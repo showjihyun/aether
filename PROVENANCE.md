@@ -49,6 +49,7 @@
 | [evaluation/](evaluation/README.md) | 번들 템플릿의 `{{자리표시자}}` 를 aether 도메인으로 실체화한 사본 |
 | [improvement-log/](improvement-log/README.md) | 아직 비어 있습니다. 첫 항목은 실제로 실패가 관측될 때 생깁니다 |
 | [intents/](intents/intent.md) | intent → spec → plan 파이프라인의 첫 단계. 출처는 6절 |
+| [specs/](specs/README.md) | 승인된 intent 의 요구사항과 설계. 첫 spec(0001)이 나오면서 생겼습니다 |
 
 ## 5. 로드맵 원본
 
@@ -88,3 +89,4 @@
 | 2026-09-08 | `intents/` 추가. Intent 0001(Phase 0) 작성, 승인 대기 |
 | 2026-09-08 | `intents/intent.md` 추가. 플레이북의 이름으로 활성 intent 를 가리키는 자리를 만들고, 진입점 문서(AGENTS.md·CLAUDE.md·docs/README.md)의 경로를 그쪽으로 옮겼습니다 |
 | 2026-09-08 | Intent 0001 승인(showjihyun). Q1 = uv, Q2 = pnpm workspace 단독으로 닫힘. 다음 산출물은 spec |
+| 2026-09-08 | `specs/` 신설. Spec 0001(Phase 0) 초안, 검토 대기. Q3 는 근거와 함께 결정 요청으로 올림 |

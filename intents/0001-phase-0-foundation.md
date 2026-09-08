@@ -7,7 +7,7 @@
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 0 (Week 1~2) |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-08 |
-| 후속 spec | 아직 없음 |
+| 후속 spec | [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (검토 대기) |
 
 ## Problem
 

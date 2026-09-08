@@ -47,7 +47,7 @@ Phase 가 바뀔 때는 새 intent 를 발급합니다(`cp _template.md NNNN-<�
 
 ## Phase 0 — Architecture & Foundation
 
-Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). 기간: Week 1~2.
+Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (검토 대기). 기간: Week 1~2.
 
 **Phase 완료 판정** — 새로 clone 한 사람이 저장소 정보만으로 명령 하나를 찾아 실행하면 Web 과 API 가 뜨고, `verify.sh` 가 제품 코드를 실제로 검사하며, AR-2·AR-3·AR-5 위반이 `arch-test` 에서 exit 0 이 아닌 값으로 드러나고, `docker compose up` 이 인터넷 없이 성립합니다.
 

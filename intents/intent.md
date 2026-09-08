@@ -5,7 +5,7 @@
 | 활성 intent | [0001 — Phase 0: Architecture & Foundation](0001-phase-0-foundation.md) |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-08 |
-| 후속 spec | 아직 없음 |
+| 후속 spec | [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (검토 대기) |
 | 열린 질문 | 5건 중 2건 닫힘(Q1 → uv, Q2 → pnpm workspace 단독). 착수 전에 닫아야 하는 Q3 이 남아 있습니다 |
 | 갱신일 | 2026-09-08 |
 
@@ -22,11 +22,11 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 | 단계 | 산출물 | 이 저장소의 자리 | 누가 통과시키는가 | 지금 |
 | --- | --- | --- | --- | --- |
 | 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0001, 승인됨 |
-| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 없음. **다음 단계입니다.** 0001 이 승인되었으므로 `specs/0001-phase-0-foundation.md` 를 쓸 차례이며, 그때 `specs/` 가 생깁니다 |
-| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 없음 |
+| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0001 초안, **검토 대기.** 승인되면 plan 으로 넘어갑니다 |
+| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 없음. spec 승인 후 |
 | 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | 없음. Phase 0 미착수 |
 
-`specs/` 와 `plans/` 를 지금 빈 디렉터리로 만들지 않는 것은 의도입니다. 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
+`plans/` 를 지금 빈 디렉터리로 만들지 않는 것은 의도입니다(`specs/` 는 0001 의 spec 이 나오면서 생겼습니다). 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
 
 사슬은 건너뛰지 않습니다. spec 없이 plan 으로, plan 없이 코드로 가면 결정이 코드에만 남고 문서에는 남지 않습니다.
 
@@ -46,7 +46,7 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 
 | 번호 | 제목 | 대상 Phase | 상태 | 후속 spec |
 | --- | --- | --- | --- | --- |
-| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 승인됨 | 없음 |
+| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 승인됨 | [0001](../specs/0001-phase-0-foundation.md) 검토 대기 |
 
 아직 발급하지 않은 intent(0002 ~ 0006, Phase 1 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
 
