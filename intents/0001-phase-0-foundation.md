@@ -7,7 +7,7 @@
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 0 (Week 1~2) |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-08 |
-| 후속 spec | [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (검토 대기) |
+| 후속 spec | [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (승인됨 2026-09-09) |
 
 ## Problem
 
@@ -65,11 +65,11 @@ Phase 0 이 끝났을 때 다음이 관측 가능합니다.
 | --- | --- | --- | --- |
 | 1 | Python 패키지 관리자를 uv / poetry 중 무엇으로 고정하는가. `harness.config` 의 제품 단계 명령이 여기 달려 있습니다 | 사람 (showjihyun) | **닫힘** 2026-09-08 · 답: **uv** |
 | 2 | 모노레포 도구를 pnpm workspace 단독으로 갈 것인가, turborepo 를 함께 쓸 것인가 | 사람 (showjihyun) | **닫힘** 2026-09-08 · 답: **pnpm workspace 단독**, turborepo 없음 |
-| 3 | Python 과 TypeScript 가 한 저장소에 있을 때 `verify.sh` 를 한 번에 돌릴 것인가, kind 별로 나눌 것인가. `HARNESS_KIND` 가 `fullstack` 으로 잡히는 경우의 동작을 먼저 확인해야 합니다 | 사람 + 하네스 감사 | Phase 0 착수 전 |
-| 4 | 인증을 Phase 0 에서 어디까지 넣는가. 로드맵은 "Authentication" 만 적고 범위를 정하지 않았습니다 | 사람 | Phase 0 중반 |
-| 5 | `packages/sdk` 가 생성물인가 수기 작성물인가. AR-1(웹은 SDK 경유)의 실효성이 여기 달려 있습니다 | 사람 | Phase 0 중반 |
+| 3 | Python 과 TypeScript 가 한 저장소에 있을 때 `verify.sh` 를 한 번에 돌릴 것인가, kind 별로 나눌 것인가. `HARNESS_KIND` 가 `fullstack` 으로 잡히는 경우의 동작을 먼저 확인해야 합니다 | 사람 + 하네스 감사 | **닫힘** 2026-09-09 · 답: **한 번에** (spec D-1). 감지 결과는 명시된 `HARNESS_STEPS` 에 영향이 없음을 `detect-stack.sh` 계약으로 확인 |
+| 4 | 인증을 Phase 0 에서 어디까지 넣는가. 로드맵은 "Authentication" 만 적고 범위를 정하지 않았습니다 | 사람 | **닫힘** 2026-09-09 · 답: **API 키** (spec D-3). 🔒 P0-9 구현은 별도 사람 검토 |
+| 5 | `packages/sdk` 가 생성물인가 수기 작성물인가. AR-1(웹은 SDK 경유)의 실효성이 여기 달려 있습니다 | 사람 | **닫힘** 2026-09-09 · 답: **타입은 생성, 호출은 수기** (spec D-2) |
 
-질문 1·2 는 2026-09-08 에 닫혔습니다(uv, pnpm workspace 단독). 질문 3 은 **착수 전에 닫습니다.** `harness.config` 의 제품 단계 명령이 이 답에 직접 의존하므로, 열린 채로 시작하면 에이전트가 추측으로 명령을 적고 그 명령이 게이트가 됩니다.
+다섯 질문 전부 닫혔습니다 — 1·2 는 2026-09-08(uv, pnpm workspace 단독), 3·4·5 는 2026-09-09 spec 승인으로. 답의 근거와 결정 목록은 spec 4절이 소유합니다.
 
 ## Non-goals
 

@@ -49,7 +49,7 @@ intent 와 spec 은 짝으로 커밋합니다. 요구사항과 그때의 결정�
 
 | 번호 | 제목 | 근거 intent | 상태 |
 | --- | --- | --- | --- |
-| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [intents/0001](../intents/0001-phase-0-foundation.md) | 검토 대기 |
+| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [intents/0001](../intents/0001-phase-0-foundation.md) | 승인됨 |
 
 ## 관련 문서
 

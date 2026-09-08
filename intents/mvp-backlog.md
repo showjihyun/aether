@@ -47,7 +47,7 @@ Phase 가 바뀔 때는 새 intent 를 발급합니다(`cp _template.md NNNN-<�
 
 ## Phase 0 — Architecture & Foundation
 
-Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (검토 대기). 기간: Week 1~2.
+Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (승인됨 2026-09-09). 기간: Week 1~2.
 
 **Phase 완료 판정** — 새로 clone 한 사람이 저장소 정보만으로 명령 하나를 찾아 실행하면 Web 과 API 가 뜨고, `verify.sh` 가 제품 코드를 실제로 검사하며, AR-2·AR-3·AR-5 위반이 `arch-test` 에서 exit 0 이 아닌 값으로 드러나고, `docker compose up` 이 인터넷 없이 성립합니다.
 
@@ -55,13 +55,13 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | --- | --- | --- | --- | --- |
 | P0-1 | 모노레포 뼈대와 빈 패키지 경계 | — | — | 대기 |
 | P0-2 | `apps/api` 최소 기동 | P0-1 | — | 대기 |
-| P0-3 | `packages/sdk` 와 `apps/web` 최소 기동 | P0-2 | Q5 | 대기 |
+| P0-3 | `packages/sdk` 와 `apps/web` 최소 기동 | P0-2 | — | 대기 |
 | P0-4 | `apps/worker` 최소 기동 | P0-1 | — | 대기 |
 | P0-5 | Docker Compose 로 전부 기동 | P0-2, P0-3, P0-4 | — | 대기 |
-| P0-6 | AR-* 를 기계 판정으로 | P0-1 | Q3 | 대기 |
-| P0-7 | `harness.config` 제품 단계 활성화와 CI | P0-5, P0-6 | Q3 | 대기 |
+| P0-6 | AR-* 를 기계 판정으로 | P0-1 | — | 대기 |
+| P0-7 | `harness.config` 제품 단계 활성화와 CI | P0-5, P0-6 | — | 대기 |
 | P0-8 | 데이터 모델 v1 (Agent / Agent Version / Run) | P0-2 | — | 대기 |
-| P0-9 | 🔒 인증 기준선 | P0-8 | Q4 | 대기 |
+| P0-9 | 🔒 인증 기준선 | P0-8 | — | 대기 |
 
 ### P0-1 모노레포 뼈대와 빈 패키지 경계
 
@@ -90,7 +90,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | 범위 밖 | 화면 디자인, 상태 관리, 다른 페이지. web 이 api 의 코드나 `packages/*` 를 직접 import 하는 것(AR-1) |
 | 완료 판정 | `build` 성공. 페이지가 api 의 healthz 값을 표시. `apps/web` 의 import 그래프에 `packages/sdk` 외의 `packages/*` 가 없음 |
 | 걸리는 규칙 | **AR-1** web 은 HTTP 계약과 sdk 만 압니다 |
-| 게이트 | **Q5** sdk 가 생성물(OpenAPI → 코드)인가 수기인가. 답에 따라 이 단위의 산출물이 코드인지 생성 파이프라인인지 달라집니다 |
+| 게이트 | 닫힘 (2026-09-09). **Q5 → 타입은 생성, 호출은 수기** (spec D-2, [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.4) |
 
 ### P0-4 `apps/worker` 최소 기동
 
@@ -118,7 +118,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | 범위 밖 | AR-6(외부 접근은 MCP 경유)·AR-7 — 대상 코드가 없어 지금은 규칙만 등록하고 검사는 Phase 2 에서 걸립니다 |
 | 완료 판정 | `lint-imports` 와 `depcruise` 가 exit 0. 위반 예시를 넣으면 exit 0 이 아님. 두 설정 파일이 하네스 보호 목록에 잡힘(`guard-evaluation-tampering.sh --list`) |
 | 걸리는 규칙 | 하네스 EL-2 → EL-6 승격. 이 파일들은 이후 보호 파일입니다 |
-| 게이트 | **Q3** Python 과 TS 를 한 verify 에서 돌릴지 kind 별로 나눌지. `HARNESS_KIND=fullstack` 동작을 먼저 확인 |
+| 게이트 | 닫힘 (2026-09-09). **Q3 → 한 번에** (spec D-1, [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.11) |
 
 ### P0-7 `harness.config` 제품 단계 활성화와 CI
 
@@ -146,7 +146,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | 범위 밖 | 권한(Permission), 조직·사용자 모델, SSO. Trust Layer 는 Phase 8 |
 | 완료 판정 | 보호 경로가 인증 없이 401, 있으면 200. `/healthz` 는 인증 없이 200. 비밀값이 코드·로그·커밋에 없음 |
 | 걸리는 규칙 | **DP-6, AGENTS.md Trust.** 에이전트는 설계와 테스트 목록을 제안하고 구현은 사람 검토를 거칩니다 |
-| 게이트 | **Q4** 인증 범위 |
+| 게이트 | 닫힘 (2026-09-09). **Q4 → API 키** (spec D-3, [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.9). 🔒 는 그대로 — 구현은 사람 검토 |
 
 ---
 

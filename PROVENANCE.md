@@ -90,3 +90,4 @@
 | 2026-09-08 | `intents/intent.md` 추가. 플레이북의 이름으로 활성 intent 를 가리키는 자리를 만들고, 진입점 문서(AGENTS.md·CLAUDE.md·docs/README.md)의 경로를 그쪽으로 옮겼습니다 |
 | 2026-09-08 | Intent 0001 승인(showjihyun). Q1 = uv, Q2 = pnpm workspace 단독으로 닫힘. 다음 산출물은 spec |
 | 2026-09-08 | `specs/` 신설. Spec 0001(Phase 0) 초안, 검토 대기. Q3 는 근거와 함께 결정 요청으로 올림 |
+| 2026-09-09 | Spec 0001 승인(showjihyun). D-1 ~ D-12 채택, Q3·Q4·Q5 닫힘. 다음 산출물은 plan |
