@@ -105,9 +105,9 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `infra/docker/compose.yaml`: PostgreSQL, Redis, api, web, worker. 이미지 빌드 포함. `.env.example` |
+| 범위 | `infra/docker/compose.yaml`: PostgreSQL, Redis, migrate(일회성), api, web, worker. 이미지 빌드 포함. `.dockerignore`, `.env.example`. `compose.offline.yaml`(internal 네트워크 + 판정용 `probe` 서비스). **루트 `README.md`** — 기동 명령과 verify 명령 한 줄씩(R-1 의 발견 경로) |
 | 범위 밖 | Local LLM, Vector DB 서비스(MVP-3). Kubernetes 매니페스트. 프로덕션 설정 |
-| 완료 판정 | 이미지 빌드 후 네트워크를 끊은 상태(`--network none` 또는 동등)에서 `docker compose up` 이 성립하고 `GET /healthz` 200, web 페이지 응답. 비밀값이 compose 파일과 이미지에 없음 |
+| 완료 판정 | README 의 명령으로 기동 후 `GET /healthz` 200, web 200. 이미지 빌드 후 `docker compose -f compose.yaml -f compose.offline.yaml run probe` 가 exit 0(판정은 호스트 curl 이 아니라 네트워크 안의 probe). `.dockerignore` 가 `.env*` 를 제외하고 이미지 layer 에 `.env` 없음 |
 | 걸리는 규칙 | **DP-4** Offline-capable 의 첫 근거. Trust: 비밀값을 커밋하지 않습니다 |
 
 ### P0-6 AR-* 를 기계 판정으로
@@ -124,7 +124,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `harness.config` 의 "Phase 0 이후" 블록 주석 해제. 명령은 P0-1 의 답(Q1·Q2)에 맞춤. `HARNESS_THRESHOLD` 를 90 → 80 (AD-2 시작값). CI 가 깨끗한 checkout 에서 verify 를 실행 |
+| 범위 | `harness.config` 의 "Phase 0 이후" 블록을 spec 2.11 의 단계 표로 교체(제품 단계 10개, 명시 필터, 작은따옴표). `HARNESS_THRESHOLD` 를 90 → 80 (AD-2 시작값). `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs`. CI 에 uv·pnpm 설치와 비밀값 스캔 job. 로컬 verify 전체 시간을 실측해 기록(R-11, 예산 10분) |
 | 범위 밖 | 단계를 열 개 넘게 늘리기. `required` 를 내려서 통과시키기. smoke/e2e/load 는 Phase 1 이후 |
 | 완료 판정 | `verify.sh` 가 self-check 단계와 제품 단계를 함께 집계해 pass. `.github/workflows/harness.yml` 이 녹색. 임계값 변경의 근거가 `improvement-log/` 에 1건 |
 | 걸리는 규칙 | **보호 파일 변경.** [../harness/rules/harness-change-control.rule.md](../harness/rules/harness-change-control.rule.md) 를 따르고 한 번에 하나만 바꿉니다. EI-2: 임계값은 사람이 소유 — 변경은 제안하고 사람이 커밋합니다 |
@@ -133,9 +133,9 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | PostgreSQL 스키마와 마이그레이션: `Agent`, `Agent Version`(불변), `Run`(상태 열 포함). [../docs/domain.md](../docs/domain.md) 1절의 뜻을 그대로 컬럼으로. `docs/data-model.md` 신설 |
+| 범위 | 스키마 `control` / `data` 와 역할 `aether_control` / `aether_data` 분리. 테이블: `control.agents`, `control.agent_versions`(불변 트리거), `control.api_keys`, `control.runs`(선언), `data.run_executions`(실행 상태). 스키마·테이블·GRANT 는 Alembic 마이그레이션(`apps/api/migrations/`)이, 역할은 초기화 스크립트가 소유. `docs/data-model.md` 신설. 열과 제약은 [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.8 |
 | 범위 밖 | Task, Observation, Memory, Workflow 테이블(각 Phase 에서). API 노출(P1-1) |
-| 완료 판정 | 마이그레이션 up/down 이 빈 DB 에서 왕복. `Agent Version` 행을 UPDATE 하면 실패하는 테스트 통과. `docs/data-model.md` 가 [../docs/README.md](../docs/README.md) 의 "아직 없는 문서" 에서 빠짐 |
+| 완료 판정 | 초기화 스크립트 없는 빈 DB(testcontainers)에서 마이그레이션 up/down 왕복. **UPDATE 권한이 있는 역할로** `agent_versions` UPDATE/DELETE 를 시도해 트리거가 거부. `aether_control` 로 `data.*` 접근 시 permission denied. `docs/data-model.md` 가 [../docs/README.md](../docs/README.md) 의 "아직 없는 문서" 에서 빠짐 |
 | 걸리는 규칙 | 용어를 새로 만들지 않습니다. `Agent` 와 `Run` 을 한 테이블에 넣지 않습니다 |
 
 ### P0-9 🔒 인증 기준선

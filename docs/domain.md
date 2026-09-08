@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | `Agent` | 목표와 도구 집합과 정책이 묶인 실행 단위의 **정의**. 실행 중인 것이 아닙니다 | `Run` |
 | `Agent Version` | 특정 시점의 `Agent` 정의를 고정한 불변 스냅숏. 재현 가능한 실행의 근거 | `Agent` |
-| `Run` | `Agent Version` 하나를 실제로 한 번 실행한 **사건**. 취소·재시도·타임아웃의 대상 | `Agent` |
+| `Run` | `Agent Version` 하나를 실제로 한 번 실행한 **사건**. 취소·재시도·타임아웃의 대상. Control Plane 이 **선언**하고 Data Plane 이 **실행**하므로 기록은 Plane 마다 하나씩입니다 — 선언 `control.runs`, 실행 상태 `data.run_executions`([../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.8) | `Agent` |
 | `Task` | `Run` 안에서 Planner 가 쪼갠 작업 단위 | `Run` |
 | `State` | `Run` 의 현재 진행 상태. 재시작 후 이어붙일 수 있어야 합니다 | `Memory` |
 | `Observation` | 도구 실행 결과가 모델에게 되돌아간 것. 신뢰 경계 밖에서 온 데이터입니다 | `Result` |
