@@ -60,6 +60,7 @@
 - 지금 Phase 보다 뒤에 있는 기능을 "미리 준비" 하지 않습니다. 근거 없는 추상화가 됩니다.
 - Phase 를 넘길 때는 그 Phase 의 산출물이 `verify.sh` 로 확인되는지를 먼저 봅니다.
 - 하네스 요소를 한 번에 여러 개 붙이지 않습니다([../harness/rules/harness-change-control.rule.md](../harness/rules/harness-change-control.rule.md)).
+- Phase 0 ~ Month 4 MVP 를 에이전트가 집을 수 있는 단위로 쪼갠 목록은 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 입니다. 단위의 완료 판정은 그 문서가, Phase 의 순서는 이 문서가 소유합니다.
 
 ## 관련 문서
 

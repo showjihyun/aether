@@ -48,6 +48,8 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | --- | --- | --- | --- | --- |
 | [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 승인 대기 | 없음 |
 
+아직 발급하지 않은 intent(0002 ~ 0006, Phase 1 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
+
 ## 버전 관리
 
 이 파일과 번호가 붙은 intent 는 **커밋합니다.** `.gitignore` 에서 제외하지 않습니다.
@@ -76,6 +78,7 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 
 - [README.md](README.md) — 작성 규칙, 파일 이름, 하네스와의 경계
 - [_template.md](_template.md) — 새 intent 의 뼈대
+- [mvp-backlog.md](mvp-backlog.md) — MVP 까지의 작업 단위와 아직 발급하지 않은 intent
 - [../docs/roadmap.md](../docs/roadmap.md) — 어느 Phase 의 intent 인가
 - [../docs/architecture.md](../docs/architecture.md) — `Affected Systems` 에 쓰는 계층 이름
 - [../docs/domain.md](../docs/domain.md) — 용어
