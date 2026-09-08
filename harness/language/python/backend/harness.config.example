@@ -1,0 +1,39 @@
+# language/python/backend/harness.config.example
+#
+# Python 백엔드(FastAPI, uv, ruff, mypy, pytest, import-linter) 프로젝트용 HARNESS_STEPS 예시입니다.
+# 프로젝트 루트의 harness.config 에 이 배열만 옮겨 적습니다. 나머지 키(HARNESS_EVAL_WEIGHTS,
+# HARNESS_THRESHOLD, HARNESS_MAX_ITERATIONS 등)의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+#   cp harness/scripts/harness.config.example ./harness.config
+#   # 아래 HARNESS_STEPS 를 ./harness.config 에 붙여 넣습니다.
+#
+# 형식: "id|layer|required|command"
+# 아래 명령은 uv 기준입니다. poetry 는 `uv run` 을 `poetry run` 으로, venv 직접 사용은 접두사를 지웁니다.
+
+HARNESS_STEPS=(
+  # lint 와 포맷. 규칙 완화는 guard hook 이 ruff.toml 변경을 차단합니다.
+  "lint|quality|true|uv run ruff check ."
+  "format-check|quality|false|uv run ruff format --check ."
+
+  # 타입 검사.
+  "typecheck|quality|true|uv run mypy src"
+
+  # 계층 의존 규칙 (import-linter). 계약은 .importlinter 가 소유합니다.
+  "arch-test|architecture|true|uv run lint-imports"
+
+  # 단위 테스트. integration 마커는 아래에서 따로 돌립니다.
+  "unit|correctness|true|uv run pytest -q -m 'not integration'"
+
+  # 통합 테스트(OBS-B1). testcontainers 로 실제 DB 를 띄웁니다.
+  "integration|correctness|true|uv run pytest -q -m integration"
+
+  # 기동 후 스모크(OBS-B2). 앱을 띄우는 스크립트는 프로젝트가 소유합니다.
+  "smoke|behavior|false|./scripts/smoke.sh"
+
+  # 부하 테스트(OBS-B7). 성능 계층을 채점하기로 결정한 뒤에만 켭니다.
+  "load|performance|false|uv run locust --headless -u 20 -r 5 -t 30s --host http://localhost:8000"
+)
+
+# 감지 결과를 강제로 재정의해야 할 때만 사용합니다.
+# HARNESS_STACK="python:uv"
+# HARNESS_KIND="backend"

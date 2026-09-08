@@ -1,0 +1,26 @@
+# Python 백엔드(FastAPI, SQLAlchemy, import-linter) 스택의 improvement candidate 예시입니다.
+# 코어 예시 harness/improvement-log/2026-08-09-001.example.yaml 의 언어 중립 문장을 이 스택의 실제 모듈·도구 이름으로 옮긴 판입니다.
+# 실제 항목은 프로젝트 루트의 improvement-log/<id>.yaml 로 저장하며, 키 순서는 harness/improvement-log/schema.md 를 따릅니다.
+id: 2026-08-09-005
+date: 2026-08-09
+status: candidate
+symptom: app/api/members.py 의 라우터가 app/infra/repositories.py 의 MemberRepository 를 직접 import 했고 import-linter 검사가 실패했습니다.
+evidence: |
+  .harness/verify.json 의 arch-test 단계 status=fail, exit_code=1.
+  실패 계약: layers (Layered architecture)
+  실패 메시지: app.api.members is not allowed to import app.infra.repositories
+  로그: .harness/logs/arch-test.log:12
+  재현: harness/scripts/verify.sh --only arch-test
+root_cause: 계층 의존 규칙 문서(docs/architecture/layers.md)가 AGENTS.md 에서 안내되지 않아 에이전트의 탐색 경로에 들어오지 않았고, import-linter 계약에 설명이 없어 실패 메시지가 허용 경로(api → service → repository)를 알려주지 않았습니다.
+fix: 라우터가 app.services.members.MemberService 를 경유하도록 import 를 변경했습니다.
+recurrence_risk: high
+harness_element: HE-4
+proposed_harness_change: AGENTS.md 의 Architecture 절에서 docs/architecture/layers.md 를 링크하고, .importlinter 의 계약 이름과 주석에 허용 경로를 적어 실패 메시지가 대안을 알려주게 합니다.
+preferred_enforcement: arch-rule
+trust: untrusted
+regression_check: |
+  대상: REP-2, REP-5, HLD-1, HLD-3
+  기준: 코어 예시(harness/improvement-log/2026-08-09-001.example.yaml)와 같습니다. 총점과 6계층 모두 기준선 이상.
+  이 스택의 추가 확인: 정당한 구현(service 경유 호출, DI 컨테이너에서의 repository 조립)이 차단되지 않을 것.
+owner: unassigned
+expires: 2026-11-09

@@ -1,0 +1,25 @@
+# language/ruby/backend/harness.config.example
+#
+# Ruby 백엔드 프로젝트용 HARNESS_STEPS 예시입니다. 프로젝트 루트의 harness.config 에 이 배열만 옮겨 적습니다.
+# 나머지 키의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+# 형식: "id|layer|required|command"
+
+HARNESS_STEPS=(
+  "lint|quality|true|bundle exec rubocop"
+  # 계층·패키지 경계 규칙: packwerk. 규칙은 packwerk.yml 과 각 package.yml 이 소유합니다.
+  "arch-test|architecture|true|bundle exec packwerk check"
+  "unit|correctness|true|bundle exec rspec spec/models spec/lib"
+  # 통합 테스트(OBS-B1). 요청·잡·DB 를 함께 지나는 스펙을 분리합니다.
+  "integration|correctness|true|bundle exec rspec spec/requests spec/jobs"
+  # 기동 후 스모크(OBS-B2).
+  "smoke|behavior|false|./bin/smoke"
+  # 의존성 취약점(Gemfile.lock 기준).
+  "audit|quality|false|bundle exec bundler-audit check --update"
+)
+
+# HARNESS_STACK="ruby"
+# HARNESS_KIND="backend"
+#
+# 루트에 프런트엔드 자산용 package.json 이 함께 있으면 기본 감지 순서에서 typescript 가 먼저 잡힙니다.
+# 그때 위 HARNESS_STACK 주석을 풀어 고정합니다. 보호 목록은 감지 결과와 무관하므로 영향을 받지 않습니다.

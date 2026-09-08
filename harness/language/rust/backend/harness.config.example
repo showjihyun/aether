@@ -1,0 +1,24 @@
+# language/rust/backend/harness.config.example
+#
+# Rust 백엔드 프로젝트용 HARNESS_STEPS 예시입니다. 프로젝트 루트의 harness.config 에 이 배열만 옮겨 적습니다.
+# 나머지 키의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+# 형식: "id|layer|required|command"
+
+HARNESS_STEPS=(
+  "build|correctness|true|cargo build --locked"
+  "fmt|quality|true|cargo fmt --check"
+  "clippy|quality|true|cargo clippy --all-targets -- -D warnings"
+  # 의존성 정책(라이선스·중복·취약점). 정책은 deny.toml 이 소유합니다.
+  "deny|architecture|false|cargo deny check"
+  "unit|correctness|true|cargo test --lib --bins"
+  # 통합 테스트(OBS-B1). tests/ 디렉터리의 통합 테스트만 실행합니다.
+  "integration|correctness|true|cargo test --test '*'"
+  # 기동 후 스모크(OBS-B2).
+  "smoke|behavior|false|./scripts/smoke.sh"
+  # 벤치마크(OBS-B7). criterion 을 쓰는 경우입니다.
+  "bench|performance|false|cargo bench --no-run"
+)
+
+# HARNESS_STACK="rust"
+# HARNESS_KIND="backend"

@@ -1,0 +1,26 @@
+# <언어> 백엔드 스택의 improvement candidate 예시 자리입니다. 팩을 만들 때 코어 예시
+# harness/improvement-log/2026-08-09-001.example.yaml 의 언어 중립 문장을 이 스택의 실제 클래스·규칙·도구 이름으로 바꿔 채웁니다.
+# 실제 항목은 프로젝트 루트의 improvement-log/<id>.yaml 로 저장하며, 키 순서는 harness/improvement-log/schema.md 를 따릅니다.
+id: 2026-08-09-999
+date: 2026-08-09
+status: candidate
+symptom: <상위 계층 모듈> 이 <하위 계층 모듈> 에 직접 의존했고 <아키텍처 규칙 도구> 검사가 실패했습니다.
+evidence: |
+  .harness/verify.json 의 arch-test 단계 status=fail, exit_code=1.
+  실패 규칙: <규칙 이름>
+  실패 메시지: <도구가 출력한 실제 문구>
+  로그: .harness/logs/arch-test.log:<줄>
+  재현: harness/scripts/verify.sh --only arch-test
+root_cause: 계층 의존 규칙 문서가 진입점 문서에서 안내되지 않아 에이전트의 탐색 경로에 들어오지 않았고, 규칙의 실패 메시지도 허용된 호출 경로를 알려주지 않았습니다.
+fix: <상위 계층 모듈> 이 <중간 계층> 을 경유하도록 의존성을 변경했습니다.
+recurrence_risk: high
+harness_element: HE-4
+proposed_harness_change: 아키텍처 문서의 발견 경로를 보강하고, <아키텍처 규칙 도구> 규칙의 실패 메시지에 허용된 호출 경로를 포함시킵니다.
+preferred_enforcement: arch-rule
+trust: untrusted
+regression_check: |
+  대상: REP-2, REP-5, HLD-1, HLD-3
+  기준: 총점이 기준선 이상이고 6개 계층 어느 것도 기준선보다 낮지 않을 것. 정당한 구현이 차단되지 않을 것.
+  근거 파일: .harness/baseline-eval.json, .harness/latest-eval.json
+owner: unassigned
+expires: 2026-11-09

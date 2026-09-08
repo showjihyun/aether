@@ -1,0 +1,53 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/harness/hooks/guard-evaluation-tampering.sh\"",
+            "timeout": 10,
+            "statusMessage": "평가 무결성 검사 중"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/harness/hooks/guard-evaluation-tampering.sh\"",
+            "timeout": 10,
+            "statusMessage": "평가 무결성 검사 중 (셸)"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Edit|Write|MultiEdit|NotebookEdit|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/harness/hooks/detect-guarded-change.sh\"",
+            "timeout": 15,
+            "statusMessage": "보호 파일 변경 검출 중"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/harness/hooks/stop-verify-gate.sh\"",
+            "timeout": 30,
+            "statusMessage": "검증 게이트 확인 중"
+          }
+        ]
+      }
+    ]
+  }
+}

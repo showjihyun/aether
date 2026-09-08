@@ -1,0 +1,24 @@
+# language/go/backend/harness.config.example
+#
+# Go 백엔드 프로젝트용 HARNESS_STEPS 예시입니다. 프로젝트 루트의 harness.config 에 이 배열만 옮겨 적습니다.
+# 나머지 키의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+# 형식: "id|layer|required|command"
+
+HARNESS_STEPS=(
+  "build|correctness|true|go build ./..."
+  "vet|quality|true|go vet ./..."
+  "lint|quality|true|golangci-lint run ./..."
+  # 계층 규칙: golangci-lint depguard 또는 go-arch-lint. 규칙은 .golangci.yml / .go-arch-lint.yml 이 소유합니다.
+  "arch-test|architecture|true|go-arch-lint check"
+  "unit|correctness|true|go test -race ./..."
+  # 통합 테스트(OBS-B1). 빌드 태그로 분리합니다.
+  "integration|correctness|true|go test -tags=integration ./..."
+  # 기동 후 스모크(OBS-B2).
+  "smoke|behavior|false|./scripts/smoke.sh"
+  # 벤치마크·부하(OBS-B7).
+  "bench|performance|false|go test -run=^$ -bench=. -benchtime=1s ./..."
+)
+
+# HARNESS_STACK="go"
+# HARNESS_KIND="backend"

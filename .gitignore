@@ -1,0 +1,50 @@
+# 런타임 산출물입니다. 매 실행 재생성되므로 커밋하지 않습니다.
+.harness/verify.json
+.harness/latest-eval.json
+.harness/loop-state.json
+.harness/baseline-eval.json
+.harness/guard-events.log
+.harness/guard-snapshot.tsv
+.harness/guard-patterns.cache
+.harness/logs/
+
+# 로컬 설정 오버라이드
+harness.config.local
+.claude/settings.local.json
+
+# 평가 task 실행용 임시 워크트리. 런타임 산출물이며 커밋하지 않습니다.
+.claude/worktrees/
+
+# 도구 부산물
+.playwright-mcp/
+*.png
+
+# --- 이 프로젝트(aether)의 스택 ------------------------------------------------
+# Phase 0 에서 apps/ packages/ infra/ 가 들어오기 전에 미리 등록해 둡니다.
+
+# Node / TypeScript
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+.turbo/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.egg-info/
+
+# 환경변수와 비밀값. 저장소에 남기지 않습니다(AGENTS.md Trust).
+.env
+.env.*
+!.env.example
+
+# 로컬 인프라 상태
+.docker-data/

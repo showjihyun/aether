@@ -1,0 +1,4 @@
+interface:
+  display_name: "Harness"
+  short_description: "HARNESS.md 기반 하네스 구축·감사·개선"
+  default_prompt: "$harness를 사용해 이 프로젝트의 Self-Improving Harness를 HARNESS.md 기준으로 구축하거나 감사하거나 개선하세요. 구축에서는 통합 verify 명령을 improvement log와 retrospective보다 먼저 성립시키고 stack 감지와 harness.config 재정의를 검증하세요. 감사에서는 L0~L5 성숙도를 판정하고 결손을 HE-* ID로 보고하며 읽기 전용을 유지하세요. 개선에서는 candidate를 regression test로 검증한 뒤에만 승격하고 한 번에 하나만 바꾸세요."

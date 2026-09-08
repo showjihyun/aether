@@ -1,0 +1,44 @@
+# language/typescript/backend/harness.config.example
+#
+# TypeScript 백엔드(NestJS 또는 Express, pnpm, Jest, Prisma, Testcontainers) 프로젝트용 HARNESS_STEPS 예시입니다.
+# 프로젝트 루트의 harness.config 에 이 배열만 옮겨 적습니다. 나머지 키(HARNESS_EVAL_WEIGHTS,
+# HARNESS_THRESHOLD, HARNESS_MAX_ITERATIONS 등)의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+#   cp harness/scripts/harness.config.example ./harness.config
+#   # 아래 HARNESS_STEPS 를 ./harness.config 에 붙여 넣습니다.
+#
+# 형식: "id|layer|required|command"
+# 명령은 package.json 의 scripts 이름을 가정합니다. 스크립트 이름이 다르면 명령만 바꿉니다.
+
+HARNESS_STEPS=(
+  # 타입 검사. (scripts.typecheck = "tsc --noEmit -p tsconfig.build.json")
+  "typecheck|quality|true|pnpm run typecheck"
+
+  # ESLint(또는 Biome).
+  "lint|quality|true|pnpm run lint"
+
+  # 계층 경계 검사. scripts.depcruise = "depcruise src --config .dependency-cruiser.cjs"
+  "arch-test|architecture|true|pnpm run depcruise"
+
+  # ORM 스키마가 마이그레이션과 일치하는지(OBS-B3). scripts.db:validate = "prisma validate && prisma migrate diff --exit-code ..."
+  "db-validate|architecture|false|pnpm run db:validate"
+
+  # 단위 테스트 (Jest 또는 Vitest).
+  "unit|correctness|true|pnpm run test:unit"
+
+  # 통합 테스트(OBS-B1). supertest + Testcontainers 로 실제 DB 를 띄웁니다. scripts.test:integration = "jest --config test/jest-e2e.json"
+  "integration|correctness|true|pnpm run test:integration"
+
+  # API 계약 테스트. OpenAPI 스펙과 실제 응답의 차이를 잡습니다.
+  "contract|correctness|false|pnpm run test:contract"
+
+  # 기동 후 스모크(OBS-B2). scripts.smoke = "./scripts/smoke.sh"
+  "smoke|behavior|false|pnpm run smoke"
+
+  # 부하 테스트(OBS-B7). 성능 계층을 채점하기로 결정한 뒤에만 켭니다. scripts.test:load = "k6 run load/smoke.js"
+  "load|performance|false|pnpm run test:load"
+)
+
+# 감지 결과를 강제로 재정의해야 할 때만 사용합니다.
+# HARNESS_STACK="typescript:pnpm"
+# HARNESS_KIND="backend"

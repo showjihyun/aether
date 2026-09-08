@@ -1,0 +1,24 @@
+# language/<언어>/backend/harness.config.example
+#
+# <언어> 백엔드 프로젝트용 HARNESS_STEPS 예시입니다. 프로젝트 루트의 harness.config 에
+# 이 배열만 옮겨 적습니다. 나머지 키(HARNESS_EVAL_WEIGHTS, HARNESS_THRESHOLD,
+# HARNESS_MAX_ITERATIONS 등)의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+#   cp harness/scripts/harness.config.example ./harness.config
+#   # 아래 HARNESS_STEPS 를 ./harness.config 에 붙여 넣습니다.
+#
+# 형식: "id|layer|required|command"
+
+HARNESS_STEPS=(
+  "build|correctness|true|<빌드 명령>"
+  "lint|quality|true|<lint 명령>"
+  "unit|correctness|true|<단위 테스트 명령>"
+  "integration|correctness|true|<통합 테스트 명령>"
+  "arch-test|architecture|true|<아키텍처 규칙 검사 명령>"
+  "smoke|behavior|false|<기동 후 curl 스모크 명령>"
+  "load|performance|false|<부하 테스트 명령>"
+)
+
+# 감지 결과를 강제로 재정의해야 할 때만 사용합니다.
+# HARNESS_STACK="<언어>"
+# HARNESS_KIND="backend"

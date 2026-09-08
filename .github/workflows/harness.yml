@@ -1,0 +1,66 @@
+# 로컬 hook 은 에이전트가 도는 곳에서 돕니다. 그래서 결정적인 우회를 원리적으로 막지
+# 못합니다. hook 을 등록에서 빼거나, 열거에 없는 명령을 쓰거나, hook 이 읽을 수 없는
+# 프로그램 안에서 쓰면 됩니다. 이 워크플로는 그 밖에서 돕니다.
+# 무결성 보장의 실제 자리는 여기입니다. 로컬 hook 은 빠른 피드백용입니다.
+name: harness
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    # labeled / unlabeled 가 없으면 harness-change 라벨을 붙여도 검사가 다시 돌지
+    # 않습니다. 기본 타입은 opened, synchronize, reopened 뿐입니다. 라벨로 통과를
+    # 결정하면서 라벨 변경에 반응하지 않으면, 승인해도 빨간불이 그대로 남습니다.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # 깨끗한 체크아웃에서 돕니다. 로컬에만 있는 상태가 결과를 만들지 못합니다.
+      # 진입점의 실행 비트는 git 인덱스에서 옵니다. Windows 에서 core.fileMode=false 로
+      # 100644 가 커밋되면 여기서 exit 126 으로 드러납니다.
+      - name: 하네스 검증
+        run: ./harness/scripts/verify.sh
+
+      - name: 결과 파일
+        if: always()
+        run: cat .harness/verify.json || true
+
+  protected:
+    name: 보호 파일 변경 검토
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 보호 목록은 hooks/lib/guard-lib.sh 와 언어 팩이 소유합니다. 여기서 다시 적지
+      # 않습니다. 목록이 갈라지면 로컬이 막는 것을 CI 가 보지 못합니다.
+      - name: 보호 파일 변경 확인
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+        run: |
+          set -uo pipefail
+          git fetch --no-tags origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}" || true
+          if hits="$(harness/scripts/protected-diff.sh "origin/${GITHUB_BASE_REF}")"; then
+            echo "보호 파일 변경이 없습니다."
+            exit 0
+          fi
+          echo "바뀐 보호 파일:"
+          echo "${hits}"
+          case ",${LABELS}," in
+            *,harness-change,*)
+              echo "harness-change 라벨이 있습니다. 사람 검토를 거친 변경으로 봅니다."
+              exit 0
+              ;;
+          esac
+          echo "::error::평가·게이트를 규정하는 파일이 바뀌었습니다. 이 PR 에는 harness-change 라벨과 사람 검토가 필요합니다. 라벨 없이 병합하지 마십시오."
+          exit 1

@@ -1,0 +1,134 @@
+# harness.config.example — 프로젝트 루트에 harness.config 로 복사해 쓰는 예시입니다.
+#
+#   cp harness/scripts/harness.config.example ./harness.config
+#
+# 이 파일은 bash 로 source 되므로 bash 문법을 지킵니다.
+# 값을 하나도 정의하지 않아도 스크립트는 스택 자동 감지로 동작합니다.
+# 자동 감지 결과를 재정의하고 싶을 때만 필요한 키를 채웁니다.
+#
+# 이 파일은 언어에 고정되지 않습니다. 언어별로 실제 명령이 채워진 HARNESS_STEPS 예시는
+# 언어 팩이 소유합니다. 프로젝트 스택에 맞는 것을 골라 이 파일의 HARNESS_STEPS 자리에 붙여 넣습니다.
+#
+#   | 스택                     | kind      | 예시 파일                                                |
+#   | ------------------------ | --------- | -------------------------------------------------------- |
+#   | TypeScript (브라우저 앱)  | frontend  | harness/language/typescript/frontend/harness.config.example |
+#   | TypeScript (Node 서버)    | backend   | harness/language/typescript/backend/harness.config.example  |
+#   | Java (Gradle/Maven)      | backend   | harness/language/java/backend/harness.config.example        |
+#   | Python                   | backend   | harness/language/python/backend/harness.config.example      |
+#   | Go                       | backend   | harness/language/go/backend/harness.config.example          |
+#   | Rust                     | backend   | harness/language/rust/backend/harness.config.example        |
+#
+# 팩 규약과 감지 순서: harness/language/README.md
+
+# ---------------------------------------------------------------------------
+# HARNESS_STEPS — verify.sh 가 실행할 단계 목록입니다.
+# 영향을 받는 스크립트: verify.sh (직접), eval.sh / loop.sh (verify 결과를 통해 간접)
+#
+# 형식: "id|layer|required|command"
+#   id       .harness/logs/<id>.log 의 파일명이 되고 --only 의 인자가 됩니다.
+#   layer    correctness | architecture | quality | behavior | performance | subjective
+#   required true 이면 실패 시 verify.sh 가 exit 1 로 끝납니다. false 는 경고로만 셉니다.
+#   command  bash -c 로 실행합니다. 파이프와 리다이렉션을 써도 됩니다.
+#
+# 이 배열을 정의하면 스택 자동 감지 결과를 완전히 대체합니다.
+# 정의하지 않으면(아래처럼 주석인 채로 두면) lib/detect-stack.sh 가 언어 팩의
+# default_steps 를 씁니다. 아래는 형식만 보여 주는 뼈대이며 <> 자리를 그대로 두면 실행에 실패합니다.
+#
+# HARNESS_STEPS=(
+#   "typecheck|quality|true|<타입 검사 명령>"
+#   "lint|quality|true|<lint 명령>"
+#   "arch-test|architecture|true|<아키텍처 규칙 검사 명령>"
+#   "unit|correctness|true|<단위 테스트 명령>"
+#   "integration|correctness|true|<통합 테스트 명령>"
+#   "e2e|behavior|false|<브라우저 또는 API 시나리오 명령>"
+#   "bench|performance|false|<벤치마크 또는 부하 테스트 명령>"
+# )
+
+# ---------------------------------------------------------------------------
+# HARNESS_EVAL_WEIGHTS — 평가 계층 가중치입니다.
+# 영향을 받는 스크립트: eval.sh
+#
+# 형식: "layer|weight". 합이 1.0 이 아니어도 됩니다. eval.sh 가 정규화합니다.
+# 단계가 하나도 없는 계층은 score 가 null 이 되고, 그 가중치는 나머지 계층에
+# 비례해 재분배됩니다. 정의하지 않으면 아래 기본값을 씁니다.
+HARNESS_EVAL_WEIGHTS=(
+  "correctness|0.30"
+  "architecture|0.20"
+  "quality|0.20"
+  "behavior|0.15"
+  "performance|0.10"
+  "subjective|0.05"
+)
+
+# ---------------------------------------------------------------------------
+# HARNESS_THRESHOLD — 합격선(0~100 정수)입니다.
+# 영향을 받는 스크립트: eval.sh (latest-eval.json 의 threshold 로 기록),
+#                       pass-threshold.sh (비교 기준), loop.sh (종료 판정)
+HARNESS_THRESHOLD=80
+
+# ---------------------------------------------------------------------------
+# HARNESS_MAX_ITERATIONS — loop 최대 반복 횟수입니다. rules/loop-budget.rule.md 의 기본값은 8 입니다.
+# 영향을 받는 스크립트: loop.sh
+HARNESS_MAX_ITERATIONS=8
+
+# ---------------------------------------------------------------------------
+# HARNESS_MAX_SAME_FAILURE — 같은 실패 서명이 몇 번 반복되면 중단할지입니다.
+# 실패 서명은 verify.json 에서 실패한 단계 id 를 이어붙인 문자열입니다.
+# 영향을 받는 스크립트: loop.sh
+HARNESS_MAX_SAME_FAILURE=3
+
+# ---------------------------------------------------------------------------
+# HARNESS_NO_IMPROVEMENT_ROUNDS — 점수가 개선되지 않은 라운드가 몇 번 이어지면
+# 중단할지입니다.
+# 영향을 받는 스크립트: loop.sh
+HARNESS_NO_IMPROVEMENT_ROUNDS=2
+
+# ---------------------------------------------------------------------------
+# HARNESS_AGENT_CMD — loop.sh 가 각 라운드마다 실행할 에이전트 명령입니다.
+# 프롬프트는 표준입력으로 전달합니다. 비워 두면 loop.sh 는 dry-run 으로 동작해
+# 사람이 직접 실행할 프롬프트만 출력합니다.
+# 영향을 받는 스크립트: loop.sh
+#
+# 예시:
+#   HARNESS_AGENT_CMD="claude -p --permission-mode acceptEdits"
+#   HARNESS_AGENT_CMD="codex exec -"
+HARNESS_AGENT_CMD=""
+
+# ---------------------------------------------------------------------------
+# 선택 확장 키 (language/README.md 2절의 고정 키는 아닙니다. 없어도 모두 동작합니다.)
+#
+# HARNESS_MAX_SECONDS — loop 전체의 시간 예산(초)입니다. 0 이면 무제한입니다.
+#   영향을 받는 스크립트: loop.sh (종료 사유 budget_exceeded)
+# HARNESS_STACK — 스택 자동 감지를 강제로 재정의합니다.
+#   영향을 받는 스크립트: verify.sh (기본 단계 선택). 보호 목록은 바꾸지 않습니다.
+#   값 형식: <언어>[:<변형>]. 예: typescript:pnpm, typescript:npm, typescript:yarn, typescript:bun,
+#            java:gradle, java:maven, python:uv, python:poetry, python:pdm, python:pipenv, python, go, rust, ruby
+#   옛 값(node:pnpm, gradle, maven)은 자동으로 새 형식으로 해석되며 경고가 납니다.
+# HARNESS_KIND — FE/BE 자동 판정을 강제로 재정의합니다.
+#   값: frontend | backend | fullstack | unknown
+#   영향을 받는 스크립트: verify.sh (기본 단계 선택). 보호 목록은 바꾸지 않습니다.
+#
+#   두 키 모두 hooks/guard-evaluation-tampering.sh 의 보호 목록에는 영향을 주지 않습니다.
+#   보호 목록은 감지 결과와 무관하게 모든 언어 팩의 합집합입니다. 근거는 harness/hooks/README.md 를 보십시오.
+#   또한 hook 은 이 파일을 읽지 않습니다. bash 파일을 가드 프로세스에서 실행하면
+#   한 줄로 가드를 무력화할 수 있기 때문입니다.
+# HARNESS_LANG_DETECT_ORDER — 여러 스택이 감지될 때 우선순위입니다. 공백 구분.
+#   기본값: "typescript java python go rust ruby"
+# HARNESS_PROJECT_ROOT — 프로젝트 루트 탐색을 강제로 재정의합니다.
+#   영향을 받는 스크립트: 모든 스크립트 (lib/common.sh 의 find_project_root)
+# HARNESS_SELF_CHECK_LINK_DIRS — self-check 의 links 검사에 프로젝트 문서를 더합니다.
+#   기본값은 번들(harness/)뿐입니다. 채택하지 않은 프로젝트의 문서를 임의로 훑으면
+#   의도적인 외부 링크까지 실패로 잡히기 때문입니다.
+#   진입점 문서(README, AGENTS.md, CLAUDE.md)와 평가 세트는 링크가 끊기면
+#   에이전트의 탐색 경로가 사라지므로 여기에 등록해 두는 것을 권합니다.
+#   값은 **프로젝트 루트 기준 상대 경로**를 공백으로 나열합니다. 파일도 디렉터리도 됩니다.
+#   주의: 존재하지 않는 경로를 적으면 links 단계가 실패합니다(설정 오류로 봅니다).
+#   그러므로 이 예시 값을 그대로 복사하지 말고 실제로 있는 문서만 적으십시오.
+#   영향을 받는 스크립트: scripts/self-check.sh (verify 의 links 단계)
+#
+# HARNESS_MAX_SECONDS=1800
+# HARNESS_SELF_CHECK_LINK_DIRS="README.md AGENTS.md docs"
+# HARNESS_STACK="typescript:pnpm"
+# HARNESS_KIND="frontend"
+# HARNESS_LANG_DETECT_ORDER="java typescript"
+# HARNESS_PROJECT_ROOT="/abs/path/to/project"

@@ -1,0 +1,43 @@
+# language/typescript/frontend/harness.config.example
+#
+# TypeScript 프론트엔드(React/Vite, pnpm, Vitest, Playwright) 프로젝트용 HARNESS_STEPS 예시입니다.
+# 프로젝트 루트의 harness.config 에 이 배열만 옮겨 적습니다. 나머지 키(HARNESS_EVAL_WEIGHTS,
+# HARNESS_THRESHOLD, HARNESS_MAX_ITERATIONS 등)의 설명과 기본값은 harness/scripts/harness.config.example 이 정본입니다.
+#
+#   cp harness/scripts/harness.config.example ./harness.config
+#   # 아래 HARNESS_STEPS 를 ./harness.config 에 붙여 넣습니다.
+#
+# 형식: "id|layer|required|command"
+# 명령은 package.json 의 scripts 이름을 가정합니다. 스크립트 이름이 다르면 명령만 바꿉니다.
+
+HARNESS_STEPS=(
+  # 타입 검사가 깨지면 나머지는 의미가 없으므로 첫 필수 단계입니다. (scripts.typecheck = "tsc --noEmit -p tsconfig.json")
+  "typecheck|quality|true|pnpm run typecheck"
+
+  # ESLint(또는 Biome). 규칙 비활성화는 guard hook 이 차단합니다.
+  "lint|quality|true|pnpm run lint"
+
+  # 의존 경계 검사(OBS-C3 와 함께 architecture 계층). scripts.depcruise = "depcruise src --config .dependency-cruiser.cjs"
+  "arch-test|architecture|true|pnpm run depcruise"
+
+  # 프로덕션 번들이 실제로 만들어지는지. 빌드 실패는 correctness 입니다.
+  "build|correctness|true|pnpm run build"
+
+  # 단위·컴포넌트 테스트 (Vitest + Testing Library).
+  "unit|correctness|true|pnpm run test:unit"
+
+  # 브라우저 E2E (OBS-F1). Playwright 가 console(OBS-F4)·network(OBS-F5) 를 .harness/logs/ 에 남기도록
+  # fixture 를 둡니다. 예시는 examples.md 3절에 있습니다.
+  "e2e|behavior|false|pnpm run test:e2e"
+
+  # 접근성 검사(OBS-F2). axe-core 를 Playwright 안에서 실행합니다.
+  "a11y|behavior|false|pnpm run test:a11y"
+
+  # 번들 크기 예산. .size-limit.json 이 기준값을 소유합니다.
+  "bundle-size|performance|false|pnpm run size"
+)
+
+# 감지 결과를 강제로 재정의해야 할 때만 사용합니다. workspace 루트에서는 kind 가 unknown 으로 나오므로
+# 패키지 루트를 HARNESS_PROJECT_ROOT 로 지정하거나 여기서 kind 를 고정합니다.
+# HARNESS_STACK="typescript:pnpm"
+# HARNESS_KIND="frontend"

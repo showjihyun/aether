@@ -1,0 +1,15 @@
+# 평가·게이트를 규정하는 경로입니다. 브랜치 보호에서 "Require review from Code Owners"
+# 를 켜야 실제 강제력이 생깁니다. 이 파일만으로는 알림 역할에 그칩니다.
+#
+# 로컬 hook 은 에이전트가 도는 곳에서 돌아 우회가 가능합니다. 사람 검토는 저장소 밖에
+# 있으므로 우회되지 않습니다. 그것이 이 파일을 두는 이유입니다.
+
+/harness/rules/            @showjihyun
+/harness/hooks/            @showjihyun
+/harness/scripts/          @showjihyun
+/harness/evaluation/       @showjihyun
+/evaluation/               @showjihyun
+/harness/language/         @showjihyun
+/harness.config            @showjihyun
+/.claude/settings.json     @showjihyun
+/.github/                  @showjihyun
