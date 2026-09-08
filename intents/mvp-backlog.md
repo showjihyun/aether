@@ -47,13 +47,13 @@ Phase 가 바뀔 때는 새 intent 를 발급합니다(`cp _template.md NNNN-<�
 
 ## Phase 0 — Architecture & Foundation
 
-Intent: [0001](0001-phase-0-foundation.md) (승인 대기). 기간: Week 1~2.
+Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). 기간: Week 1~2.
 
 **Phase 완료 판정** — 새로 clone 한 사람이 저장소 정보만으로 명령 하나를 찾아 실행하면 Web 과 API 가 뜨고, `verify.sh` 가 제품 코드를 실제로 검사하며, AR-2·AR-3·AR-5 위반이 `arch-test` 에서 exit 0 이 아닌 값으로 드러나고, `docker compose up` 이 인터넷 없이 성립합니다.
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| P0-1 | 모노레포 뼈대와 빈 패키지 경계 | — | Q1, Q2 | 대기 |
+| P0-1 | 모노레포 뼈대와 빈 패키지 경계 | — | — | 대기 |
 | P0-2 | `apps/api` 최소 기동 | P0-1 | — | 대기 |
 | P0-3 | `packages/sdk` 와 `apps/web` 최소 기동 | P0-2 | Q5 | 대기 |
 | P0-4 | `apps/worker` 최소 기동 | P0-1 | — | 대기 |
@@ -71,7 +71,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인 대기). 기간: Week 1~2.
 | 범위 밖 | 패키지 안의 구현. 서로를 import 하는 코드. `infra/kubernetes` 는 디렉터리와 README 한 줄만 |
 | 완료 판정 | 의존성 설치 명령 두 개(Python, Node)가 깨끗한 checkout 에서 성공. 트리가 [../docs/architecture.md](../docs/architecture.md) 2절의 `패키지 자리` 열과 일치. 각 패키지 README 의 책임 문장이 2절의 `책임` 열과 같음 |
 | 걸리는 규칙 | DP-5 Modular Monolith. 패키지 경계로만 표현합니다 |
-| 게이트 | **Q1** Python 패키지 관리자(uv / poetry), **Q2** 모노레포 도구(pnpm 단독 / turborepo). 둘 다 [0001](0001-phase-0-foundation.md) Open Questions 1·2 |
+| 게이트 | 닫힘 (2026-09-08). **Q1 → uv**, **Q2 → pnpm workspace 단독**(turborepo 없음). 기록은 [0001](0001-phase-0-foundation.md) Open Questions 1·2 |
 
 ### P0-2 `apps/api` 최소 기동
 

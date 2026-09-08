@@ -87,3 +87,4 @@
 | 2026-09-08 | 번들 도입(AD-1). verify 단계는 self-check 6개. 제품 코드 없음 |
 | 2026-09-08 | `intents/` 추가. Intent 0001(Phase 0) 작성, 승인 대기 |
 | 2026-09-08 | `intents/intent.md` 추가. 플레이북의 이름으로 활성 intent 를 가리키는 자리를 만들고, 진입점 문서(AGENTS.md·CLAUDE.md·docs/README.md)의 경로를 그쪽으로 옮겼습니다 |
+| 2026-09-08 | Intent 0001 승인(showjihyun). Q1 = uv, Q2 = pnpm workspace 단독으로 닫힘. 다음 산출물은 spec |

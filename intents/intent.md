@@ -3,10 +3,10 @@
 | 키 | 값 |
 | --- | --- |
 | 활성 intent | [0001 — Phase 0: Architecture & Foundation](0001-phase-0-foundation.md) |
-| 상태 | 승인 대기 |
-| 승인 | (비어 있음 — 채워지기 전에는 spec 단계로 넘어가지 않습니다) |
+| 상태 | 승인됨 |
+| 승인 | showjihyun, 2026-09-08 |
 | 후속 spec | 아직 없음 |
-| 열린 질문 | 5건. 이 중 착수 전에 닫아야 하는 3건이 미해결입니다 |
+| 열린 질문 | 5건 중 2건 닫힘(Q1 → uv, Q2 → pnpm workspace 단독). 착수 전에 닫아야 하는 Q3 이 남아 있습니다 |
 | 갱신일 | 2026-09-08 |
 
 ## 이 파일이 무엇인가
@@ -21,8 +21,8 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 
 | 단계 | 산출물 | 이 저장소의 자리 | 누가 통과시키는가 | 지금 |
 | --- | --- | --- | --- | --- |
-| 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0001, 승인 대기 |
-| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 없음. intent 가 승인되면 만듭니다 |
+| 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0001, 승인됨 |
+| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 없음. **다음 단계입니다.** 0001 이 승인되었으므로 `specs/0001-phase-0-foundation.md` 를 쓸 차례이며, 그때 `specs/` 가 생깁니다 |
 | 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 없음 |
 | 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | 없음. Phase 0 미착수 |
 
@@ -46,7 +46,7 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 
 | 번호 | 제목 | 대상 Phase | 상태 | 후속 spec |
 | --- | --- | --- | --- | --- |
-| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 승인 대기 | 없음 |
+| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 승인됨 | 없음 |
 
 아직 발급하지 않은 intent(0002 ~ 0006, Phase 1 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
 
