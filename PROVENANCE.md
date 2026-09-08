@@ -44,6 +44,7 @@
 | [AGENTS.md](AGENTS.md) | 진입점 지침. `harness/templates/AGENTS.md` 의 자리표시자를 aether 로 채운 것 |
 | [CLAUDE.md](CLAUDE.md) | 진입 지도. `harness/templates/CLAUDE.md` 기반 |
 | `harness.config` | aether 의 verify 단계 정의 |
+| `.gitattributes` | 줄바꿈을 LF 로 고정. bash 스크립트와 `harness.config` 가 Windows clone 에서 CRLF 로 깨지는 것을 막습니다. 번들에는 없던 파일입니다 |
 | [docs/](docs/README.md) | 계층·용어·Phase. 에이전트의 탐색 대상 |
 | [evaluation/](evaluation/README.md) | 번들 템플릿의 `{{자리표시자}}` 를 aether 도메인으로 실체화한 사본 |
 | [improvement-log/](improvement-log/README.md) | 아직 비어 있습니다. 첫 항목은 실제로 실패가 관측될 때 생깁니다 |
