@@ -82,7 +82,29 @@
 | — | `Affected Systems` 를 [docs/architecture.md](docs/architecture.md) 의 계층 이름으로 강제했습니다. 자유 서술이면 문서와 코드가 다른 이름을 쓰게 됩니다 |
 | — | intent 의 문장이 하네스 규칙으로 승격되지 않는다는 경계를 명시했습니다([intents/README.md](intents/README.md) "하네스와의 관계") |
 
-## 7. 도입 이력
+## 7. 차용한 아키텍처 개념
+
+[docs/architecture.md](docs/architecture.md) 3.1 의 AR-8 ~ AR-11 은 두 외부 개념을 이 저장소에 맞게 줄인 것입니다.
+
+| 항목 | 값 |
+| --- | --- |
+| 출처 1 | Clean Architecture (Robert C. Martin) — 의존성 규칙: 의존은 안쪽으로만, 프레임워크는 바깥의 세부사항 |
+| 출처 2 | Hexagonal Architecture / Ports and Adapters (Alistair Cockburn) — 포트는 안쪽이 선언, 어댑터는 바깥이 구현, driving/driven 의 구분 |
+| 가져온 날짜 | 2026-09-09 |
+| 대상 | Python 패키지 전부(`apps/*`, `packages/*`)의 내부 구조와 import-linter 계약 |
+
+| 원본 | aether 에서 |
+| --- | --- |
+| 클린 아키텍처의 네 동심원(Entities · Use Cases · Interface Adapters · Frameworks) | **세 층**으로 접었습니다 — `domain` · `application` · `adapters`. Interface Adapters 와 Frameworks 를 가르는 실익이 이 규모에서는 없고, 층이 늘면 빈 껍데기가 늘어납니다 |
+| 헥사고날의 driving / driven | `adapters/inbound` / `adapters/outbound` 로 이름을 바꿔 채택. 방향이 이름에 드러나야 AR-11 이 읽힙니다 |
+| 헥사고날의 "포트마다 모듈" | 채택하지 않았습니다. 포트는 `application/ports/` 아래 `Protocol` 로 모아 둡니다. 포트 수가 적은 지금 모듈을 나누면 발견 경로만 길어집니다 |
+| 클린 아키텍처의 "유스케이스 = 클래스 하나" | 규칙으로 두지 않았습니다. 함수든 클래스든 `application` 에 있고 AR-9 를 지키면 됩니다 |
+| 조립(composition root) | 채택. `apps/*/main.py` 한 곳(AR-10). 규칙으로 승격은 어댑터가 생기는 Phase 1 |
+| — | 신뢰 경계를 어댑터에 놓는 해석을 더했습니다. `Observation` 같은 외부 데이터의 표시는 outbound 어댑터의 일이고 `domain` 은 표시된 값만 봅니다 |
+
+이 개념들을 자연어로만 두지 않고 import-linter 계약으로 옮기는 이유는 이 저장소의 원칙([AGENTS.md](AGENTS.md) Learning) 그대로입니다 — 자연어 지시보다 arch-rule 이 먼저입니다.
+
+## 8. 도입 이력
 
 | 날짜 | 무엇을 |
 | --- | --- |
@@ -93,3 +115,4 @@
 | 2026-09-08 | `specs/` 신설. Spec 0001(Phase 0) 초안, 검토 대기. Q3 는 근거와 함께 결정 요청으로 올림 |
 | 2026-09-09 | Spec 0001 승인(showjihyun). D-1 ~ D-12 채택, Q3·Q4·Q5 닫힘. 다음 산출물은 plan |
 | 2026-09-09 | `plans/` 신설. Plan 0001(Phase 0) 초안, 검토 대기. 사람 손 세 번(H-1 보호 파일, H-2 게이트, H-3 인증)으로 묶고 보호 파일 내용을 부록으로 제안 |
+| 2026-09-09 | architecture.md 3.1 에 AR-8 ~ AR-11 신설(클린·헥사고날, 7절). Spec 0001 개정 1, plan·backlog 동반 갱신 |
