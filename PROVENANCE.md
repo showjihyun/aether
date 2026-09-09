@@ -51,6 +51,7 @@
 | [intents/](intents/intent.md) | intent → spec → plan 파이프라인의 첫 단계. 출처는 6절 |
 | [specs/](specs/README.md) | 승인된 intent 의 요구사항과 설계. 첫 spec(0001)이 나오면서 생겼습니다 |
 | [plans/](plans/README.md) | 승인된 spec 의 파일·순서·판정 절차. 첫 plan(0001)이 나오면서 생겼습니다 |
+| [.claude/agents/](.claude/agents/implementer.md) | 구현 서브에이전트. 코드 작성과 테스트 실행을 Sonnet 5 로 위임합니다. 생성자와 판정자를 가르는 장치이기도 합니다(HE-9). 번들의 `harness/subagents/` 형식을 따랐습니다 |
 
 ## 5. 로드맵 원본
 
@@ -120,3 +121,4 @@
 | 2026-09-09 | `plans/` 신설. Plan 0001(Phase 0) 초안, 검토 대기. 사람 손 세 번(H-1 보호 파일, H-2 게이트, H-3 인증)으로 묶고 보호 파일 내용을 부록으로 제안 |
 | 2026-09-09 | architecture.md 3.1 에 AR-8 ~ AR-11 신설(클린·헥사고날, 7절). Spec 0001 개정 1, plan·backlog 동반 갱신 |
 | 2026-09-09 | 포트·어댑터를 1급 개념으로. 포트를 inbound/outbound 로, 유스케이스를 분리, AR-12 신설. Spec 0001 개정 2 |
+| 2026-09-09 | Plan 0001 리뷰 반영(F-1 ~ F-6, P-1 ~ P-7). Spec 0001 개정 3. `.claude/agents/implementer.md`(Sonnet 5) 추가, AGENTS.md Loop 에 위임 규칙 |

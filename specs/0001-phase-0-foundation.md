@@ -10,6 +10,7 @@
 | 후속 plan | [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) (검토 대기) |
 | 개정 1 | 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
+| 개정 3 | 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
 
 intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다. 이 문서는 그 `Proposed Outcome` 다섯 개를 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, 사람이 내려야 할 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P0-1 ~ P0-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다.
 
@@ -24,7 +25,7 @@ intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다.
 | R-3 | AR-1 ~ AR-5 와 **AR-8 · AR-9 · AR-11 · AR-12** 가 기계 판정입니다. 위반을 넣으면 `architecture` 계층이 실패합니다 | Outcome 3, 개정 1·2 | 위반 fixture 로 `lint-imports` / `depcruise` 가 exit ≠ 0. 정상 코드에서 exit 0. 둘 다 테스트로 고정 |
 | R-4 | 이미지를 빌드해 둔 뒤에는 인터넷 없이 `docker compose up` 이 성립합니다 | Outcome 4, DP-4 | egress 없는 네트워크에서 up → **네트워크 안의 `probe` 서비스**가 `api` 와 `web` 에 200 을 받고 exit 0. 호스트 포트는 판정에 쓰지 않습니다(C-3) |
 | R-5 | CI 가 깨끗한 checkout 에서 R-2 를 통과합니다 | Outcome 5 | `.github/workflows/harness.yml` 녹색 |
-| R-6 | 비밀값이 코드·이미지·로그·커밋에 없습니다 | Constraints, Trust | `.dockerignore` 가 `.env*` 를 제외. CI 의 비밀값 스캔 job 적중 0건. `.env.example` 만 커밋 |
+| R-6 | 비밀값이 코드·이미지·로그·커밋에 없습니다 | Constraints, Trust | **저장소 루트**의 `.dockerignore` 가 `.env*` 를 제외(빌드 컨텍스트 루트의 것만 Docker 가 읽습니다). CI 의 비밀값 스캔 job 적중 0건. `.env.example` 만 커밋 |
 | R-7 | Control Plane 은 Data Plane 을 호출하지 않고 선언만 합니다 | AR-7 | `aether_api` 의 import 그래프에 `aether_worker` 없음(`api-arch`). `aether_control` 역할로 `data.*` 에 접근하면 permission denied 인 테스트 |
 | R-8 | `Agent` / `Agent Version` / `Run` 의 저장 모델이 [../docs/domain.md](../docs/domain.md) 1절과 같고, `Agent Version` 은 DB 수준에서 불변입니다 | backlog P0-8 | 빈 DB 에서 마이그레이션 up/down 왕복. **UPDATE 권한이 있는 역할로** `agent_versions` UPDATE/DELETE 를 시도해 트리거가 거부하는 테스트(권한 부족으로 막힌 것은 증명이 아닙니다) |
 | R-9 | 보호 경로는 인증 없이 401, `/healthz` 는 인증 없이 200 입니다 | Q4, DP-6 | 테스트 2건 |
@@ -50,7 +51,7 @@ intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다.
 | `packages/policy` | Python | Trust | 경계만. Phase 2 에 판정 함수 |
 | `packages/evaluation` | Python | Control Plane (제품 Evaluation) | 경계만. Phase 7. 하네스의 `evaluation/` 과 다른 것([../docs/domain.md](../docs/domain.md) 5절) |
 | `packages/sdk` | TypeScript | Experience ↔ Control Plane 의 HTTP 계약 | `healthz()` 하나. 타입은 OpenAPI 에서 생성 |
-| `infra/docker` | — | 배포 | `compose.yaml`, `compose.offline.yaml`, Dockerfile, `.dockerignore`, `.env.example` |
+| `infra/docker` | — | 배포 | `compose.yaml`, `compose.offline.yaml`, Dockerfile, `.env.example`(실제 `.env` 도 이 옆) |
 | `infra/kubernetes` | — | 배포 | README 한 줄. Month 6 |
 | `README.md` (루트) | — | — | 기동 명령과 verify 명령. R-1 의 발견 경로. P0-5 가 만듭니다 |
 
@@ -62,6 +63,7 @@ Python 패키지 이름은 전부 `aether_<이름>` 이고 배치는 `packages/<
 
 ```text
 README.md              기동 명령 한 줄, verify 명령 한 줄, 문서 지도 링크
+.dockerignore          빌드 컨텍스트(저장소 루트)의 제외 목록. .env* 가 이미지에 들어가는 경로를 끊습니다
 pyproject.toml         uv workspace. members = apps/api, apps/worker, packages/<Python 전부>
 uv.lock  .python-version
 package.json           pnpm workspace 루트. 스크립트는 명시 필터로 위임만 합니다
@@ -94,7 +96,7 @@ Q1·Q2 의 답을 반영합니다. 버전은 숫자를 문서에 박지 않고 *
 | 트레이스 | OpenTelemetry SDK | 각 앱 시작점 |
 | 비밀값 스캔 | gitleaks 류. verify 단계가 아니라 **CI 의 별도 job** | `.github/workflows/harness.yml` |
 
-**workspace 스크립트 규칙.** `apps/web` 과 `packages/sdk` 는 `typecheck`·`lint`·`test:unit` 을 **반드시** 가지고, `web` 은 `build`·`depcruise` 를, `sdk` 는 `generate` 를 더 가집니다. verify 명령은 `pnpm -r` 이 아니라 **명시 필터** `pnpm -F web -F sdk` 를 씁니다. `-r` 은 스크립트가 없는 패키지를 조용히 건너뛰어 검사 범위가 소리 없이 줄지만, 명시 필터는 스크립트가 없으면 오류를 냅니다.
+**workspace 스크립트 규칙.** `apps/web` 과 `packages/sdk` 는 `typecheck`·`lint`·`test:unit` 을 **반드시** 가지고, `web` 은 `build` 를, `sdk` 는 `generate` 를 더 가집니다. dependency-cruiser 는 루트 devDependency 이고 **루트에서** `pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` 로 실행합니다 — 경로 규칙이 cwd 기준이라 패키지 안에서 돌리면 발화하지 않습니다. verify 명령은 `pnpm -r` 이 아니라 **명시 필터** `pnpm -F web -F sdk` 를 씁니다. `-r` 은 스크립트가 없는 패키지를 조용히 건너뛰어 검사 범위가 소리 없이 줄지만, 명시 필터는 스크립트가 없으면 오류를 냅니다.
 
 ### 2.3 계약
 
@@ -150,7 +152,7 @@ Data Plane 의 프로세스입니다. Redis Streams 의 `aether:runs:requested` 
 | `web` | Experience | `api` healthy 후 |
 | `probe` | R-4 판정 전용. `compose.offline.yaml` 에만 있음 | `api` 와 `web` 에 curl 하고 exit 코드로 답하는 일회성 |
 
-장기 실행 서비스에는 healthcheck 를 두고 `depends_on` 에 `condition: service_healthy` 를 씁니다. 베이스 이미지는 digest 로 고정합니다. `infra/docker/.dockerignore` 가 `.env*`, `.git`, `node_modules`, `.venv` 를 제외합니다 — `.env` 가 이미지 layer 에 들어가는 경로를 여기서 끊습니다(R-6).
+장기 실행 서비스에는 healthcheck 를 두고 `depends_on` 에 `condition: service_healthy` 를 씁니다. 베이스 이미지는 digest 로 고정합니다. **저장소 루트의 `.dockerignore`** 가 `.env*`, `.git`, `node_modules`, `.venv`, `.next`, `dist` 를 제외합니다 — Docker 는 빌드 컨텍스트 루트의 것만 읽고, 컨텍스트는 uv workspace 전체가 필요해 저장소 루트입니다. `.env` 가 이미지 layer 에 들어가는 경로를 여기서 끊습니다(R-6). `.env` 자체는 compose 파일 옆 `infra/docker/.env` 에 둡니다 — compose 는 자기 디렉터리의 `.env` 를 읽습니다.
 
 오프라인은 오버라이드 파일로 표현합니다.
 
@@ -234,9 +236,9 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | `api-typecheck` | quality | true | `uv run mypy` |
 | `api-arch` | architecture | true | `uv run lint-imports` |
 | `api-unit` | correctness | true | `uv run pytest -q -m 'not integration'` |
-| `web-typecheck` | quality | true | `pnpm -F sdk run generate && git diff --exit-code -- packages/sdk/src/generated && pnpm -F web -F sdk run typecheck` |
+| `web-typecheck` | quality | true | `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck` |
 | `web-lint` | quality | true | `pnpm -F web -F sdk run lint` |
-| `web-arch` | architecture | true | `pnpm -F web run depcruise` |
+| `web-arch` | architecture | true | `pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` |
 | `web-unit` | correctness | true | `pnpm -F web -F sdk run test:unit` |
 | `web-build` | correctness | true | `pnpm -F web run build` |
 | `api-integration` | correctness | true | `uv run pytest -q -m integration` (testcontainers → 실행 호스트에 Docker 필요) |
@@ -315,7 +317,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 | R-3 | P0-1, P0-6 | `api-arch`, `web-arch` + `tests/arch/` 부정 테스트(AR-8·9·11·12 fixture 포함) |
 | R-4 | P0-5 | `docker compose -f compose.yaml -f compose.offline.yaml run probe` → exit 0 |
 | R-5 | P0-7 | GitHub Actions `harness` 워크플로 |
-| R-6 | P0-5, P0-9 | `.dockerignore` 존재와 내용, CI 비밀값 스캔 job, `.env` 미커밋 확인 |
+| R-6 | P0-5, P0-9 | 루트 `.dockerignore` 존재와 내용, CI 비밀값 스캔 job, `.env` 미커밋 확인 |
 | R-7 | P0-4, P0-8 | `api-arch`(AR-7 계약), `api-integration`: `aether_control` 로 `data.*` 접근 시 permission denied |
 | R-8 | P0-8 | `api-integration`: 빈 DB 마이그레이션 왕복, 권한 있는 역할로 불변 트리거 테스트 |
 | R-9 | P0-9 | `api-unit`: 401 / 200 테스트 |
