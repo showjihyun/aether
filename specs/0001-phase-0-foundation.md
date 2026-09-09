@@ -11,6 +11,7 @@
 | 개정 1 | 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 4 | 2026-09-09. C-1 에 사실 하나를 더함: guard hook 은 자기 환경변수만 읽어, 세션 안의 에이전트는 사람이 대행을 지시해도 `HARNESS_ALLOW_GUARDED_EDIT` 통로를 쓸 수 없음(`guard-evaluation-tampering.sh` 274·299행). H-1 대행 요청을 검토하며 확인. 보호 파일의 생성·커밋은 사람의 셸에서 |
 
 intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다. 이 문서는 그 `Proposed Outcome` 다섯 개를 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, 사람이 내려야 할 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P0-1 ~ P0-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다.
 
@@ -274,7 +275,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 
 | ID | 우려 | 어떻게 다루는가 |
 | --- | --- | --- |
-| C-1 | **보호 파일의 생성이 hook 에 막힙니다.** `guard-lib.sh` 의 `matches_any` 는 `/` 없는 패턴을 **basename 으로 어느 깊이에서든** 맞춥니다. 그래서 `.importlinter`, `.dependency-cruiser.cjs` 뿐 아니라 `apps/web/tsconfig.json`, `eslint.config.*` 도 에이전트가 Write 로 만들 수 없습니다. P0-1, P0-3, P0-6 이 걸립니다 | 에이전트는 파일 내용을 PR 본문이나 인접 문서에 제안하고, 사람이 만들어 `harness-change` 라벨로 커밋합니다. `HARNESS_ALLOW_GUARDED_EDIT` 우회는 쓰지 않습니다 — `bypass` 이벤트가 남고 REP-3 의 합격 기준에 걸립니다 |
+| C-1 | **보호 파일의 생성이 hook 에 막힙니다.** `guard-lib.sh` 의 `matches_any` 는 `/` 없는 패턴을 **basename 으로 어느 깊이에서든** 맞춥니다. 그래서 `.importlinter`, `.dependency-cruiser.cjs` 뿐 아니라 `apps/web/tsconfig.json`, `eslint.config.*` 도 에이전트가 Write 로 만들 수 없습니다. P0-1, P0-3, P0-6 이 걸립니다 | 에이전트는 파일 내용을 PR 본문이나 인접 문서에 제안하고, 사람이 만들어 `harness-change` 라벨로 커밋합니다. `HARNESS_ALLOW_GUARDED_EDIT` 우회는 쓰지 않습니다 — `bypass` 이벤트가 남고 REP-3 의 합격 기준에 걸립니다. 게다가 hook 은 **자기 프로세스의 환경변수만** 읽으므로 세션 안의 에이전트는 명령에 변수를 붙여도 그 통로를 쓸 수 없습니다. 보호 파일은 구조적으로 사람의 것입니다 — 사람이 대행을 지시해도 실행은 사람의 셸에서 합니다 |
 | C-2 | **Phase 0 에서 보호 파일 변경이 세 건 있습니다.** `harness.config`(단계·임계값·링크 디렉터리), `harness.yml`(도구 설치·스캔 job), 그리고 C-1 의 신규 파일들 | 각각 별도 PR, 한 번에 하나([../harness/rules/harness-change-control.rule.md](../harness/rules/harness-change-control.rule.md)). 임계값은 EI-2 로 사람 소유 |
 | C-3 | **R-1 과 R-4 는 같은 명령으로 동시에 만족되지 않습니다.** "명령 하나로 뜬다" 는 첫 실행에서 이미지 pull 을 전제하고, "인터넷 없이" 는 pull 이 이미 끝났음을 전제합니다 | R-1 은 온라인 첫 실행으로, R-4 는 빌드 후 `compose.offline.yaml` 의 `probe` 로 각각 판정합니다. 두 판정을 하나로 합치려고 이미지를 저장소에 넣지 않습니다. 진짜 오프라인 배포는 Phase 11 의 Offline Release Bundle 입니다 |
 | C-4 | **인증(2.9)은 보안에 닿습니다** | 🔒 P0-9. 에이전트는 설계와 테스트 목록까지. 구현은 사람 검토 |
