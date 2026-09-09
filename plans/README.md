@@ -47,7 +47,7 @@ plan 은 실행 중에 바뀌는 문서입니다. 단위를 끝내면 [../intent
 
 | 번호 | 제목 | 근거 spec | 상태 |
 | --- | --- | --- | --- |
-| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [specs/0001](../specs/0001-phase-0-foundation.md) | 검토 대기 |
+| [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [specs/0001](../specs/0001-phase-0-foundation.md) | 승인됨 |
 
 ## 관련 문서
 
