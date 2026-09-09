@@ -97,7 +97,10 @@
 | --- | --- |
 | 클린 아키텍처의 네 동심원(Entities · Use Cases · Interface Adapters · Frameworks) | **세 층**으로 접었습니다 — `domain` · `application` · `adapters`. Interface Adapters 와 Frameworks 를 가르는 실익이 이 규모에서는 없고, 층이 늘면 빈 껍데기가 늘어납니다 |
 | 헥사고날의 driving / driven | `adapters/inbound` / `adapters/outbound` 로 이름을 바꿔 채택. 방향이 이름에 드러나야 AR-11 이 읽힙니다 |
-| 헥사고날의 "포트마다 모듈" | 채택하지 않았습니다. 포트는 `application/ports/` 아래 `Protocol` 로 모아 둡니다. 포트 수가 적은 지금 모듈을 나누면 발견 경로만 길어집니다 |
+| 헥사고날의 포트 두 종류 | 채택. inbound 포트(유스케이스 인터페이스)와 outbound 포트(바깥에 요구하는 것)를 `application/ports/inbound`, `application/ports/outbound` 에 `Protocol` 로. 유스케이스는 inbound 포트의 구현으로 `application/usecases` 에 |
+| 헥사고날의 "안은 포트로만 닿는다" | 채택. AR-12 — 어댑터는 `application.ports` 만 import 하고 유스케이스 구현을 직접 부르지 않습니다. 유스케이스는 조립이 포트 타입으로 건넵니다 |
+| 포트 계약 테스트 | 채택. 같은 테스트를 fake 어댑터와 실제 어댑터에 둘 다 돌립니다. "어댑터를 바꿔 꽂을 수 있다" 는 주장이 이것으로 증명됩니다 |
+| 헥사고날의 "포트마다 모듈" | 강제하지 않습니다. 포트는 방향별 디렉터리 아래 모으고, 파일을 어떻게 나눌지는 포트 수가 정합니다 |
 | 클린 아키텍처의 "유스케이스 = 클래스 하나" | 규칙으로 두지 않았습니다. 함수든 클래스든 `application` 에 있고 AR-9 를 지키면 됩니다 |
 | 조립(composition root) | 채택. `apps/*/main.py` 한 곳(AR-10). 규칙으로 승격은 어댑터가 생기는 Phase 1 |
 | — | 신뢰 경계를 어댑터에 놓는 해석을 더했습니다. `Observation` 같은 외부 데이터의 표시는 outbound 어댑터의 일이고 `domain` 은 표시된 값만 봅니다 |
@@ -116,3 +119,4 @@
 | 2026-09-09 | Spec 0001 승인(showjihyun). D-1 ~ D-12 채택, Q3·Q4·Q5 닫힘. 다음 산출물은 plan |
 | 2026-09-09 | `plans/` 신설. Plan 0001(Phase 0) 초안, 검토 대기. 사람 손 세 번(H-1 보호 파일, H-2 게이트, H-3 인증)으로 묶고 보호 파일 내용을 부록으로 제안 |
 | 2026-09-09 | architecture.md 3.1 에 AR-8 ~ AR-11 신설(클린·헥사고날, 7절). Spec 0001 개정 1, plan·backlog 동반 갱신 |
+| 2026-09-09 | 포트·어댑터를 1급 개념으로. 포트를 inbound/outbound 로, 유스케이스를 분리, AR-12 신설. Spec 0001 개정 2 |

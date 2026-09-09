@@ -8,7 +8,8 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-09 (D-1 ~ D-12 채택. D-7 은 해석 (i) 로 확정) |
 | 후속 plan | [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) (검토 대기) |
-| 개정 | **1** — 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
+| 개정 1 | 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
+| 개정 2 | 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 
 intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다. 이 문서는 그 `Proposed Outcome` 다섯 개를 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, 사람이 내려야 할 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P0-1 ~ P0-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다.
 
@@ -20,7 +21,7 @@ intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다.
 | --- | --- | --- | --- |
 | R-1 | 깨끗한 checkout 에서 저장소 문서만 보고 찾은 **명령 하나**로 Web 과 API 가 뜹니다 | Outcome 1 | P0-5 가 만드는 **루트 README** 의 명령을 그대로 실행 → `GET /healthz` 200, web 첫 페이지 200. README 에서 명령까지 두 홉 이내 |
 | R-2 | `verify.sh` 한 번의 실행이 self-check 단계와 제품 단계를 함께 집계합니다 | Outcome 2 | `.harness/verify.json` 의 `steps[]` 에 `api-*` 와 `web-*` id 가 있고 전부 `pass` |
-| R-3 | AR-1 ~ AR-5 와 **AR-8 · AR-9 · AR-11** 이 기계 판정입니다. 위반을 넣으면 `architecture` 계층이 실패합니다 | Outcome 3, 개정 1 | 위반 fixture 로 `lint-imports` / `depcruise` 가 exit ≠ 0. 정상 코드에서 exit 0. 둘 다 테스트로 고정 |
+| R-3 | AR-1 ~ AR-5 와 **AR-8 · AR-9 · AR-11 · AR-12** 가 기계 판정입니다. 위반을 넣으면 `architecture` 계층이 실패합니다 | Outcome 3, 개정 1·2 | 위반 fixture 로 `lint-imports` / `depcruise` 가 exit ≠ 0. 정상 코드에서 exit 0. 둘 다 테스트로 고정 |
 | R-4 | 이미지를 빌드해 둔 뒤에는 인터넷 없이 `docker compose up` 이 성립합니다 | Outcome 4, DP-4 | egress 없는 네트워크에서 up → **네트워크 안의 `probe` 서비스**가 `api` 와 `web` 에 200 을 받고 exit 0. 호스트 포트는 판정에 쓰지 않습니다(C-3) |
 | R-5 | CI 가 깨끗한 checkout 에서 R-2 를 통과합니다 | Outcome 5 | `.github/workflows/harness.yml` 녹색 |
 | R-6 | 비밀값이 코드·이미지·로그·커밋에 없습니다 | Constraints, Trust | `.dockerignore` 가 `.env*` 를 제외. CI 의 비밀값 스캔 job 적중 0건. `.env.example` 만 커밋 |
@@ -55,7 +56,7 @@ intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다.
 
 Python 패키지 이름은 전부 `aether_<이름>` 이고 배치는 `packages/<이름>/src/aether_<이름>/` 입니다. `src` 레이아웃을 쓰는 이유는 하나입니다 — 테스트가 **설치된** 패키지를 import 하게 강제해, 경계 위반이 로컬의 상대 경로 덕에 통과하는 일이 없게 합니다. `apps/api`, `apps/worker` 도 같은 규칙(`aether_api`, `aether_worker`)입니다.
 
-모든 패키지는 안에 같은 세 층을 가집니다 — `domain/`, `application/`(안에 `ports/`), `adapters/inbound/`, `adapters/outbound/` — 그리고 `apps/*` 만 `main.py` 를 조립 지점으로 둡니다([../docs/architecture.md](../docs/architecture.md) 3.1, AR-8 ~ AR-11). Phase 0 에서는 이 하위 패키지들이 `__init__.py` 만 가진 빈 껍데기입니다. 빈 껍데기를 지금 만드는 이유는 3.1 의 마지막 문단과 같습니다.
+모든 패키지는 안에 같은 구조를 가집니다 — `domain/`, `application/ports/inbound/`(유스케이스 인터페이스), `application/ports/outbound/`(바깥에 요구하는 인터페이스), `application/usecases/`(inbound 포트의 구현), `adapters/inbound/`, `adapters/outbound/` — 그리고 `apps/*` 만 `main.py` 를 조립 지점으로 둡니다([../docs/architecture.md](../docs/architecture.md) 3.1, AR-8 ~ AR-12). 어댑터는 `application.ports` 만 import 합니다(AR-12). Phase 0 에서는 이 하위 패키지들이 `__init__.py` 만 가진 빈 껍데기입니다. 빈 껍데기를 지금 만드는 이유는 3.1 의 마지막 문단과 같습니다.
 
 루트 파일:
 
@@ -83,7 +84,7 @@ Q1·Q2 의 답을 반영합니다. 버전은 숫자를 문서에 박지 않고 *
 | Python lint | ruff `check` | `pyproject.toml` `[tool.ruff]` (별도 `ruff.toml` 을 만들지 않습니다 — 보호 파일 수를 늘리지 않기 위해) |
 | Python 포맷 | ruff `format --check`. **`ruff check` 는 포맷을 검사하지 않으므로** 별도 명령이며, 단계 수를 지키려고 `api-lint` 한 단계 안에서 두 명령을 잇습니다 | 같은 곳 |
 | Python 타입 | mypy, strict. 대상은 `[tool.mypy] files` 가 명시 — 인자 없는 `uv run mypy` 가 그것을 읽습니다 | `pyproject.toml` `[tool.mypy]` |
-| Python 테스트 | pytest. `integration` 마커. `domain`·`application` 테스트는 컨테이너 없이 — outbound 포트에 fake 를 꽂습니다(AR-9). 어댑터 테스트만 testcontainers 로 실제 PostgreSQL·Redis | `pyproject.toml` `[tool.pytest.ini_options]` |
+| Python 테스트 | pytest. `integration` 마커. 유스케이스 테스트는 inbound 포트로 부르고 outbound 포트에 fake 를 꽂아 컨테이너 없이(AR-9·AR-12). 어댑터는 **포트 계약 테스트** — 같은 테스트를 fake 와 실제 어댑터에 둘 다 — 로, 실제 쪽만 testcontainers 로 PostgreSQL·Redis | `pyproject.toml` `[tool.pytest.ini_options]` |
 | Python 아키텍처 | import-linter | `.importlinter` |
 | TS lint | ESLint (flat config) | `eslint.config.*` (보호 파일) |
 | TS 타입 | `tsc --noEmit` | 각 패키지 `tsconfig.json` (보호 파일) |
@@ -197,6 +198,7 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | 조회 | 요청 키를 해시해 `key_hash` 로 직접 조회. 비교는 constant-time. `revoked_at` 이 있으면 거부 |
 | 발급 | `uv run aether-api keys create --label <이름>`. 원문은 이때 한 번 출력. 환경변수로 키를 주입하는 부트스트랩은 두지 않습니다 — `.env` 에 동작하는 비밀값이 놓이는 경로가 됩니다 |
 | 범위 | `/healthz` 를 제외한 모든 경로. 단일 테넌트. 사용자·조직·역할 없음 |
+| 구조 | inbound 포트 `Authenticate`·`IssueApiKey`, outbound 포트 `ApiKeyStore`, 유스케이스 둘, outbound 어댑터는 PostgreSQL 구현. HTTP 의존성과 CLI 는 inbound 포트만 봅니다(AR-12). `ApiKeyStore` 의 fake 와 PostgreSQL 구현은 같은 포트 계약 테스트를 통과합니다 |
 | 뺀 것 | 세션, OIDC/SSO, Permission, rate limit. Identity 는 Control Plane 의 항목이지만 Trust Layer(Phase 8) 전에는 키 하나로 충분합니다 |
 
 이 절은 DP-6 과 AGENTS.md Trust 에 걸립니다. 에이전트는 P0-9 에서 인터페이스와 테스트 목록까지만 만들고 구현은 사람 검토를 거칩니다.
@@ -216,6 +218,7 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | AR-9 | forbidden, `include_external_packages` | 전 패키지의 `domain`·`application` → 프레임워크·I/O 모듈 금지(목록은 architecture.md 3.1 과 `.importlinter`) | 활성 (개정 1) |
 | AR-10 | — | 조립은 `apps/*/main.py` 한 곳 | 리뷰 항목. Phase 1 에 forbidden 으로 승격 |
 | AR-11 | forbidden ×2 | 전 패키지의 `adapters.inbound` ↔ `adapters.outbound` 상호 금지 | 활성 (개정 1) |
+| AR-12 | forbidden | 전 패키지의 `adapters` → `application.usecases` 금지. 어댑터는 `application.ports` 만 | 활성 (개정 2) |
 
 부정 테스트: `tests/arch/` 에 위반 import 를 담은 임시 패키지 fixture 를 두고, 그 fixture 용 설정으로 `lint-imports` 와 `depcruise` 를 실행해 exit ≠ 0 을 단언합니다. 이 테스트가 없으면 "규칙이 등록되어 있다" 와 "규칙이 동작한다" 를 구분할 수 없습니다.
 
@@ -297,7 +300,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 | D-10 | 큐는 **Redis Streams**. consumer group 과 ack 가 필요하고 List 에는 둘 다 없습니다 | — | 2.3, F-4 |
 | D-11 | **Run 은 Plane 마다 기록이 하나씩**: `control.runs`(선언) + `data.run_executions`(실행 상태). `GET /runs/{id}` 는 `control` 의 투영만 읽습니다 | — | 2.8, F-1. On-Prem Plane 분리에 맞는 쪽 |
 | D-12 | **로컬 verify 전체 예산 10분.** P0-7 에서 실측해 기록하고, 조정은 사람이 `improvement-log/` 근거와 함께 | — | R-11, V-5 |
-| D-13 | **모든 Python 패키지는 `domain` / `application`(+`ports`) / `adapters`(`inbound`·`outbound`) 세 층**을 가지며 AR-8 ~ AR-11 을 import-linter 로 판정합니다. 조립은 `apps/*/main.py`. Phase 0 에서는 빈 껍데기 | — | 개정 1. [../docs/architecture.md](../docs/architecture.md) 3.1 |
+| D-13 | **모든 Python 패키지는 `domain` / `application`(`ports/inbound`, `ports/outbound`, `usecases`) / `adapters`(`inbound`, `outbound`) 구조**를 가지며 AR-8 ~ AR-12 를 import-linter 로 판정합니다. 포트는 안쪽이 소유하고 어댑터는 포트로만 안을 만납니다. 조립은 `apps/*/main.py`. Phase 0 에서는 빈 껍데기 | — | 개정 1·2. [../docs/architecture.md](../docs/architecture.md) 3.1 |
 
 승인과 함께 [../intents/0001-phase-0-foundation.md](../intents/0001-phase-0-foundation.md) 의 Open Questions 3·4·5 를 닫고, [../intents/intent.md](../intents/intent.md) 의 머리 표를 갱신합니다. D-3 은 승인해도 P0-9 의 구현 검토가 따로 남습니다.
 
@@ -309,7 +312,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 | --- | --- | --- |
 | R-1 | P0-1 ~ P0-5 | 루트 README 의 명령 실행 → `curl /healthz`, web 200 |
 | R-2 | P0-7 | `./harness/scripts/verify.sh` → `.harness/verify.json` 의 `api-*`, `web-*` |
-| R-3 | P0-1, P0-6 | `api-arch`, `web-arch` + `tests/arch/` 부정 테스트(AR-8·9·11 fixture 포함) |
+| R-3 | P0-1, P0-6 | `api-arch`, `web-arch` + `tests/arch/` 부정 테스트(AR-8·9·11·12 fixture 포함) |
 | R-4 | P0-5 | `docker compose -f compose.yaml -f compose.offline.yaml run probe` → exit 0 |
 | R-5 | P0-7 | GitHub Actions `harness` 워크플로 |
 | R-6 | P0-5, P0-9 | `.dockerignore` 존재와 내용, CI 비밀값 스캔 job, `.env` 미커밋 확인 |

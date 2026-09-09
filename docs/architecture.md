@@ -41,42 +41,75 @@ Build → Connect → Contextualize → Verify → Execute → Evaluate
 | AR-6 | 외부 시스템 접근은 전부 `packages/mcp` 를 지납니다. 우회 경로를 만들면 MCP Firewall 이 관측하지 못합니다. |
 | AR-7 | Control Plane 은 Data Plane 을 **호출하지 않고 선언만** 합니다. On-Prem 에서 Data Plane 이 고객 데이터센터 안에만 있어도 성립해야 하기 때문입니다. |
 
-### 3.1 패키지 안의 의존 방향 (AR-8 ~ AR-11)
+### 3.1 패키지 안의 의존 방향 (AR-8 ~ AR-12)
 
-AR-1 ~ AR-7 은 패키지 **사이**의 방향입니다. 패키지 **안**에도 방향이 있어야 합니다. 없으면 FastAPI 핸들러가 SQLAlchemy 세션을 직접 만들고, 그 순간 유스케이스 하나를 테스트하려면 DB 가 필요해집니다. 클린 아키텍처의 의존성 규칙과 헥사고날 아키텍처의 포트·어댑터를 이 저장소에 맞게 줄여 가져옵니다. 무엇을 가져오고 무엇을 뺐는지는 [../PROVENANCE.md](../PROVENANCE.md) 7절이 소유합니다.
+AR-1 ~ AR-7 은 패키지 **사이**의 방향입니다. 패키지 **안**에도 방향이 있어야 합니다. 없으면 FastAPI 핸들러가 SQLAlchemy 세션을 직접 만들고, 그 순간 유스케이스 하나를 테스트하려면 DB 가 필요해집니다. 클린 아키텍처의 의존성 규칙과 헥사고날 아키텍처의 포트·어댑터를 가져옵니다. 무엇을 가져오고 무엇을 뺐는지는 [../PROVENANCE.md](../PROVENANCE.md) 7절이 소유합니다.
 
-모든 Python 패키지 — `packages/*` 와 `apps/*` 둘 다 — 는 같은 세 층을 가집니다.
+#### 용어
+
+포트와 어댑터는 디렉터리 이름이 아니라 개념입니다. 먼저 뜻을 고정합니다.
+
+| 용어 | 뜻 | 어디에 |
+| --- | --- | --- |
+| **포트** (Port) | 애플리케이션 경계에 놓인 **인터페이스**. `Protocol` 로 선언합니다. 기술을 모릅니다 | `application/ports` — 안쪽이 소유 |
+| inbound 포트 | 바깥이 안을 **부르는** 계약. 유스케이스의 인터페이스. "이것을 해 달라" | `application/ports/inbound` |
+| outbound 포트 | 안이 바깥에 **요구하는** 계약. 저장소, 큐, 모델, 시계. "이것이 필요하다" | `application/ports/outbound` |
+| **유스케이스** (Use case) | inbound 포트의 구현. outbound 포트만 통해 바깥을 봅니다 | `application/usecases` |
+| **어댑터** (Adapter) | 포트와 기술을 잇는 바깥 코드. 기술을 압니다 | `adapters` |
+| inbound 어댑터 | inbound 포트를 **부르는** 쪽. HTTP 라우터, CLI, 스트림 소비자 | `adapters/inbound` |
+| outbound 어댑터 | outbound 포트를 **구현하는** 쪽. PostgreSQL 저장소, Redis 발행자, LLM SDK 호출 | `adapters/outbound` |
+| **조립** (Composition root) | 유스케이스에 outbound 어댑터를 꽂고, inbound 어댑터에 유스케이스를 포트 타입으로 건네는 곳. 양쪽을 다 아는 유일한 코드 | `apps/*/main.py` |
+
+포트는 **안쪽이 소유**합니다. 어댑터가 포트의 모양을 정하면 기술이 애플리케이션의 모양을 정하게 되고, 그것이 헥사고날이 막으려는 바로 그 일입니다.
+
+#### 구조
+
+모든 Python 패키지 — `packages/*` 와 `apps/*` 둘 다 — 는 같은 구조를 가집니다.
 
 ```text
 aether_<이름>/
-  domain/               엔티티·값 객체·도메인 규칙. 표준 라이브러리와 domain 만 import
-  application/          유스케이스와 포트. domain 만 import
-    ports/              Protocol 로 선언한 인터페이스 — 유스케이스가 바깥에 요구하는 것
+  domain/                    엔티티·값 객체·도메인 규칙. 표준 라이브러리와 domain 만 import
+  application/
+    ports/
+      inbound/               유스케이스 인터페이스 (Protocol)
+      outbound/              바깥에 요구하는 인터페이스 (Protocol)
+    usecases/                inbound 포트의 구현. domain 과 ports 만 import
   adapters/
-    inbound/            바깥이 application 을 부르는 쪽. HTTP 라우터, CLI, 스트림 소비자
-    outbound/           application 이 포트로 바깥을 부르는 쪽. 저장소, 큐, HTTP 클라이언트, LLM SDK
-  main.py               apps/* 에만. 조립 — 포트에 어댑터를 꽂는 유일한 곳
+    inbound/                 inbound 포트를 부름. ports.inbound 와 domain 만 import
+    outbound/                outbound 포트를 구현. ports.outbound 와 domain 만 import
+  main.py                    apps/* 에만. 조립
 ```
+
+#### 규칙
 
 | ID | 규칙 |
 | --- | --- |
 | AR-8 | 의존은 **안쪽으로만** 흐릅니다: `adapters` → `application` → `domain`. `domain` 은 `application` 을, `application` 은 `adapters` 를 import 하지 않습니다. |
-| AR-9 | `domain` 과 `application` 은 **프레임워크와 I/O 를 import 하지 않습니다** — `fastapi`, `starlette`, `uvicorn`, `sqlalchemy`, `alembic`, `psycopg`, `asyncpg`, `redis`, `httpx`, `aiohttp`, `requests`, `opentelemetry`, 그리고 AR-5·AR-6 의 SDK. 바깥이 필요하면 `application/ports` 에 `Protocol` 을 선언하고 `adapters/outbound` 가 구현합니다. 검증 라이브러리(pydantic)는 I/O 가 아니므로 막지 않되, `domain` 은 표준 `dataclass` 를 권장합니다. |
+| AR-9 | `domain` 과 `application` 은 **프레임워크와 I/O 를 import 하지 않습니다** — `fastapi`, `starlette`, `uvicorn`, `sqlalchemy`, `alembic`, `psycopg`, `asyncpg`, `redis`, `httpx`, `aiohttp`, `requests`, `opentelemetry`, 그리고 AR-5·AR-6 의 SDK. 바깥이 필요하면 outbound 포트를 선언하고 `adapters/outbound` 가 구현합니다. 검증 라이브러리(pydantic)는 I/O 가 아니므로 막지 않되, `domain` 은 표준 `dataclass` 를 권장합니다. |
 | AR-10 | 포트에 어댑터를 꽂는 **조립은 `apps/*` 의 `main.py` 한 곳**입니다. `packages/*` 안에 조립 코드가 있으면 그 패키지가 배포 모드를 알게 됩니다. |
 | AR-11 | `adapters/inbound` 와 `adapters/outbound` 는 **서로를 import 하지 않습니다.** 둘은 `application` 을 통해서만 만납니다. 라우터가 저장소를 직접 부르면 유스케이스가 사라지고, 그 경로는 테스트도 정책도 지나지 않습니다. |
+| AR-12 | **어댑터는 포트로만 애플리케이션을 만납니다.** `adapters` 는 `application.ports` 만 import 하고 `application.usecases` 를 import 하지 않습니다. inbound 어댑터가 유스케이스 구현을 직접 부르면 포트는 장식이 되고, 테스트에서 유스케이스를 fake 로 바꿀 수 없습니다. 유스케이스 인스턴스는 조립(AR-10)이 포트 타입으로 건넵니다. |
 
-헥사고날에서 가져온 구분은 방향입니다. inbound(driving) 어댑터는 시스템을 **움직이는** 쪽이고, outbound(driven) 어댑터는 시스템이 **움직이는** 쪽입니다. 같은 유스케이스에 HTTP 와 CLI 가 둘 다 붙는 것(`aether-api` 의 라우터와 `keys create`)이 이 구분의 첫 실례입니다. 신뢰 경계도 여기 놓입니다 — `Observation` 처럼 바깥에서 온 데이터는 outbound 어댑터를 지나 들어오므로, 그것이 데이터이지 지시가 아님을 표시하는 일은 어댑터의 몫이고 `domain` 은 이미 표시된 값만 봅니다([domain.md](domain.md) 1절).
+#### 방향과 신뢰 경계
 
-이미 있는 규칙과의 관계: AR-5 의 model gateway 는 `application/ports` 의 포트 하나와 `adapters/outbound/model_gateway/` 의 어댑터들입니다. AR-6 의 MCP Gateway 도 같은 모양입니다. AR-8 ~ AR-11 은 그 두 특수 사례를 일반 규칙으로 올린 것입니다.
+헥사고날의 핵심은 대칭입니다. inbound(driving) 어댑터는 시스템을 **움직이는** 쪽이고 outbound(driven) 어댑터는 시스템이 **움직이는** 쪽인데, 둘 다 안을 **포트로만** 만납니다. 같은 inbound 포트에 HTTP 와 CLI 가 둘 다 붙는 것(`aether-api` 의 라우터와 `keys create`)이 이 대칭의 첫 실례입니다 — 유스케이스는 누가 자기를 불렀는지 모릅니다.
 
-이 규칙에 두 이득이 달려 있습니다.
+신뢰 경계도 여기 놓입니다. `Observation` 처럼 바깥에서 온 데이터는 outbound 어댑터를 지나 들어오므로, 그것이 데이터이지 지시가 아님을 표시하는 일은 어댑터의 몫이고 `domain` 은 이미 표시된 값만 봅니다([domain.md](domain.md) 1절).
+
+#### 이미 있는 규칙과의 관계
+
+AR-5 의 model gateway 는 outbound 포트 하나(`application/ports/outbound` 의 `ModelGateway`)와 `adapters/outbound/model_gateway/` 의 어댑터들입니다. AR-6 의 MCP Gateway 도 같은 모양입니다. AR-8 ~ AR-12 는 그 두 특수 사례를 일반 규칙으로 올린 것입니다.
+
+#### 이 규칙에 달린 두 이득
 
 | 이득 | 어떻게 |
 | --- | --- |
-| TDD | AR-9 가 성립하면 `domain`·`application` 의 테스트는 컨테이너 없이 돕니다. 유스케이스를 inbound 포트로 부르고 outbound 포트에 fake 를 꽂으면 됩니다. `api-unit` 이 빠른 것이 관행이 아니라 규칙이 됩니다. 어댑터만 `api-integration` 으로 갑니다 |
-| 운영 | DP-3(Model-agnostic)·DP-4(Offline)가 "outbound 어댑터를 바꿔 꽂는다" 로 환원됩니다. Cloud 는 원격 LLM 어댑터, Air-Gapped 는 로컬 어댑터. `domain` 은 어느 쪽인지 모릅니다 |
+| TDD | 유스케이스 테스트는 inbound 포트로 부르고 outbound 포트에 fake 를 꽂습니다 — 컨테이너 없이 돕니다(AR-9). 어댑터는 **포트 계약 테스트**로 검사합니다: 같은 테스트를 fake 어댑터와 실제 어댑터에 둘 다 돌려, 둘이 같은 계약을 지킴을 증명합니다. `api-unit` 이 빠른 것이 관행이 아니라 규칙이 되고, 실제 어댑터만 `api-integration` 으로 갑니다 |
+| 운영 | DP-3(Model-agnostic)·DP-4(Offline)가 "outbound 어댑터를 바꿔 꽂는다" 로 환원됩니다. Cloud 는 원격 LLM 어댑터, Air-Gapped 는 로컬 어댑터. 바꿔 꽂아도 된다는 주장은 포트 계약 테스트가 증명합니다. `domain` 은 어느 쪽인지 모릅니다 |
 
-기계 판정: AR-8 은 import-linter `layers` 계약 하나(`containers` 로 전 패키지), AR-9 는 `forbidden`(`include_external_packages`), AR-11 은 `forbidden` 두 개. AR-10 은 어댑터가 실제로 생기는 Phase 1 에 승격하고 그 전에는 리뷰 항목입니다. 계약 본문은 [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) 부록 D. TypeScript 쪽(`apps/web`)은 지금 페이지 하나라 판정하지 않고, Phase 5 Agent Builder 에서 다시 봅니다.
+#### 기계 판정
+
+AR-8 은 import-linter `layers` 계약 하나(`containers` 로 전 패키지), AR-9 는 `forbidden`(`include_external_packages`), AR-11 은 `forbidden` 두 개, AR-12 는 `forbidden` 하나(`adapters` → `application.usecases`). AR-10 은 어댑터가 실제로 생기는 Phase 1 에 승격하고 그 전에는 리뷰 항목입니다. 계약 본문은 [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) 부록 D. TypeScript 쪽(`apps/web`)은 지금 페이지 하나라 판정하지 않고, Phase 5 Agent Builder 에서 다시 봅니다.
 
 코드가 비어 있는 지금 이 규칙을 붙이는 이유는 단순합니다. 지금 붙이면 공허하게 통과하고, 코드가 생긴 뒤 붙이면 리팩터링이 됩니다.
 

@@ -67,7 +67,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | 로드맵 Phase 0 의 트리를 그대로 만듭니다: `apps/{web,api,worker}`, `packages/{runtime,workflow,context,memory,mcp,policy,evaluation,sdk}`, `infra/{docker,kubernetes}`. 각 Python 패키지는 이름·한 줄 책임과 세 층의 빈 껍데기(`domain`, `application/ports`, `adapters/inbound`, `adapters/outbound` — [../docs/architecture.md](../docs/architecture.md) 3.1)만 가집니다. 루트에 Python 워크스페이스와 Node 워크스페이스 설정 |
+| 범위 | 로드맵 Phase 0 의 트리를 그대로 만듭니다: `apps/{web,api,worker}`, `packages/{runtime,workflow,context,memory,mcp,policy,evaluation,sdk}`, `infra/{docker,kubernetes}`. 각 Python 패키지는 이름·한 줄 책임과 빈 껍데기(`domain`, `application/ports/{inbound,outbound}`, `application/usecases`, `adapters/{inbound,outbound}` — [../docs/architecture.md](../docs/architecture.md) 3.1)만 가집니다. 루트에 Python 워크스페이스와 Node 워크스페이스 설정 |
 | 범위 밖 | 패키지 안의 구현. 서로를 import 하는 코드. `infra/kubernetes` 는 디렉터리와 README 한 줄만 |
 | 완료 판정 | 의존성 설치 명령 두 개(Python, Node)가 깨끗한 checkout 에서 성공. 트리가 [../docs/architecture.md](../docs/architecture.md) 2절의 `패키지 자리` 열과 일치. 각 패키지 README 의 책임 문장이 2절의 `책임` 열과 같음 |
 | 걸리는 규칙 | DP-5 Modular Monolith. 패키지 경계로만 표현합니다 |
@@ -114,7 +114,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `.importlinter`(Python): AR-2(packages 는 apps 를 모름), AR-3(runtime → mcp/context 단방향), AR-4(policy 는 runtime/mcp/context 를 부르지 않음), AR-5(LLM SDK import 는 runtime 의 model gateway 어댑터에서만), **AR-8(패키지 안은 안쪽으로만), AR-9(domain·application 은 프레임워크·I/O 없음), AR-11(inbound ↔ outbound 어댑터 상호 금지)**. `.dependency-cruiser.cjs`(TS): AR-1. 각 규칙에 대해 **일부러 위반한 예시가 실패하는 것**을 테스트로 남깁니다. 파일 자체는 plan 의 H-1 에서 사람이 만듭니다(spec C-1) |
+| 범위 | `.importlinter`(Python): AR-2(packages 는 apps 를 모름), AR-3(runtime → mcp/context 단방향), AR-4(policy 는 runtime/mcp/context 를 부르지 않음), AR-5(LLM SDK import 는 runtime 의 model gateway 어댑터에서만), **AR-8(패키지 안은 안쪽으로만), AR-9(domain·application 은 프레임워크·I/O 없음), AR-11(inbound ↔ outbound 어댑터 상호 금지), AR-12(어댑터는 포트로만 application 을 만남)**. `.dependency-cruiser.cjs`(TS): AR-1. 각 규칙에 대해 **일부러 위반한 예시가 실패하는 것**을 테스트로 남깁니다. 파일 자체는 plan 의 H-1 에서 사람이 만듭니다(spec C-1) |
 | 범위 밖 | AR-6(외부 접근은 MCP 경유)·AR-7 — 대상 코드가 없어 지금은 규칙만 등록하고 검사는 Phase 2 에서 걸립니다 |
 | 완료 판정 | `lint-imports` 와 `depcruise` 가 exit 0. 위반 예시를 넣으면 exit 0 이 아님. 두 설정 파일이 하네스 보호 목록에 잡힘(`guard-evaluation-tampering.sh --list`) |
 | 걸리는 규칙 | 하네스 EL-2 → EL-6 승격. 이 파일들은 이후 보호 파일입니다 |
