@@ -61,11 +61,11 @@ source_modules =
 forbidden_modules =
     openai
     anthropic
-    google.genai
+    google
 ignore_imports =
     aether_runtime.adapters.outbound.model_gateway.** -> openai
     aether_runtime.adapters.outbound.model_gateway.** -> anthropic
-    aether_runtime.adapters.outbound.model_gateway.** -> google.genai
+    aether_runtime.adapters.outbound.model_gateway.** -> google
 unmatched_ignore_imports_alerting = warn
 # 확인: ** 와일드카드는 import-linter 2.x. 미지원이면 어댑터 모듈을 개별 나열합니다.
 # warn 인 이유: 위 ignore_imports 는 어댑터가 생기기 전까지 아무 import 도 매칭하지 않고,
@@ -152,7 +152,7 @@ forbidden_modules =
     opentelemetry
     openai
     anthropic
-    google.genai
+    google
     mcp
 
 [importlinter:contract:ar11-inbound-does-not-import-outbound]
