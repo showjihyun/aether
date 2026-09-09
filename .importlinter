@@ -1,0 +1,228 @@
+[importlinter]
+root_packages =
+    aether_api
+    aether_worker
+    aether_runtime
+    aether_workflow
+    aether_context
+    aether_memory
+    aether_mcp
+    aether_policy
+    aether_evaluation
+include_external_packages = True
+
+[importlinter:contract:ar2-packages-do-not-know-apps]
+name = AR-2 packages/* must not import apps/*
+type = forbidden
+source_modules =
+    aether_runtime
+    aether_workflow
+    aether_context
+    aether_memory
+    aether_mcp
+    aether_policy
+    aether_evaluation
+forbidden_modules =
+    aether_api
+    aether_worker
+
+[importlinter:contract:ar3-runtime-direction]
+name = AR-3 mcp and context must not import runtime
+type = forbidden
+source_modules =
+    aether_mcp
+    aether_context
+forbidden_modules =
+    aether_runtime
+
+[importlinter:contract:ar4-policy-judges-only]
+name = AR-4 policy must not import runtime, mcp, context
+type = forbidden
+source_modules =
+    aether_policy
+forbidden_modules =
+    aether_runtime
+    aether_mcp
+    aether_context
+
+[importlinter:contract:ar5-llm-sdk-only-in-model-gateway]
+name = AR-5 LLM SDKs only inside aether_runtime.model_gateway
+type = forbidden
+source_modules =
+    aether_api
+    aether_worker
+    aether_runtime
+    aether_workflow
+    aether_context
+    aether_memory
+    aether_mcp
+    aether_policy
+    aether_evaluation
+forbidden_modules =
+    openai
+    anthropic
+    google.genai
+ignore_imports =
+    aether_runtime.adapters.outbound.model_gateway.** -> openai
+    aether_runtime.adapters.outbound.model_gateway.** -> anthropic
+    aether_runtime.adapters.outbound.model_gateway.** -> google.genai
+unmatched_ignore_imports_alerting = warn
+# 확인: ** 와일드카드는 import-linter 2.x. 미지원이면 어댑터 모듈을 개별 나열합니다.
+# warn 인 이유: 위 ignore_imports 는 어댑터가 생기기 전까지 아무 import 도 매칭하지 않고,
+# import-linter 의 기본값(error)은 그것을 실패로 봅니다. Phase 1 에 어댑터가 생기면 error 로 되돌립니다(사람).
+
+[importlinter:contract:ar6-mcp-client-only-in-mcp]
+name = AR-6 MCP client library only inside aether_mcp
+type = forbidden
+source_modules =
+    aether_api
+    aether_worker
+    aether_runtime
+    aether_workflow
+    aether_context
+    aether_memory
+    aether_policy
+    aether_evaluation
+forbidden_modules =
+    mcp
+
+[importlinter:contract:ar7-control-does-not-call-data]
+name = AR-7 api must not import worker
+type = forbidden
+source_modules =
+    aether_api
+forbidden_modules =
+    aether_worker
+# AR-7 의 나머지(api -> runtime 의 planner/executor 금지)는 그 모듈이 생기는 Phase 1 에 더합니다.
+
+# --- 패키지 안의 방향 (architecture.md 3.1) -----------------------------------
+
+[importlinter:contract:ar8-inward-only]
+name = AR-8 adapters -> application -> domain, inward only, in every package
+type = layers
+layers =
+    adapters
+    application
+    domain
+containers =
+    aether_api
+    aether_worker
+    aether_runtime
+    aether_workflow
+    aether_context
+    aether_memory
+    aether_mcp
+    aether_policy
+    aether_evaluation
+
+[importlinter:contract:ar9-core-is-framework-free]
+name = AR-9 domain and application import no framework or I/O
+type = forbidden
+source_modules =
+    aether_api.domain
+    aether_api.application
+    aether_worker.domain
+    aether_worker.application
+    aether_runtime.domain
+    aether_runtime.application
+    aether_workflow.domain
+    aether_workflow.application
+    aether_context.domain
+    aether_context.application
+    aether_memory.domain
+    aether_memory.application
+    aether_mcp.domain
+    aether_mcp.application
+    aether_policy.domain
+    aether_policy.application
+    aether_evaluation.domain
+    aether_evaluation.application
+forbidden_modules =
+    fastapi
+    starlette
+    uvicorn
+    sqlalchemy
+    alembic
+    psycopg
+    asyncpg
+    redis
+    httpx
+    aiohttp
+    requests
+    opentelemetry
+    openai
+    anthropic
+    google.genai
+    mcp
+
+[importlinter:contract:ar11-inbound-does-not-import-outbound]
+name = AR-11 inbound adapters do not import outbound adapters
+type = forbidden
+source_modules =
+    aether_api.adapters.inbound
+    aether_worker.adapters.inbound
+    aether_runtime.adapters.inbound
+    aether_workflow.adapters.inbound
+    aether_context.adapters.inbound
+    aether_memory.adapters.inbound
+    aether_mcp.adapters.inbound
+    aether_policy.adapters.inbound
+    aether_evaluation.adapters.inbound
+forbidden_modules =
+    aether_api.adapters.outbound
+    aether_worker.adapters.outbound
+    aether_runtime.adapters.outbound
+    aether_workflow.adapters.outbound
+    aether_context.adapters.outbound
+    aether_memory.adapters.outbound
+    aether_mcp.adapters.outbound
+    aether_policy.adapters.outbound
+    aether_evaluation.adapters.outbound
+
+[importlinter:contract:ar11-outbound-does-not-import-inbound]
+name = AR-11 outbound adapters do not import inbound adapters
+type = forbidden
+source_modules =
+    aether_api.adapters.outbound
+    aether_worker.adapters.outbound
+    aether_runtime.adapters.outbound
+    aether_workflow.adapters.outbound
+    aether_context.adapters.outbound
+    aether_memory.adapters.outbound
+    aether_mcp.adapters.outbound
+    aether_policy.adapters.outbound
+    aether_evaluation.adapters.outbound
+forbidden_modules =
+    aether_api.adapters.inbound
+    aether_worker.adapters.inbound
+    aether_runtime.adapters.inbound
+    aether_workflow.adapters.inbound
+    aether_context.adapters.inbound
+    aether_memory.adapters.inbound
+    aether_mcp.adapters.inbound
+    aether_policy.adapters.inbound
+    aether_evaluation.adapters.inbound
+[importlinter:contract:ar12-adapters-only-through-ports]
+name = AR-12 adapters reach the application only through ports
+type = forbidden
+source_modules =
+    aether_api.adapters
+    aether_worker.adapters
+    aether_runtime.adapters
+    aether_workflow.adapters
+    aether_context.adapters
+    aether_memory.adapters
+    aether_mcp.adapters
+    aether_policy.adapters
+    aether_evaluation.adapters
+forbidden_modules =
+    aether_api.application.usecases
+    aether_worker.application.usecases
+    aether_runtime.application.usecases
+    aether_workflow.application.usecases
+    aether_context.application.usecases
+    aether_memory.application.usecases
+    aether_mcp.application.usecases
+    aether_policy.application.usecases
+    aether_evaluation.application.usecases
+# AR-10(조립은 apps/*/main.py 한 곳)은 어댑터가 실제로 생기는 Phase 1 에 forbidden 으로 승격합니다.
