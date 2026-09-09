@@ -123,3 +123,4 @@
 | 2026-09-09 | 포트·어댑터를 1급 개념으로. 포트를 inbound/outbound 로, 유스케이스를 분리, AR-12 신설. Spec 0001 개정 2 |
 | 2026-09-09 | Plan 0001 리뷰 반영(F-1 ~ F-6, P-1 ~ P-7). Spec 0001 개정 3. `.claude/agents/implementer.md`(Sonnet 5) 추가, AGENTS.md Loop 에 위임 규칙 |
 | 2026-09-09 | Plan 0001 승인(showjihyun). intent → spec → plan 사슬이 Phase 0 에서 처음 닫힘. 다음은 H-1(보호 파일 다섯 개, 사람) → P0-1(implementer) |
+| 2026-09-09 | H-1 완료(사람, `3040b1c`). **P0-1 완료** — 첫 제품 코드. implementer(Sonnet) 1회 반복, 주 세션 리뷰. `.importlinter` 후속 1건(`google.genai` → `google`, 사람). 11개 계약 KEPT |
