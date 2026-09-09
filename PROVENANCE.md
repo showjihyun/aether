@@ -127,3 +127,4 @@
 | 2026-09-09 | P0-6 구현(implementer, 반복 2회 + 리뷰 재작업 1회). 리뷰가 Node 버전 spoof shim 을 거부(EI-6 모양) — 환경 불일치는 소리 내어 실패하도록. 이 기계의 Node v23 이 `.nvmrc`(22)와 달라 `test_depcruise` 1건 실패 상태로 `진행`. Node 를 맞춘 뒤 완료 판정 |
 | 2026-09-09 | 개발 기계 Node v23 → **24.19.0**(Active LTS, winget). `.nvmrc` 24, `engines >=24`. `tests/arch` 5/5 — **P0-6 완료.** AR-1(depcruise)·AR-2~12(import-linter) 전부 fixture 로 발화 증명 |
 | 2026-09-10 | `main` 을 `origin` 에 첫 push. CI(harness 워크플로) 첫 성공. GitHub 초기 커밋의 `LICENSE`(MIT)를 `main` 에 병합하고 기본 브랜치를 `main` 으로, `master` 삭제 |
+| 2026-09-10 | **P0-2 완료** — `apps/api` 최소 기동(implementer, 반복 1회). `/healthz` 계약, `AETHER_` 설정, OTel no-op 초기화, `aether-api openapi`. 조립은 `main.py`, CLI 진입점 `main:cli`. 실제 기동 200 확인. lint-imports 11 kept — AR-8~12 가 실제 import 를 처음 검사한 단위 |
