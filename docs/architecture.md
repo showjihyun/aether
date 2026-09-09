@@ -19,9 +19,9 @@ Build → Connect → Contextualize → Verify → Execute → Evaluate
 | # | 계층 | 책임 | 패키지 자리 |
 | --- | --- | --- | --- |
 | 1 | Experience | Chat, Agent Builder, Workflow, Admin, Analytics | `apps/web` |
-| 2 | Control Plane | Agent Registry, Model Registry, Policy, Evaluation, Identity, Config, Deployment, Marketplace | `apps/api` |
+| 2 | Control Plane | Agent Registry, Model Registry, Policy, Evaluation, Identity, Config, Deployment, Marketplace | `apps/api`. 제품 Evaluation 은 `packages/evaluation` |
 | 3 | Trust | Permission, Policy, Approval, Provenance, Audit | `packages/policy` |
-| 4 | Agent Runtime | Planner, Executor, State, Memory, Scheduler, HITL | `packages/runtime` |
+| 4 | Agent Runtime | Planner, Executor, State, Memory, Scheduler, HITL | `packages/runtime`, `packages/workflow`. 실행 프로세스는 `apps/worker` |
 | 5 | Context Engine | Context Compiler, RAG, Memory, Knowledge, Skills | `packages/context`, `packages/memory` |
 | 6 | MCP | MCP Gateway, Firewall, Auth, Permission, DLP | `packages/mcp` |
 | 7 | Model | Cloud LLM, Local LLM, VLM, Embedding, Reranker | `packages/runtime` 의 model gateway |

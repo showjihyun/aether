@@ -43,13 +43,13 @@ P0-6 을 backlog 의 번호 순서보다 앞당긴 것은 의도입니다. 규�
 | --- | --- | --- |
 | 1 | 루트 `pyproject.toml`(uv workspace, `[tool.uv] package = false`, ruff·mypy·pytest 설정, dev 의존 그룹), `.python-version` | A (W) |
 | 2 | `apps/api`, `apps/worker`, `packages/{runtime,workflow,context,memory,mcp,policy,evaluation}` — 각각 `pyproject.toml` + `README.md`(책임 한 문장 = architecture.md 2절) + `src/aether_<이름>/` 아래 빈 껍데기: `domain/`, `application/ports/inbound/`, `application/ports/outbound/`, `application/usecases/`, `adapters/inbound/`, `adapters/outbound/` — 각각 `__init__.py` (중간 패키지 `application/`, `application/ports/`, `adapters/` 포함). `apps/*` 에는 `main.py` 자리(AR-8 ~ AR-12, spec D-13) | A (W) |
-| 3 | `uv sync` → `uv.lock` | A (W) |
+| 3 | `uv sync --all-packages` → `uv.lock`. 루트가 `package = false` 가상 워크스페이스라 옵션 없는 `uv sync` 는 멤버를 설치하지 않고 **제거**합니다(P0-1 실행에서 확인) | A (W) |
 | 4 | 루트 `package.json`(`engines`, devDependencies 는 spec 2.2 의 도구 전부 — typescript, eslint, @eslint/js, typescript-eslint, @next/eslint-plugin-next, dependency-cruiser, vitest, openapi-typescript …), `pnpm-workspace.yaml`, `.nvmrc` | A (W) |
 | 5 | `apps/web/package.json`(`@aether/web`), `packages/sdk/package.json`(`@aether/sdk`) — 스크립트 이름은 spec 2.2 의 규칙대로 전부 등록, 내용은 아직 비어도 됨 | A (W) |
 | 6 | `pnpm install` → `pnpm-lock.yaml` | A (W) |
 | 7 | H-1 의 다섯 파일(`apps/web/tsconfig.json`, `packages/sdk/tsconfig.json`, `eslint.config.js`, `.importlinter`, `.dependency-cruiser.cjs`)이 **이미 있는지 확인**. H-1 은 이 단위 착수 전에 끝나 있습니다(3절). 없으면 시작하지 않고 보고 | A |
 | 8 | `infra/docker/README.md`, `infra/kubernetes/README.md` 한 줄씩 | A |
-| 9 | 판정: `uv sync` 와 `pnpm install` 이 깨끗한 checkout 에서 성공. `uv run lint-imports` exit 0 — 코드가 없어 공허하게 통과하며, 빈 코드에서도 성립하는 것은 부록 D 의 `unmatched_ignore_imports_alerting = warn` 덕입니다. 트리가 spec 2.1 표와 일치 | A |
+| 9 | 판정: `uv sync --all-packages` 와 `pnpm install` 이 깨끗한 checkout 에서 성공. `PYTHONUTF8=1 uv run lint-imports` exit 0 — 코드가 없어 공허하게 통과하며, 빈 코드에서도 성립하는 것은 부록 D 의 `unmatched_ignore_imports_alerting = warn` 덕입니다. `PYTHONUTF8` 은 Windows 의 locale(cp949)이 `.importlinter` 의 UTF-8 주석을 못 읽기 때문입니다. 트리가 spec 2.1 표와 일치 | A |
 
 `packages/sdk` 는 `src/index.ts` 빈 export 하나만 둡니다. 내용은 P0-3.
 
@@ -113,7 +113,7 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 1 | `infra/docker/api.Dockerfile`, `worker.Dockerfile`, `web.Dockerfile` — 베이스 이미지 digest 고정, 빌드 인자 `AETHER_VERSION`, 빌드 컨텍스트는 저장소 루트(uv workspace 전체가 필요). **루트 `.dockerignore`**(`.env*`, `.git`, `node_modules`, `.venv`, `.next`, `dist`) — Docker 는 빌드 컨텍스트 루트의 것만 읽습니다. `infra/docker/` 에 두면 무시되고 `.env` 가 이미지에 들어갑니다(리뷰 F-1) | A |
 | 2 | `infra/docker/compose.yaml` — postgres(init 마운트, healthcheck), redis(AOF, healthcheck), migrate(일회성, 관리자 역할), api(`service_completed_successfully` on migrate), worker, web. `infra/docker/.env.example` 전체 키, 비밀값 자리는 `<generate>`. 실제 `.env` 도 compose 파일 옆 `infra/docker/.env` — compose 는 자기 디렉터리의 `.env` 를 읽습니다(`.gitignore` 의 `.env` 패턴은 깊이 무관) | A (W) |
 | 3 | `infra/docker/compose.offline.yaml` — 네트워크 `internal: true`, `probe` 서비스(curl 이미지, `api:8000/healthz` 와 `web:3000/` 200 확인 후 exit 0) | A (W) |
-| 4 | 루트 `README.md` — 기동 명령(`docker compose -f infra/docker/compose.yaml up`), verify 명령, 문서 지도 링크. 두 홉 규칙(spec R-1) | A |
+| 4 | 루트 `README.md` — 기동 명령(`docker compose -f infra/docker/compose.yaml up`), 개발 설치 명령(`uv sync --all-packages`, `pnpm install`), verify 명령, 문서 지도 링크. 두 홉 규칙(spec R-1) | A |
 | 5 | 판정: 온라인에서 README 의 명령 → healthz 200, web 200 (R-1). 이미지 빌드 후 `docker compose -f … -f compose.offline.yaml run probe` exit 0 (R-4). `docker history` 로 이미지에 `.env` 없음 (R-6) | A |
 
 ### P0-7 `harness.config` 제품 단계 활성화와 CI
@@ -157,7 +157,7 @@ H-1 을 P0-1 의 **선행 조건**으로 둔 이유: 단위 안에 두면 에이
 ```bash
 uv run ruff check . && uv run ruff format --check .
 uv run mypy
-uv run lint-imports
+PYTHONUTF8=1 uv run lint-imports
 uv run pytest -q -m 'not integration'
 pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck
 pnpm -F web -F sdk run lint
@@ -367,11 +367,13 @@ source_modules =
 forbidden_modules =
     openai
     anthropic
-    google.genai
+    google
+# google 가 아니라 google 인 이유: import-linter 는 외부 패키지의 하위 패키지를
+# 금지 대상으로 받지 않습니다("subpackages of external packages are not valid"). P0-1 에서 확인.
 ignore_imports =
     aether_runtime.adapters.outbound.model_gateway.** -> openai
     aether_runtime.adapters.outbound.model_gateway.** -> anthropic
-    aether_runtime.adapters.outbound.model_gateway.** -> google.genai
+    aether_runtime.adapters.outbound.model_gateway.** -> google
 unmatched_ignore_imports_alerting = warn
 # 확인: ** 와일드카드는 import-linter 2.x. 미지원이면 어댑터 모듈을 개별 나열합니다.
 # warn 인 이유: 위 ignore_imports 는 어댑터가 생기기 전까지 아무 import 도 매칭하지 않고,
@@ -458,7 +460,7 @@ forbidden_modules =
     opentelemetry
     openai
     anthropic
-    google.genai
+    google
     mcp
 
 [importlinter:contract:ar11-inbound-does-not-import-outbound]
@@ -578,7 +580,7 @@ module.exports = {
   # --- Phase 0 제품 단계 (spec 0001 2.11, D-7). 싼 것부터. -----------------------
   "api-lint|quality|true|uv run ruff check . && uv run ruff format --check ."
   "api-typecheck|quality|true|uv run mypy"
-  "api-arch|architecture|true|uv run lint-imports"
+  "api-arch|architecture|true|PYTHONUTF8=1 uv run lint-imports"
   "api-unit|correctness|true|uv run pytest -q -m 'not integration'"
   "web-typecheck|quality|true|pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z '$(git status --porcelain packages/sdk/src/generated)' && pnpm -F web -F sdk run typecheck"
   "web-lint|quality|true|pnpm -F web -F sdk run lint"
@@ -603,7 +605,7 @@ HARNESS_SELF_CHECK_LINK_DIRS="AGENTS.md CLAUDE.md PROVENANCE.md docs intents spe
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with: { node-version-file: .nvmrc, cache: pnpm }
-      - run: uv sync --frozen
+      - run: uv sync --all-packages --frozen
       - run: pnpm install --frozen-lockfile
 ```
 

@@ -1,0 +1,46 @@
+[project]
+name = "aether"
+version = "0.0.0"
+description = "aether — Open Hybrid Enterprise AI OS (uv workspace root)"
+requires-python = ">=3.12"
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/worker",
+    "packages/runtime",
+    "packages/workflow",
+    "packages/context",
+    "packages/memory",
+    "packages/mcp",
+    "packages/policy",
+    "packages/evaluation",
+]
+
+[dependency-groups]
+dev = [
+    "ruff",
+    "mypy",
+    "pytest",
+    "import-linter",
+    "testcontainers",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+strict = true
+files = ["apps", "packages"]
+
+[tool.pytest.ini_options]
+testpaths = ["apps", "packages"]
+markers = [
+    "integration: 실제 컨테이너가 필요한 테스트",
+]

@@ -11,6 +11,7 @@
 | 개정 1 | 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 5 | 2026-09-09. P0-1 실행에서 드러난 것 셋 — 루트가 가상 워크스페이스라 설치는 `uv sync --all-packages`(2.2), Windows 에서 `lint-imports` 는 `PYTHONUTF8=1` 필요(2.11 `api-arch`), import-linter 는 외부 패키지의 하위 패키지를 금지 대상으로 받지 않아 `google.genai` → `google`(2.10 AR-5). 단계 수 10 불변 |
 | 개정 4 | 2026-09-09. C-1 에 사실 하나를 더함: guard hook 은 자기 환경변수만 읽어, 세션 안의 에이전트는 사람이 대행을 지시해도 `HARNESS_ALLOW_GUARDED_EDIT` 통로를 쓸 수 없음(`guard-evaluation-tampering.sh` 274·299행). H-1 대행 요청을 검토하며 확인. 보호 파일의 생성·커밋은 사람의 셸에서 |
 
 intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다. 이 문서는 그 `Proposed Outcome` 다섯 개를 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, 사람이 내려야 할 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P0-1 ~ P0-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다.
@@ -80,7 +81,7 @@ Q1·Q2 의 답을 반영합니다. 버전은 숫자를 문서에 박지 않고 *
 
 | 대상 | 도구 | 고정 위치 |
 | --- | --- | --- |
-| Python 의존성·실행 | **uv** workspace | `pyproject.toml` `[tool.uv.workspace]`, `uv.lock` |
+| Python 의존성·실행 | **uv** workspace. 루트는 `[tool.uv] package = false` 가상 루트이므로 설치는 **`uv sync --all-packages`** — 옵션 없는 `uv sync` 는 멤버를 제거합니다 | `pyproject.toml` `[tool.uv.workspace]`, `uv.lock` |
 | Python 버전 | 3.12 이상 | `.python-version`, 각 `pyproject.toml` 의 `requires-python` |
 | Node 의존성·실행 | **pnpm workspace 단독**. turborepo 없음 — 패키지 두 개(web, sdk)에 태스크 그래프는 과합니다. 다섯을 넘으면 그때 다시 판정 | `pnpm-workspace.yaml`, `pnpm-lock.yaml` |
 | Node 버전 | 현재 LTS | `.nvmrc`, 루트 `package.json` `engines` |
@@ -214,7 +215,7 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | AR-2 | import-linter forbidden | `aether_runtime, workflow, context, memory, mcp, policy, evaluation` → `aether_api`, `aether_worker` 금지 | 활성 |
 | AR-3 | forbidden | `aether_mcp`, `aether_context` → `aether_runtime` 금지 | 활성. 코드가 없어 공허하게 통과하지만 위반 fixture 가 발화를 증명 |
 | AR-4 | forbidden | `aether_policy` → `aether_runtime`, `aether_mcp`, `aether_context` 금지 | 활성 |
-| AR-5 | forbidden, `include_external_packages` | LLM SDK 모듈(`openai`, `anthropic`, … 목록은 `.importlinter` 가 소유) → `aether_runtime.adapters.outbound.model_gateway` 밖 어디서든 금지. `ignore_imports` 로 그 모듈만 예외 | 활성. 공급자를 더하면 목록에 이름을 더합니다 — 보호 파일이므로 사람 |
+| AR-5 | forbidden, `include_external_packages` | LLM SDK 모듈(`openai`, `anthropic`, `google` … 목록은 `.importlinter` 가 소유) → `aether_runtime.adapters.outbound.model_gateway` 밖 어디서든 금지. `ignore_imports` 로 그 모듈만 예외. 외부 패키지의 **하위** 패키지(`google.genai`)는 import-linter 가 받지 않으므로 최상위 이름으로 적습니다 | 활성. 공급자를 더하면 목록에 이름을 더합니다 — 보호 파일이므로 사람 |
 | AR-6 | forbidden | MCP 클라이언트 라이브러리 → `aether_mcp` 밖 금지 | 등록. Phase 2 에 실제로 걸림 |
 | AR-7 | forbidden | `aether_api` → `aether_worker` 금지. `aether_api` → `aether_runtime` 의 실행 모듈(planner, executor) 금지, 공개 타입 모듈만 허용 | 등록. 모듈 이름은 Phase 1 에서 확정 |
 | AR-8 | `layers`, `containers` = 전 패키지 | 패키지마다 `adapters` → `application` → `domain` 안쪽으로만 | 활성 (개정 1) |
@@ -235,7 +236,7 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | --- | --- | --- | --- |
 | `api-lint` | quality | true | `uv run ruff check . && uv run ruff format --check .` |
 | `api-typecheck` | quality | true | `uv run mypy` |
-| `api-arch` | architecture | true | `uv run lint-imports` |
+| `api-arch` | architecture | true | `PYTHONUTF8=1 uv run lint-imports` (Windows 의 cp949 locale 이 `.importlinter` 의 UTF-8 주석을 못 읽습니다. Linux 에서는 무해) |
 | `api-unit` | correctness | true | `uv run pytest -q -m 'not integration'` |
 | `web-typecheck` | quality | true | `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck` |
 | `web-lint` | quality | true | `pnpm -F web -F sdk run lint` |

@@ -1,0 +1,11 @@
+{
+  "name": "@aether/web",
+  "private": true,
+  "version": "0.0.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test:unit": "vitest run",
+    "build": "next build"
+  }
+}
