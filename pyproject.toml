@@ -31,16 +31,19 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["tests/arch/fixtures"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 strict = true
-files = ["apps", "packages"]
+files = ["apps", "packages", "tests"]
+exclude = ["tests/arch/fixtures"]
 
 [tool.pytest.ini_options]
-testpaths = ["apps", "packages"]
+testpaths = ["apps", "packages", "tests"]
+norecursedirs = ["fixtures", "node_modules", ".venv"]
 markers = [
     "integration: 실제 컨테이너가 필요한 테스트",
 ]

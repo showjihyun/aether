@@ -124,3 +124,4 @@
 | 2026-09-09 | Plan 0001 리뷰 반영(F-1 ~ F-6, P-1 ~ P-7). Spec 0001 개정 3. `.claude/agents/implementer.md`(Sonnet 5) 추가, AGENTS.md Loop 에 위임 규칙 |
 | 2026-09-09 | Plan 0001 승인(showjihyun). intent → spec → plan 사슬이 Phase 0 에서 처음 닫힘. 다음은 H-1(보호 파일 다섯 개, 사람) → P0-1(implementer) |
 | 2026-09-09 | H-1 완료(사람, `3040b1c`). **P0-1 완료** — 첫 제품 코드. implementer(Sonnet) 1회 반복, 주 세션 리뷰. `.importlinter` 후속 1건(`google.genai` → `google`, 사람). 11개 계약 KEPT |
+| 2026-09-09 | P0-6 구현(implementer, 반복 2회 + 리뷰 재작업 1회). 리뷰가 Node 버전 spoof shim 을 거부(EI-6 모양) — 환경 불일치는 소리 내어 실패하도록. 이 기계의 Node v23 이 `.nvmrc`(22)와 달라 `test_depcruise` 1건 실패 상태로 `진행`. Node 를 맞춘 뒤 완료 판정 |

@@ -8,6 +8,9 @@
 .harness/guard-patterns.cache
 .harness/logs/
 
+# import-linter 캐시. 매 실행 재생성됩니다. 디렉터리 자체 .gitignore 가 있지만 명시해 둡니다.
+.import_linter_cache/
+
 # 로컬 설정 오버라이드
 harness.config.local
 .claude/settings.local.json
