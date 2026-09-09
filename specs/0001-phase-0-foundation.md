@@ -7,7 +7,7 @@
 | 작성일 | 2026-09-08 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-09 (D-1 ~ D-12 채택. D-7 은 해석 (i) 로 확정) |
-| 후속 plan | (생기면 `plans/0001-phase-0-foundation.md`) |
+| 후속 plan | [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) (검토 대기) |
 | 개정 | — (2026-09-09 리뷰 반영은 승인 전 수정이므로 개정으로 세지 않습니다) |
 
 intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다. 이 문서는 그 `Proposed Outcome` 다섯 개를 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, 사람이 내려야 할 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P0-1 ~ P0-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다.

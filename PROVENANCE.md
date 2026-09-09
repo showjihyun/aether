@@ -50,6 +50,7 @@
 | [improvement-log/](improvement-log/README.md) | 아직 비어 있습니다. 첫 항목은 실제로 실패가 관측될 때 생깁니다 |
 | [intents/](intents/intent.md) | intent → spec → plan 파이프라인의 첫 단계. 출처는 6절 |
 | [specs/](specs/README.md) | 승인된 intent 의 요구사항과 설계. 첫 spec(0001)이 나오면서 생겼습니다 |
+| [plans/](plans/README.md) | 승인된 spec 의 파일·순서·판정 절차. 첫 plan(0001)이 나오면서 생겼습니다 |
 
 ## 5. 로드맵 원본
 
@@ -91,3 +92,4 @@
 | 2026-09-08 | Intent 0001 승인(showjihyun). Q1 = uv, Q2 = pnpm workspace 단독으로 닫힘. 다음 산출물은 spec |
 | 2026-09-08 | `specs/` 신설. Spec 0001(Phase 0) 초안, 검토 대기. Q3 는 근거와 함께 결정 요청으로 올림 |
 | 2026-09-09 | Spec 0001 승인(showjihyun). D-1 ~ D-12 채택, Q3·Q4·Q5 닫힘. 다음 산출물은 plan |
+| 2026-09-09 | `plans/` 신설. Plan 0001(Phase 0) 초안, 검토 대기. 사람 손 세 번(H-1 보호 파일, H-2 게이트, H-3 인증)으로 묶고 보호 파일 내용을 부록으로 제안 |

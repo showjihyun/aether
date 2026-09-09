@@ -23,10 +23,10 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 | --- | --- | --- | --- | --- |
 | 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0001, 승인됨 |
 | 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0001 승인됨 2026-09-09 |
-| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 없음. **다음 단계입니다.** `plans/0001-phase-0-foundation.md` 를 쓸 차례이며 그때 `plans/` 가 생깁니다 |
+| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 0001 초안, **검토 대기.** 승인되면 P0-1 을 시작합니다 |
 | 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | 없음. Phase 0 미착수 |
 
-`plans/` 를 지금 빈 디렉터리로 만들지 않는 것은 의도입니다(`specs/` 는 0001 의 spec 이 나오면서 생겼습니다). 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
+`specs/` 와 `plans/` 는 각각 0001 의 첫 산출물이 나오면서 생겼습니다. 빈 디렉터리를 미리 만들지 않은 것은 의도였습니다 — 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
 
 사슬은 건너뛰지 않습니다. spec 없이 plan 으로, plan 없이 코드로 가면 결정이 코드에만 남고 문서에는 남지 않습니다.
 
