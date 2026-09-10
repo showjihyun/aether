@@ -20,7 +20,7 @@ module.exports = {
   options: {
     doNotFollow: { path: "node_modules" },
     tsPreCompilationDeps: true,
-    tsConfig: { fileName: "apps/web/tsconfig.json" },
+    tsConfig: { fileName: require("node:path").resolve(__dirname, "apps/web/tsconfig.json") },
     // 확인: pnpm 의 workspace 심링크가 실경로(packages/sdk/…)로 해석되는지 첫 실행에서 봅니다.
     // node_modules/@aether/… 로 보이면 to.path 에 "node_modules/@aether/(?!sdk)" 를 더합니다.
     enhancedResolveOptions: {
