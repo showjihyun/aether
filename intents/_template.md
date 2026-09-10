@@ -5,7 +5,7 @@
 | 번호 | NNNN |
 | 작성일 | YYYY-MM-DD |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase N |
-| 상태 | 초안 / 승인 대기 / 승인됨 / 폐기 |
+| 상태 | 초안 / 승인 대기 / 승인됨 / 완료 / 폐기 |
 | 승인 | (사람 이름과 날짜. 비어 있으면 spec 단계로 넘어가지 않습니다) |
 | 후속 spec | (생기면 `specs/<같은 슬러그>.md`) |
 
