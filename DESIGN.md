@@ -13,7 +13,7 @@
 | 컴포넌트 | **shadcn/ui** — style `new-york`, base color `neutral`, CSS variables 켬. **CLI 는 `shadcn@3.8.5` 로 고정**(`apps/web` devDependency) | 소스가 저장소에 복사되는 모델이라 의존성이 아니라 우리 코드가 됩니다. 기본값이 곧 디자인 시스템입니다. v4 CLI 는 init 을 프리셋 8종으로 바꿔 `new-york + neutral` 을 지정할 수 없고, 프리셋을 고르는 것은 그 자체가 새 시각적 결정이라 3.x 마지막 안정판에 고정했습니다(P0-3b). 올리려면 이 문서를 먼저 고칩니다 |
 | 프리미티브 | Radix UI (shadcn 이 가져옴 — 3.8.5 는 단일 패키지 `radix-ui` 에서 import) | 접근성·키보드·포커스가 이미 되어 있습니다. 직접 import 하지 않습니다(3절) |
 | 아이콘 | `lucide-react` 만 | shadcn 기본. 세트를 섞지 않습니다 |
-| 폰트 | Geist Sans / Geist Mono (`next/font`) | Next 기본. 로컬 번들이라 오프라인(DP-4)에서도 뜹니다 |
+| 폰트 | Geist Sans / Geist Mono — **`geist` npm 패키지** | 로컬 번들이라 오프라인(DP-4)에서도 뜹니다. `next/font/google` 은 빌드 시 네트워크에서 폰트를 받아 오프라인 빌드를 깨뜨리므로 쓰지 않습니다(P0-3b) |
 | 테마 전환 | `next-themes`, `class` 전략 | 다크 모드는 선택이 아니라 기본 요구입니다(8절) |
 
 여기 없는 라이브러리(차트, 모션, 다른 컴포넌트 킷)는 필요가 생긴 단위에서 이 문서를 고쳐 추가합니다. 먼저 넣고 나중에 적지 않습니다.
@@ -101,7 +101,7 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 | `queued` | `secondary` | `Clock` |
 | `running` | `default` | `Loader2`(회전) |
 | `waiting` | `outline` | `Hand` — HITL, 사람을 기다림 |
-| `succeeded` | `default` + `text-emerald-600 dark:text-emerald-400` 은 쓰지 않음 → `secondary` + `CircleCheck` | 색이 아니라 아이콘으로 구분합니다(D-1) |
+| `succeeded` | `secondary` | `CircleCheck` — 초록 계열 색으로 구분하지 않습니다(D-1). 색이 아니라 아이콘이 뜻을 전달합니다 |
 | `failed` | `destructive` | `CircleX` |
 | `cancelled` | `outline` | `Ban` |
 | `timed_out` | `destructive` | `TimerOff` |
@@ -149,7 +149,7 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 
 | 규칙 | 도구 | 계약 |
 | --- | --- | --- |
-| D-5 Radix 직접 import 금지 | dependency-cruiser | `apps/web/(app\|components)/(?!ui/)` → `radix-ui`, `@radix-ui/*` 금지. 지금은 P0-3b 의 grep(`from ["'](@radix-ui\|radix-ui)`)이 대신합니다 |
+| D-5 Radix 직접 import 금지 | dependency-cruiser | `apps/web/(app\|components)/(?!ui/)` → `radix-ui`, `@radix-ui/*` 금지. 지금은 P0-3b 의 grep — `from` 뒤에 `@radix-ui` 또는 `radix-ui` 가 오는 import 를 `components/ui/` 밖에서 찾는 것 — 이 대신합니다 |
 | D-1 임의 값 금지 | `eslint-plugin-better-tailwindcss` 류 | `no-unregistered-classes` / arbitrary value 규칙 |
 | 8절 접근성 | Playwright + axe (`a11y` 단계) | 프런트엔드 팩 `test:a11y`. MVP-2 에서 켬 |
 
