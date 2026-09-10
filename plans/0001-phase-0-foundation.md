@@ -103,10 +103,10 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
-| 1 | Tailwind CSS v4: `pnpm -F web add -D tailwindcss @tailwindcss/postcss postcss`, `apps/web/postcss.config.mjs`, `app/globals.css` 에 `@import "tailwindcss"` | A (W) |
-| 2 | `pnpm -F web dlx shadcn@latest init` — style `new-york`, base color `neutral`, CSS variables. 생성되는 `components.json`, `lib/utils.ts`(`cn`), `globals.css` 토큰을 그대로 둠. **`tsconfig.json` 의 `paths`(`@/*`)는 부록 B 에 이미 있음 — init 이 tsconfig 를 고치려 하면 diff 를 보고(H-1 후속)** | A |
-| 3 | DESIGN.md 4절의 초기 세트 `pnpm -F web dlx shadcn@latest add button input textarea label card badge alert skeleton separator scroll-area table tabs dialog sheet dropdown-menu tooltip sonner`. `components/ui/*` 커밋 | A |
-| 4 | `next-themes`(`ThemeProvider`, 헤더 토글), Geist(`next/font`), `lucide-react` | A (W) |
+| 1 | Tailwind CSS v4: `pnpm -F web add -D tailwindcss @tailwindcss/postcss postcss`, PostCSS 설정은 **`package.json` 의 `postcss` 필드**(`.mjs` 파일은 보호 파일 `tsconfig.json` `include` + `eslint.config.js` `projectService` 조합에서 파싱 오류 — P0-3b 에서 확인), `app/globals.css` 에 `@import "tailwindcss"` | A (W) |
+| 2 | `pnpm -F web add -D shadcn@3.8.5` 뒤 `pnpm -F web exec shadcn init --yes --base-color neutral --css-variables` — **CLI 를 3.8.5 로 고정**합니다. `shadcn@latest`(v4)는 init 을 프리셋 8종으로 바꿔 `new-york + neutral` 을 지정할 수 없고, 프리셋 선택은 새 시각적 결정입니다(P0-3b 의 판단, DESIGN.md 1절에 반영). 생성되는 `components.json`, `lib/utils.ts`(`cn`), `globals.css` 토큰을 그대로 둠. `tsconfig.json` 은 건드리지 않았음 | A |
+| 3 | DESIGN.md 4절의 초기 세트 `pnpm -F web exec shadcn add --yes button input textarea label card badge alert skeleton separator scroll-area table tabs dialog sheet dropdown-menu tooltip sonner`(17개). 3.8.5 는 단일 패키지 `radix-ui` 에서 import 합니다. `components/ui/*` 커밋, 수정 0건 | A |
+| 4 | `next-themes`(`ThemeProvider`, 헤더 토글), Geist(`geist` 패키지 — `next/font/google` 은 빌드 시 네트워크라 금지), `lucide-react`, `TooltipProvider`(tooltip 의 전제). `vitest.config.ts` 에 `@/*` alias — Vitest 는 tsconfig `paths` 를 읽지 않습니다 | A (W) |
 | 5 | `components/AppShell.tsx` — DESIGN.md 5절의 셸. 사이드바 항목 5개(Agents·Runs·Knowledge·Workflows·Settings — 링크 자리만, 대상 페이지는 MVP-2), `lg` 미만은 `sheet`. `app/layout.tsx` 가 이것으로 감쌈 | A |
 | 6 | `components/RunStatusBadge.tsx` — 6절 표를 코드로(7개 상태 × variant × 아이콘). `RunStatusBadge.test.tsx` 가 7개를 전부 렌더해 텍스트·아이콘 존재 확인 | A |
 | 7 | `app/page.tsx` 를 다시 표현: `card` 안에 status·service·version, 오류 시 `alert destructive`(DESIGN.md 7절). 서버 컴포넌트·동적 렌더링은 P0-3 그대로 | A |

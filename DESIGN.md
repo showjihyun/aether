@@ -9,9 +9,9 @@
 | 층 | 선택 | 왜 이것인가 |
 | --- | --- | --- |
 | 프레임워크 | Next.js App Router (`apps/web`) | spec 0001 2.5 |
-| 스타일 | **Tailwind CSS v4** | shadcn/ui 의 전제. 유틸리티만 쓰고 CSS 파일을 손으로 쓰지 않습니다 |
-| 컴포넌트 | **shadcn/ui** — style `new-york`, base color `neutral`, CSS variables 켬 | 소스가 저장소에 복사되는 모델이라 의존성이 아니라 우리 코드가 됩니다. 기본값이 곧 디자인 시스템입니다 |
-| 프리미티브 | Radix UI (shadcn 이 가져옴) | 접근성·키보드·포커스가 이미 되어 있습니다. 직접 import 하지 않습니다(3절) |
+| 스타일 | **Tailwind CSS v4** | shadcn/ui 의 전제. 유틸리티만 쓰고 CSS 파일을 손으로 쓰지 않습니다. PostCSS 설정은 `apps/web/package.json` 의 `postcss` 필드에 둡니다 — 별도 `.mjs` 설정 파일은 보호 파일 두 개(`tsconfig.json` 의 `include`, `eslint.config.js` 의 `projectService`)의 조합에서 lint 파싱 오류를 냅니다(P0-3b) |
+| 컴포넌트 | **shadcn/ui** — style `new-york`, base color `neutral`, CSS variables 켬. **CLI 는 `shadcn@3.8.5` 로 고정**(`apps/web` devDependency) | 소스가 저장소에 복사되는 모델이라 의존성이 아니라 우리 코드가 됩니다. 기본값이 곧 디자인 시스템입니다. v4 CLI 는 init 을 프리셋 8종으로 바꿔 `new-york + neutral` 을 지정할 수 없고, 프리셋을 고르는 것은 그 자체가 새 시각적 결정이라 3.x 마지막 안정판에 고정했습니다(P0-3b). 올리려면 이 문서를 먼저 고칩니다 |
+| 프리미티브 | Radix UI (shadcn 이 가져옴 — 3.8.5 는 단일 패키지 `radix-ui` 에서 import) | 접근성·키보드·포커스가 이미 되어 있습니다. 직접 import 하지 않습니다(3절) |
 | 아이콘 | `lucide-react` 만 | shadcn 기본. 세트를 섞지 않습니다 |
 | 폰트 | Geist Sans / Geist Mono (`next/font`) | Next 기본. 로컬 번들이라 오프라인(DP-4)에서도 뜹니다 |
 | 테마 전환 | `next-themes`, `class` 전략 | 다크 모드는 선택이 아니라 기본 요구입니다(8절) |
@@ -34,21 +34,21 @@ shadcn 이 `app/globals.css` 에 만드는 CSS 변수(`--background`, `--foregro
 
 ```text
 apps/web/
-  components/ui/        shadcn 생성물. `pnpm dlx shadcn@latest add <name>` 으로만 추가. 커밋합니다
+  components/ui/        shadcn 생성물. `pnpm -F web exec shadcn add <name>` (고정된 3.8.5) 으로만 추가. 커밋합니다
   components/           aether 도메인 컴포넌트 — ui/ 를 조합한 것 (RunStatusBadge, AppShell …)
   app/                  페이지. components/ 를 조합만 합니다. 페이지 안에 스타일 결정을 두지 않습니다
 ```
 
 | 규칙 | 뜻 |
 | --- | --- |
-| **D-4 새 UI 는 shadcn 조합** | 필요한 것이 `components/ui/` 에 없으면 먼저 `shadcn add`. shadcn 에도 없으면 Radix 프리미티브 위에 같은 규약(`cva`, `cn`, 토큰)으로 `components/ui/` 에 만들고 이 문서 4절에 적습니다 |
-| **D-5 Radix·Tailwind 팔레트를 페이지에서 직접 쓰지 않음** | `app/` 과 `components/` 는 `@/components/ui` 만 import. `@radix-ui/*` 직접 import 는 `components/ui/` 안에서만 |
+| **D-4 새 UI 는 shadcn 조합** | 필요한 것이 `components/ui/` 에 없으면 먼저 `pnpm -F web exec shadcn add <name>`(고정 버전 — `dlx shadcn@latest` 를 쓰지 않습니다). shadcn 에도 없으면 Radix 프리미티브 위에 같은 규약(`cva`, `cn`, 토큰)으로 `components/ui/` 에 만들고 이 문서 4절에 적습니다 |
+| **D-5 Radix·Tailwind 팔레트를 페이지에서 직접 쓰지 않음** | `app/` 과 `components/` 는 `@/components/ui` 만 import. `radix-ui` / `@radix-ui/*` 직접 import 는 `components/ui/` 안에서만 |
 | **D-6 생성물은 우리 코드** | `components/ui/` 를 고치는 것은 허용(shadcn 의 모델)이되, 고친 이유를 파일 머리 주석에 남깁니다. 고친 파일은 `shadcn add` 로 다시 덮지 않습니다 |
 | **D-7 조합은 도메인 컴포넌트에** | 같은 조합이 두 번 나오면 `components/` 로 올립니다. 페이지는 얇게 |
 
 ## 4. 초기 세트
 
-P0-3b 가 설치합니다. MVP-2(Chat, Run 목록, Run 상세)가 필요로 하는 것과 그 전에 필요한 것만입니다. 더 필요해지면 그 단위에서 `shadcn add` 하고 이 표에 한 줄 더합니다.
+P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필요로 하는 것과 그 전에 필요한 것만입니다. 더 필요해지면 그 단위에서 `shadcn add` 하고 이 표에 한 줄 더합니다. `tooltip` 은 `app/layout.tsx` 의 `TooltipProvider` 가 전제입니다(P0-3b 가 감쌈).
 
 | 컴포넌트 | 어디에 쓰는가 |
 | --- | --- |
@@ -149,7 +149,7 @@ P0-3b 가 설치합니다. MVP-2(Chat, Run 목록, Run 상세)가 필요로 하�
 
 | 규칙 | 도구 | 계약 |
 | --- | --- | --- |
-| D-5 Radix 직접 import 금지 | dependency-cruiser | `apps/web/(app\|components)/(?!ui/)` → `@radix-ui/*` 금지 |
+| D-5 Radix 직접 import 금지 | dependency-cruiser | `apps/web/(app\|components)/(?!ui/)` → `radix-ui`, `@radix-ui/*` 금지. 지금은 P0-3b 의 grep(`from ["'](@radix-ui\|radix-ui)`)이 대신합니다 |
 | D-1 임의 값 금지 | `eslint-plugin-better-tailwindcss` 류 | `no-unregistered-classes` / arbitrary value 규칙 |
 | 8절 접근성 | Playwright + axe (`a11y` 단계) | 프런트엔드 팩 `test:a11y`. MVP-2 에서 켬 |
 

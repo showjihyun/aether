@@ -56,7 +56,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | P0-1 | 모노레포 뼈대와 빈 패키지 경계 | — | — | 완료 |
 | P0-2 | `apps/api` 최소 기동 | P0-1 | — | 완료 |
 | P0-3 | `packages/sdk` 와 `apps/web` 최소 기동 | P0-2 | — | 완료 |
-| P0-3b | UI 기반: Tailwind + shadcn/ui + 앱 셸 | P0-3 | — | 대기 |
+| P0-3b | UI 기반: Tailwind + shadcn/ui + 앱 셸 | P0-3 | — | 완료 |
 | P0-4 | `apps/worker` 최소 기동 | P0-1 | — | 완료 |
 | P0-5 | Docker Compose 로 전부 기동 | P0-2, P0-3, P0-4 | — | 대기 |
 | P0-6 | AR-* 를 기계 판정으로 | P0-1 | — | 완료 |
