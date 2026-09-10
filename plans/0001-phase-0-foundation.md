@@ -118,13 +118,16 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
-| 1 | `apps/api/migrations/`(`alembic.ini`, `env.py`, `script.py.mako`), `versions/0001_schemas_and_roles_grants.py` — `CREATE SCHEMA control, data`, 다섯 테이블(spec 2.8 표), `agent_versions` 불변 트리거, `run_executions.status` enum, GRANT 두 역할. `downgrade` 는 전부 되돌림 | A |
-| 2 | `infra/docker/postgres/init/01-roles.sh` — `aether_control`, `aether_data` 역할만. plain SQL 은 env 를 읽지 못하므로 셸에서 `psql -v` 로 비밀번호를 넘깁니다. 실행 비트 필요(5절). P0-5 의 compose 가 마운트 | A |
-| 3 | `apps/api/tests/conftest.py`(`integration`: testcontainers PostgreSQL 기동 → 01-roles.sh 와 같은 SQL 로 역할 생성 → `alembic upgrade head`), `tests/test_migrations.py`(up → down → up 왕복), `tests/test_agent_version_immutable.py`(**관리자 역할로** UPDATE·DELETE → 트리거 예외), `tests/test_plane_roles.py`(`aether_control` 로 `SELECT FROM data.run_executions` → permission denied. `aether_data` 로 `control.agent_versions` SELECT 성공, INSERT 실패) | A (W) |
-| 4 | `docs/data-model.md` — 열의 정본. cross-schema FK 의 수명(spec C-8)을 적음. `docs/README.md` 의 "아직 없는 문서" 에서 행 제거 | A |
-| 5 | 판정: `uv run pytest apps/api -q -m integration` 통과 | A |
+| 1 | **red** — `apps/api/tests/conftest.py`(`integration`: testcontainers PostgreSQL 기동 → 역할 두 개 생성 → `alembic upgrade head`), `tests/test_migrations.py`(up → down → up 왕복), `tests/test_agent_version_immutable.py`(**관리자 역할로** UPDATE·DELETE → 트리거 예외), `tests/test_plane_roles.py`(`aether_control` 로 `SELECT FROM data.run_executions` → permission denied. `aether_data` 로 `control.agent_versions` SELECT 성공, INSERT 실패). `uv run pytest apps/api -q -m integration` 을 **실행해 실패를 기록** — 마이그레이션이 없어 `alembic upgrade` 부터 실패합니다 | A (W) |
+| 2 | `infra/docker/postgres/init/01-roles.sh` — `aether_control`, `aether_data` 역할만. plain SQL 은 env 를 읽지 못하므로 셸에서 `psql -v` 로 비밀번호를 넘깁니다. 실행 비트 필요(5절). P0-5 의 compose 가 마운트. conftest 의 역할 생성은 이 파일과 같은 SQL 을 씁니다 | A |
+| 3 | **green** — `apps/api/migrations/`(`alembic.ini`, `env.py`, `script.py.mako`), `versions/0001_schemas_and_roles_grants.py` — `CREATE SCHEMA control, data`, 다섯 테이블(spec 2.8 표), `agent_versions` 불변 트리거, `run_executions.status` enum, GRANT 두 역할. `downgrade` 는 전부 되돌림. 1번의 테스트가 전부 통과할 때까지 — 그 이상을 만들지 않습니다 | A |
+| 4 | **refactor** — 마이그레이션 정리. 테스트는 바꾸지 않습니다 | A |
+| 5 | `docs/data-model.md` — 열의 정본. cross-schema FK 의 수명(spec C-8)을 적음. `docs/README.md` 의 "아직 없는 문서" 에서 행 제거 | A |
+| 6 | 판정: `uv run pytest apps/api -q -m integration` 통과. 보고의 `red 증거` 에 1번의 실패 실행과 3번의 통과 실행 | A |
 
 ### P0-5 Docker Compose 와 루트 README
+
+설정 단위라 테스트 우선이 성립하지 않습니다. `red 증거` 는 착수 시점에 판정 명령(`docker compose … run probe`)이 실패함을 기록한 것으로 대신하고, 끝에 같은 명령의 성공을 기록합니다.
 
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
@@ -135,6 +138,8 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 5 | 판정: 온라인에서 README 의 명령 → healthz 200, web 200 (R-1). 이미지 빌드 후 `docker compose -f … -f compose.offline.yaml run probe` exit 0 (R-4). `docker history` 로 이미지에 `.env` 없음 (R-6) | A |
 
 ### P0-7 `harness.config` 제품 단계 활성화와 CI
+
+코드가 없는 단위입니다. `red 증거` 는 "해당 없음 — 게이트 설정" 으로 적습니다.
 
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
@@ -149,9 +154,9 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
-| 1 | **포트와 테스트만**: inbound 포트 `application/ports/inbound/authenticate.py`(`Authenticate` Protocol), `application/ports/inbound/issue_api_key.py`(`IssueApiKey` Protocol); outbound 포트 `application/ports/outbound/api_keys.py`(`ApiKeyStore` Protocol — `find_by_hash`, `create`, `revoke`). docstring 에 spec 2.9 의 결정. **실패하는 테스트**: `tests/test_authenticate.py`(fake `ApiKeyStore` 로 컨테이너 없이 — 유효 키 통과, 폐기된 키 거부, 잘못된 형식 거부, constant-time 비교 사용), `tests/test_api_key_store_contract.py`(**포트 계약 테스트** — 같은 케이스를 fake 와 PostgreSQL 구현에. 후자는 `integration` 마커), `tests/test_auth_http.py`(보호 경로 401, `/healthz` 200 — `Authenticate` 포트에 fake 를 꽂아) | A |
+| 1 | **포트와 테스트만**: inbound 포트 `application/ports/inbound/authenticate.py`(`Authenticate` Protocol), `application/ports/inbound/issue_api_key.py`(`IssueApiKey` Protocol); outbound 포트 `application/ports/outbound/api_keys.py`(`ApiKeyStore` Protocol — `find_by_hash`, `create`, `revoke`). docstring 에 spec 2.9 의 결정. **실패하는 테스트**: `tests/test_authenticate.py`(fake `ApiKeyStore` 로 컨테이너 없이 — 유효 키 통과, 폐기된 키 거부, 잘못된 형식 거부, constant-time 비교 사용), `tests/test_api_key_store_contract.py`(**포트 계약 테스트** — 같은 케이스를 fake 와 PostgreSQL 구현에. 후자는 `integration` 마커), `tests/test_auth_http.py`(보호 경로 401, `/healthz` 200 — `Authenticate` 포트에 fake 를 꽂아). 전부 **실행해 실패를 기록**합니다 — red | A |
 | 2 | **H-3 (설계 검토)**: 사람이 인터페이스와 테스트 목록을 검토. 통과 전에 구현하지 않음 | **H** |
-| 3 | 구현: `application/usecases/authenticate.py`·`issue_api_key.py`(키 생성 `aeth_` + 256-bit, SHA-256, constant-time 비교 — 전부 표준 라이브러리. outbound 포트 `ApiKeyStore` 만 봄), `adapters/outbound/db/api_keys.py`(`ApiKeyStore` 의 PostgreSQL 구현), `adapters/inbound/http/auth.py`(`Depends` — `Authenticate` **포트 타입**을 받아 라우터 전체에 적용, `/healthz` 제외), `adapters/inbound/cli.py` 에 `keys create --label`(`IssueApiKey` 포트를 부름). `main.py` 에서 조립: 유스케이스에 PostgreSQL 어댑터를 꽂고, 라우터와 CLI 에 유스케이스를 포트 타입으로 건넴. CLI 진입점은 P0-2 의 `main:cli` 그대로(AR-10·AR-12) | A |
+| 3 | 구현: `application/usecases/authenticate.py`·`issue_api_key.py`(키 생성 `aeth_` + 256-bit, SHA-256, constant-time 비교 — 전부 표준 라이브러리. outbound 포트 `ApiKeyStore` 만 봄), `adapters/outbound/db/api_keys.py`(`ApiKeyStore` 의 PostgreSQL 구현), `adapters/inbound/http/auth.py`(`Depends` — `Authenticate` **포트 타입**을 받아 라우터 전체에 적용, `/healthz` 제외), `adapters/inbound/cli.py` 에 `keys create --label`(`IssueApiKey` 포트를 부름). `main.py` 에서 조립: 유스케이스에 PostgreSQL 어댑터를 꽂고, 라우터와 CLI 에 유스케이스를 포트 타입으로 건넴. CLI 진입점은 P0-2 의 `main:cli` 그대로(AR-10·AR-12). 1번의 테스트가 전부 통과 — green. 그 뒤 정리(refactor)에서 테스트는 바꾸지 않습니다 | A |
 | 4 | **H-3 (구현 검토)**: PR 리뷰. 비밀값이 로그·테스트 fixture 에 원문으로 없는지 | **H** |
 | 5 | 판정: `verify.sh` pass(P0-7 뒤이므로 게이트가 켜져 있음). R-9 의 테스트 통과 | A |
 
