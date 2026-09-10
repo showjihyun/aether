@@ -44,6 +44,8 @@ Phase 가 바뀔 때는 새 intent 를 발급합니다(`cp _template.md NNNN-<�
 
 `대기` · `진행` · `완료` · `보류`(게이트 또는 사람 검토 대기). 한 시점에 `진행` 은 하나입니다.
 
+**완료의 정의**는 하나입니다: 완료 판정 통과 + 주 세션 리뷰(판정 재현, `red 증거` 확인) + **PR 이 CI 를 통과해 사람이 병합** + backlog `상태`·관련 문서 갱신. 병합 전에는 `진행` 입니다.
+
 ---
 
 ## Phase 0 — Architecture & Foundation
@@ -119,7 +121,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | --- | --- |
 | 범위 | `infra/docker/compose.yaml`: PostgreSQL, Redis, migrate(일회성), api, web, worker. 이미지 빌드 포함. `.dockerignore`, `.env.example`. `compose.offline.yaml`(internal 네트워크 + 판정용 `probe` 서비스). **루트 `README.md`** — 기동 명령과 verify 명령 한 줄씩(R-1 의 발견 경로) |
 | 범위 밖 | Local LLM, Vector DB 서비스(MVP-3). Kubernetes 매니페스트. 프로덕션 설정 |
-| 완료 판정 | README 의 명령으로 기동 후 `GET /healthz` 200, web 200. 이미지 빌드 후 `docker compose -f compose.yaml -f compose.offline.yaml run probe` 가 exit 0(판정은 호스트 curl 이 아니라 네트워크 안의 probe). `.dockerignore` 가 `.env*` 를 제외하고 이미지 layer 에 `.env` 없음 |
+| 완료 판정 | README 의 명령으로 기동 후 `GET /healthz` 200, web 200. 이미지 빌드 후 `docker compose -f compose.yaml -f compose.offline.yaml run probe` 가 exit 0(판정은 호스트 curl 이 아니라 네트워크 안의 probe). `.dockerignore` 가 `.env*` 를 제외하고 이미지 layer 에 `.env` 없음. `AETHER_VERSION` 빌드 인자는 `git describe --tags --always` 로 채워져 `/healthz` 의 `version` 에 커밋이 보임(릴리스 정의는 Month 6 의 intent — 그때까지 버전 = 커밋) |
 | 걸리는 규칙 | **DP-4** Offline-capable 의 첫 근거. Trust: 비밀값을 커밋하지 않습니다 |
 
 ### P0-6 AR-* 를 기계 판정으로
@@ -136,7 +138,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `harness.config` 의 "Phase 0 이후" 블록을 spec 2.11 의 단계 표로 교체(제품 단계 10개, 명시 필터, 작은따옴표). `HARNESS_THRESHOLD` 를 90 → 80 (AD-2 시작값). `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs`. CI 에 uv·pnpm 설치와 비밀값 스캔 job. 로컬 verify 전체 시간을 실측해 기록(R-11, 예산 10분). **AD-2 진입 직후 improvement candidate 1건 더**: P0-4 에서 자연어 TDD 지시가 무시된 관측(근거: 구현 세션 보고서의 작업 순서) → 그 id 로 REP-9(기능 단위 test-first)를 평가 세트에 제안 |
+| 범위 | `harness.config` 의 "Phase 0 이후" 블록을 spec 2.11 의 단계 표로 교체(제품 단계 10개, 명시 필터, 작은따옴표). `HARNESS_THRESHOLD` 를 90 → 80 (AD-2 시작값). `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs`. CI 에 uv·pnpm 설치와 비밀값 스캔 job. 로컬 verify 전체 시간을 실측해 기록(R-11, 예산 10분). **AD-2 진입 직후 improvement candidate 1건 더**: P0-4 에서 자연어 TDD 지시가 무시된 관측(근거: 구현 세션 보고서의 작업 순서) → 그 id 로 REP-9(기능 단위 test-first)를 평가 세트에 제안. **그리고** `PROVENANCE.md` 이력에 그림자 로그로 쌓인 관측 전부(가드 `install` 오탐, cp949 ×3, Node LTS, shadcn v4 프리셋, depcruise 상대 경로, `uv sync` 의미, eslint `projectService`·`.mjs`)를 candidate 로 일괄 전환. **평가 기준선**: REP-3·5·7("지금 가능")을 새 세션으로 1회씩 실행해 `evaluation/runs/` 첫 기록과 `.harness/baseline-eval.json`. H-2b 에 Dependabot 설정(`.github/dependabot.yml` — uv·pnpm·actions, 보호 경로) |
 | 범위 밖 | 단계를 열 개 넘게 늘리기. `required` 를 내려서 통과시키기. smoke/e2e/load 는 Phase 1 이후 |
 | 완료 판정 | `verify.sh` 가 self-check 단계와 제품 단계를 함께 집계해 pass. `.github/workflows/harness.yml` 이 녹색. 임계값 변경의 근거가 `improvement-log/` 에 1건 |
 | 걸리는 규칙 | **보호 파일 변경.** [../harness/rules/harness-change-control.rule.md](../harness/rules/harness-change-control.rule.md) 를 따르고 한 번에 하나만 바꿉니다. EI-2: 임계값은 사람이 소유 — 변경은 제안하고 사람이 커밋합니다 |

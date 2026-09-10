@@ -37,6 +37,7 @@ aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 
 ## Loop
 
 - 코드 작성과 테스트 실행은 `.claude/agents/implementer.md`(Sonnet 5)에 위임합니다. intent·spec·plan 작성, 리뷰, 커밋, 승격 판정, 보호 파일 제안은 주 세션이 합니다. 리뷰는 보고의 `red 증거`(구현 전 테스트 실패 기록)가 없거나 순서가 뒤바뀐 단위를 반려합니다. 판정 기준은 모델과 무관하게 `./harness/scripts/verify.sh` 입니다.
+- **모든 변경은 브랜치 → PR → CI → 사람 병합입니다.** 에이전트는 `main` 에 직접 push 하지 않습니다(브랜치 보호가 막습니다). 브랜치 이름은 단위 번호(`p0-5-compose`), 커밋에는 `Unit: P0-5` trailer. CI 의 `verify` 와 `보호 파일 변경 검토` 가 필수 상태 검사이고, 보호 파일을 건드린 PR 은 사람이 `harness-change` 라벨을 붙여야 병합됩니다. 병합 버튼이 Production Gate 입니다 — 에이전트는 거기까지 갑니다.
 - 최대 반복 8회를 넘기지 않습니다.
 - 같은 실패가 3회 반복되면 중단합니다. 2라운드 연속 개선이 없으면 중단합니다.
 - 보안에 닿는 변경(인증, 권한, 비밀값, Policy, MCP Firewall)은 진행하지 않고 사람 검토로 에스컬레이션합니다.

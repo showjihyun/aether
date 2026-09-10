@@ -35,7 +35,7 @@ model: sonnet
 1. plan 의 단위 절에 적힌 순서대로 만듭니다. 순서를 바꾸지 않습니다 — 순서에는 이유가 있습니다.
 2. 코드는 [../../docs/architecture.md](../../docs/architecture.md) 3.1 의 자리에 둡니다: 규칙은 `domain`, 유스케이스는 `application/usecases`, 포트는 `application/ports/{inbound,outbound}`, 기술은 `adapters/{inbound,outbound}`, 조립은 `main.py`. 어댑터는 포트만 import 합니다.
 3. **red → green → refactor.** 테스트를 먼저 쓰고, **실행해 실패하는 것을 확인**한 뒤에 구현합니다.
-   - red: 단위의 계약(spec)과 완료 판정에서 테스트를 씁니다 — 유스케이스는 outbound 포트에 fake 를 꽂아 컨테이너 없이, 어댑터는 포트 계약 테스트로. 그 테스트를 실행해 exit ≠ 0 과 실패 이유를 **기록**합니다. 구현이 없어 import 오류로 실패하는 것도 red 입니다.
+   - red: 단위의 계약(spec)과 완료 판정에서 테스트를 씁니다 — 유스케이스는 outbound 포트에 fake 를 꽂아 컨테이너 없이, 어댑터는 포트 계약 테스트로. **테스트 docstring 첫 줄에 근거를 적습니다**(`spec 0001 R-8`, `AR-11`, `D-11` 처럼) — 리뷰어가 어느 테스트가 어느 요구사항을 증명하는지 코드에서 읽을 수 있어야 합니다. 그 테스트를 실행해 exit ≠ 0 과 실패 이유를 **기록**합니다. 구현이 없어 import 오류로 실패하는 것도 red 입니다.
    - green: 그 테스트를 통과시키는 **최소** 구현. 통과 실행을 기록합니다.
    - refactor: 구조를 정리합니다. 이 단계에서 테스트를 바꾸지 않습니다 — 바꿔야 한다면 계약을 잘못 읽은 것이고 red 로 돌아갑니다.
    - 테스트가 성립하지 않는 단위(설정 파일, 문서, compose)는 그 사실을 보고의 `red 증거` 에 적습니다. 빈칸으로 두지 않습니다.

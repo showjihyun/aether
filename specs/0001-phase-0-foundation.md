@@ -8,13 +8,13 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-09 (D-1 ~ D-12 채택. D-7 은 해석 (i) 로 확정) |
 | 후속 plan | [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) (승인됨 2026-09-09) |
-| 개정 1 | 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
-| 개정 2 | 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
-| 개정 3 | 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
-| 개정 7 | 2026-09-10. 2.8 `data.run_executions` 의 `started_at`·`finished_at` 을 nullable 로 명시 — `queued` 시점에는 값이 없습니다(P0-8 구현 세션의 판단, 리뷰 승인). 열의 정본은 `docs/data-model.md` |
-| 개정 6 | 2026-09-10. UI 기반 결정 — Tailwind CSS v4 + shadcn/ui 를 채택하고 표현 규약은 [../DESIGN.md](../DESIGN.md) 가 소유(D-14). 2.5 갱신, 구현 단위 P0-3b 신설. showjihyun 지시로 승인 |
-| 개정 5 | 2026-09-09. P0-1 실행에서 드러난 것 셋 — 루트가 가상 워크스페이스라 설치는 `uv sync --all-packages`(2.2), Windows 에서 `lint-imports` 는 `PYTHONUTF8=1` 필요(2.11 `api-arch`), import-linter 는 외부 패키지의 하위 패키지를 금지 대상으로 받지 않아 `google.genai` → `google`(2.10 AR-5). 단계 수 10 불변 |
-| 개정 4 | 2026-09-09. C-1 에 사실 하나를 더함: guard hook 은 자기 환경변수만 읽어, 세션 안의 에이전트는 사람이 대행을 지시해도 `HARNESS_ALLOW_GUARDED_EDIT` 통로를 쓸 수 없음(`guard-evaluation-tampering.sh` 274·299행). H-1 대행 요청을 검토하며 확인. 보호 파일의 생성·커밋은 사람의 셸에서 |
+| 개정 1 | [실질] 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
+| 개정 2 | [실질] 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
+| 개정 3 | [편집] 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 7 | [편집] 2026-09-10. 2.8 `data.run_executions` 의 `started_at`·`finished_at` 을 nullable 로 명시 — `queued` 시점에는 값이 없습니다(P0-8 구현 세션의 판단, 리뷰 승인). 열의 정본은 `docs/data-model.md` |
+| 개정 6 | [실질] 2026-09-10. UI 기반 결정 — Tailwind CSS v4 + shadcn/ui 를 채택하고 표현 규약은 [../DESIGN.md](../DESIGN.md) 가 소유(D-14). 2.5 갱신, 구현 단위 P0-3b 신설. showjihyun 지시로 승인 |
+| 개정 5 | [편집] 2026-09-09. P0-1 실행에서 드러난 것 셋 — 루트가 가상 워크스페이스라 설치는 `uv sync --all-packages`(2.2), Windows 에서 `lint-imports` 는 `PYTHONUTF8=1` 필요(2.11 `api-arch`), import-linter 는 외부 패키지의 하위 패키지를 금지 대상으로 받지 않아 `google.genai` → `google`(2.10 AR-5). 단계 수 10 불변 |
+| 개정 4 | [편집] 2026-09-09. C-1 에 사실 하나를 더함: guard hook 은 자기 환경변수만 읽어, 세션 안의 에이전트는 사람이 대행을 지시해도 `HARNESS_ALLOW_GUARDED_EDIT` 통로를 쓸 수 없음(`guard-evaluation-tampering.sh` 274·299행). H-1 대행 요청을 검토하며 확인. 보호 파일의 생성·커밋은 사람의 셸에서 |
 
 intent 가 정한 문제·범위·제약은 여기서 반복하지 않습니다. 이 문서는 그 `Proposed Outcome` 다섯 개를 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, 사람이 내려야 할 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P0-1 ~ P0-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다.
 
