@@ -15,3 +15,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AETHER_", extra="ignore")
 
     version: str = "dev"
+
+    database_url: str = "postgresql+psycopg://aether:aether@localhost:5432/aether"
+    """spec 2.8. `apps/api/migrations/env.py` 가 기본으로 읽는 DB 접속 문자열
+    (`ALEMBIC_URL` 환경변수가 있으면 그것이 우선). 관리자 역할로 접속합니다 —
+    런타임 역할(`aether_control`)과는 다릅니다."""

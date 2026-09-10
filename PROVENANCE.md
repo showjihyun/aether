@@ -153,6 +153,7 @@
 | 2026-09-10 | **P0-2 완료** — `apps/api` 최소 기동(implementer, 반복 1회). `/healthz` 계약, `AETHER_` 설정, OTel no-op 초기화, `aether-api openapi`. 조립은 `main.py`, CLI 진입점 `main:cli`. 실제 기동 200 확인. lint-imports 11 kept — AR-8~12 가 실제 import 를 처음 검사한 단위 |
 | 2026-09-10 | UI 기반 결정 — shadcn/ui 기본값을 디자인 시스템으로(7.1). `DESIGN.md` 신설, spec 0001 개정 6(2.5, D-14), backlog·plan 에 P0-3b 추가 |
 | 2026-09-10 | TDD 점검 — 문장(`implementer.md` 한 줄)으로만 있었고 P0-4 는 구현 먼저였음. 자연어 지시가 무시된 예측된 실패. 관측으로 환원: implementer 작업 순서를 red → green → refactor 절차로, 보고에 `red 증거` 칸(없으면 반려). plan 남은 단위에 red 단계 명시(P0-8 재배열). P0-7(AD-2) 뒤 improvement candidate 후보 |
+| 2026-09-10 | **P0-8 완료** — 데이터 모델 v1(implementer, 반복 1회). **red → green 절차가 처음 적용된 단위**: 테스트 4건 먼저 → `alembic` 실패 기록 → 마이그레이션이 통과시킴. `control`/`data` 스키마·역할 분리가 권한 테스트로, `agent_versions` 불변이 트리거 테스트로 고정. `docs/data-model.md` 신설. spec 개정 7 |
 | 2026-09-10 | **P0-3b 완료** — Tailwind v4 + shadcn/ui 17개 + 앱 셸 + `RunStatusBadge` + healthz 재표현(implementer, 반복 1회). shadcn CLI 3.8.5 고정(v4 프리셋 = 새 결정 회피). D-1·D-5 grep 0건, depcruise 134 modules 위반 0, API 다운 시 `/` 가 alert 로 200. PostCSS 설정은 package.json 필드(보호 파일 조합 제약) |
 | 2026-09-10 | **P0-3 완료** — sdk 타입 생성 + web healthz(implementer, 반복 1회). AR-1 이 실제 코드에서 처음 판정(74 modules, 위반 0). H-1 후속 2(사람): depcruise `tsConfig` 절대 경로, Next 가 다시 쓴 web tsconfig 수용. 세 언어 경계(Python → OpenAPI → TS)가 드리프트 테스트로 닫힘 |
 | 2026-09-10 | **P0-4 완료** — `apps/worker` 최소 기동(implementer, 반복 1회). Redis Streams consumer group 대기, 순수 백오프 규칙, stop 이벤트 종료. 구현 세션이 주 세션의 지시("pending 0")를 spec 2.3 근거로 거부하고 PEL 의미대로 테스트 — 리뷰 승인. **wave 2 종료** |

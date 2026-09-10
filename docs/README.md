@@ -6,6 +6,7 @@
 | --- | --- | --- |
 | [architecture.md](architecture.md) | 계층이 무엇이고 의존 방향이 어디로 흐르는가 | 코드를 추가·이동하기 전 |
 | [domain.md](domain.md) | Agent, Run, Tool, Context 가 이 제품에서 정확히 무엇을 뜻하는가 | 이름을 붙이거나 스키마를 정하기 전 |
+| [data-model.md](data-model.md) | PostgreSQL 스키마·역할·테이블·열·제약·트리거의 열 단위 정본이 무엇인가 | 마이그레이션을 고치거나 저장소 접근 코드를 쓰기 전 |
 | [roadmap.md](roadmap.md) | 지금이 어느 Phase 이고 다음에 무엇이 오는가 | 범위를 정하기 전 |
 | [../intents/intent.md](../intents/intent.md) | 이번 작업이 무엇을 왜 하는가 (활성 intent, intent → spec → plan) | 구현을 시작하기 전 |
 | [../DESIGN.md](../DESIGN.md) | `apps/web` 의 표현 규약 — 결정은 shadcn/ui 기본값, 토큰만, 도메인 → 표현 표 | 화면을 만들거나 고치기 전 |
@@ -16,7 +17,6 @@
 
 | 문서 | 만드는 시점 |
 | --- | --- |
-| `data-model.md` | Phase 0 에서 PostgreSQL 스키마가 확정될 때 |
 | `api.md` | Phase 1 에서 `POST /agents/{id}/run` 계약이 고정될 때 |
 | `security.md` | Phase 8 Trust Layer 착수 시. 그 전까지는 [../AGENTS.md](../AGENTS.md) 의 Trust 절이 유일한 규범입니다 |
 | `deployment.md` | Phase 11 Air-Gapped Edition 착수 시 |
