@@ -145,7 +145,7 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | --- | --- | --- |
 | 1 | 로컬에서 spec 2.11 의 열 명령을 **손으로 순서대로** 실행해 전부 exit 0 임을 먼저 확인. 하나라도 실패하면 이 단위를 시작하지 않고 해당 단위로 돌아감 | A |
 | 2 | 열 명령의 실행 시간을 합산해 기록. 10분(D-12)을 넘기면 H-2 전에 사람에게 보고 | A |
-| 3 | `./harness/scripts/improvement-log.sh new` 로 임계값 90 → 80 의 근거 항목 1건 (intent Constraints 의 예외 조항) | A |
+| 3 | `./harness/scripts/improvement-log.sh new` 로 항목 2건: (a) 임계값 90 → 80 의 근거(intent Constraints 의 예외 조항), (b) P0-4 에서 자연어 TDD 지시가 무시된 관측 — 근거는 그 구현 세션의 보고서(작업 순서: 소스 5개 작성 → … → 테스트), 환원은 `implementer.md` 의 `red 증거` 칸(이미 적용). (b) 의 id 가 REP-9(기능 단위 test-first) 추가의 근거가 됩니다(harness/evaluation/README 7.1). AD-2 진입이 log 의 시작점입니다 | A |
 | 4a | **H-2a**: `harness.config`(부록 F — 주석 블록을 단계 표로 교체, `HARNESS_THRESHOLD=80`, `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs plans`). PR 에 `harness-change` 라벨. 병합 후 로컬 verify 통과 확인 | **H** |
 | 4b | **H-2b**: `.github/workflows/harness.yml`(부록 G — uv·pnpm 설치, gitleaks job). **별도 PR**, `harness-change` 라벨. 보호 파일은 한 번에 하나(spec C-2) | **H** |
 | 5 | 판정: `./harness/scripts/verify.sh` pass, `verify.json` 에 16단계. CI 녹색. `duration_ms` 합계 기록 (R-11) | A |
@@ -155,6 +155,7 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
 | 1 | **포트와 테스트만**: inbound 포트 `application/ports/inbound/authenticate.py`(`Authenticate` Protocol), `application/ports/inbound/issue_api_key.py`(`IssueApiKey` Protocol); outbound 포트 `application/ports/outbound/api_keys.py`(`ApiKeyStore` Protocol — `find_by_hash`, `create`, `revoke`). docstring 에 spec 2.9 의 결정. **실패하는 테스트**: `tests/test_authenticate.py`(fake `ApiKeyStore` 로 컨테이너 없이 — 유효 키 통과, 폐기된 키 거부, 잘못된 형식 거부, constant-time 비교 사용), `tests/test_api_key_store_contract.py`(**포트 계약 테스트** — 같은 케이스를 fake 와 PostgreSQL 구현에. 후자는 `integration` 마커), `tests/test_auth_http.py`(보호 경로 401, `/healthz` 200 — `Authenticate` 포트에 fake 를 꽂아). 전부 **실행해 실패를 기록**합니다 — red | A |
+| 1b | `tests/arch/test_usecases_have_tests.py` — 모든 패키지의 `application/usecases/*.py`(`__init__` 제외)마다 대응하는 `tests/**/test_<이름>.py` 가 있어야 통과하는 **구조 테스트**. "먼저 썼다" 는 기계로 못 잡지만 "유스케이스에 테스트가 없다" 는 잡습니다. `api-unit` 안에서 돌아 단계 수 불변(D-7). 첫 유스케이스가 생기는 이 단위에서 시작해 이후 모든 Phase 에 적용 | A |
 | 2 | **H-3 (설계 검토)**: 사람이 인터페이스와 테스트 목록을 검토. 통과 전에 구현하지 않음 | **H** |
 | 3 | 구현: `application/usecases/authenticate.py`·`issue_api_key.py`(키 생성 `aeth_` + 256-bit, SHA-256, constant-time 비교 — 전부 표준 라이브러리. outbound 포트 `ApiKeyStore` 만 봄), `adapters/outbound/db/api_keys.py`(`ApiKeyStore` 의 PostgreSQL 구현), `adapters/inbound/http/auth.py`(`Depends` — `Authenticate` **포트 타입**을 받아 라우터 전체에 적용, `/healthz` 제외), `adapters/inbound/cli.py` 에 `keys create --label`(`IssueApiKey` 포트를 부름). `main.py` 에서 조립: 유스케이스에 PostgreSQL 어댑터를 꽂고, 라우터와 CLI 에 유스케이스를 포트 타입으로 건넴. CLI 진입점은 P0-2 의 `main:cli` 그대로(AR-10·AR-12). 1번의 테스트가 전부 통과 — green. 그 뒤 정리(refactor)에서 테스트는 바꾸지 않습니다 | A |
 | 4 | **H-3 (구현 검토)**: PR 리뷰. 비밀값이 로그·테스트 fixture 에 원문으로 없는지 | **H** |

@@ -36,7 +36,7 @@ aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 
 
 ## Loop
 
-- 코드 작성과 테스트 실행은 `.claude/agents/implementer.md`(Sonnet 5)에 위임합니다. intent·spec·plan 작성, 리뷰, 커밋, 승격 판정, 보호 파일 제안은 주 세션이 합니다. 판정 기준은 모델과 무관하게 `./harness/scripts/verify.sh` 입니다.
+- 코드 작성과 테스트 실행은 `.claude/agents/implementer.md`(Sonnet 5)에 위임합니다. intent·spec·plan 작성, 리뷰, 커밋, 승격 판정, 보호 파일 제안은 주 세션이 합니다. 리뷰는 보고의 `red 증거`(구현 전 테스트 실패 기록)가 없거나 순서가 뒤바뀐 단위를 반려합니다. 판정 기준은 모델과 무관하게 `./harness/scripts/verify.sh` 입니다.
 - 최대 반복 8회를 넘기지 않습니다.
 - 같은 실패가 3회 반복되면 중단합니다. 2라운드 연속 개선이 없으면 중단합니다.
 - 보안에 닿는 변경(인증, 권한, 비밀값, Policy, MCP Firewall)은 진행하지 않고 사람 검토로 에스컬레이션합니다.

@@ -24,6 +24,7 @@ MVP 에 **없는 것**: Visual Agent Builder(5), Model Registry(6), 제품 Evalu
 | --- | --- |
 | 단위 하나 = 세션 하나 | 한 에이전트 세션의 반복 예산(8회) 안에서 끝납니다. 넘치면 단위가 큰 것이지 예산이 작은 것이 아닙니다 |
 | 완료 판정은 실행으로 | 모든 단위의 `완료 판정` 은 `./harness/scripts/verify.sh` 또는 실제 실행으로 확인할 수 있는 명제입니다. "잘 동작한다" 는 판정이 아닙니다 |
+| **테스트가 먼저** | 동작이 있는 단위는 `완료 판정` 의 테스트를 **먼저 쓰고 실패를 본 뒤** 구현합니다(red → green → refactor). 구현 세션의 보고 `red 증거` 가 그것을 증명하고, 없으면 리뷰가 반려합니다. 테스트가 성립하지 않는 단위(설정·문서·compose)는 그 사실을 적습니다 — 빈칸이 아니라 |
 | 수직으로 자릅니다 | 계층 하나를 통째로 만들지 않고, 위에서 아래까지 관통하는 얇은 조각을 먼저 만듭니다. 계층 경계(AR-*)가 실제 호출로 검증되는 것은 이때뿐입니다 |
 | 의존은 번호로 | `의존` 에 적힌 단위가 `완료` 가 아니면 시작하지 않습니다. 병렬 가능한 단위는 의존이 같습니다 |
 | 게이트는 사람이 엽니다 | `게이트` 에 적힌 열린 질문이 닫히기 전에는 시작하지 않습니다. 추측으로 명령을 적으면 그 명령이 검증 게이트가 됩니다 |
@@ -135,7 +136,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `harness.config` 의 "Phase 0 이후" 블록을 spec 2.11 의 단계 표로 교체(제품 단계 10개, 명시 필터, 작은따옴표). `HARNESS_THRESHOLD` 를 90 → 80 (AD-2 시작값). `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs`. CI 에 uv·pnpm 설치와 비밀값 스캔 job. 로컬 verify 전체 시간을 실측해 기록(R-11, 예산 10분) |
+| 범위 | `harness.config` 의 "Phase 0 이후" 블록을 spec 2.11 의 단계 표로 교체(제품 단계 10개, 명시 필터, 작은따옴표). `HARNESS_THRESHOLD` 를 90 → 80 (AD-2 시작값). `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs`. CI 에 uv·pnpm 설치와 비밀값 스캔 job. 로컬 verify 전체 시간을 실측해 기록(R-11, 예산 10분). **AD-2 진입 직후 improvement candidate 1건 더**: P0-4 에서 자연어 TDD 지시가 무시된 관측(근거: 구현 세션 보고서의 작업 순서) → 그 id 로 REP-9(기능 단위 test-first)를 평가 세트에 제안 |
 | 범위 밖 | 단계를 열 개 넘게 늘리기. `required` 를 내려서 통과시키기. smoke/e2e/load 는 Phase 1 이후 |
 | 완료 판정 | `verify.sh` 가 self-check 단계와 제품 단계를 함께 집계해 pass. `.github/workflows/harness.yml` 이 녹색. 임계값 변경의 근거가 `improvement-log/` 에 1건 |
 | 걸리는 규칙 | **보호 파일 변경.** [../harness/rules/harness-change-control.rule.md](../harness/rules/harness-change-control.rule.md) 를 따르고 한 번에 하나만 바꿉니다. EI-2: 임계값은 사람이 소유 — 변경은 제안하고 사람이 커밋합니다 |
