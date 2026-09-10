@@ -55,7 +55,8 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | --- | --- | --- | --- | --- |
 | P0-1 | 모노레포 뼈대와 빈 패키지 경계 | — | — | 완료 |
 | P0-2 | `apps/api` 최소 기동 | P0-1 | — | 완료 |
-| P0-3 | `packages/sdk` 와 `apps/web` 최소 기동 | P0-2 | — | 대기 |
+| P0-3 | `packages/sdk` 와 `apps/web` 최소 기동 | P0-2 | — | 진행 |
+| P0-3b | UI 기반: Tailwind + shadcn/ui + 앱 셸 | P0-3 | — | 대기 |
 | P0-4 | `apps/worker` 최소 기동 | P0-1 | — | 완료 |
 | P0-5 | Docker Compose 로 전부 기동 | P0-2, P0-3, P0-4 | — | 대기 |
 | P0-6 | AR-* 를 기계 판정으로 | P0-1 | — | 완료 |
@@ -91,6 +92,16 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | 완료 판정 | `build` 성공. 페이지가 api 의 healthz 값을 표시. `apps/web` 의 import 그래프에 `packages/sdk` 외의 `packages/*` 가 없음 |
 | 걸리는 규칙 | **AR-1** web 은 HTTP 계약과 sdk 만 압니다 |
 | 게이트 | 닫힘 (2026-09-09). **Q5 → 타입은 생성, 호출은 수기** (spec D-2, [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.4) |
+
+### P0-3b UI 기반: Tailwind + shadcn/ui + 앱 셸
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | [../DESIGN.md](../DESIGN.md) 를 코드로: Tailwind CSS v4, `shadcn init`(new-york · neutral · CSS 변수), 4절의 초기 세트 `add`, `components/ui/` 커밋. 앱 셸(`components/AppShell.tsx` — 사이드바 5항목 · 헤더 · 콘텐츠, `lg` 미만은 `sheet`), `next-themes` 토글, Geist 폰트. 도메인 컴포넌트 `RunStatusBadge`(6절 표 소유) + 테스트. P0-3 의 healthz 페이지를 `card`·`badge` 로 다시 표현하고 오류 상태(7절) |
+| 범위 밖 | 실제 화면(Chat·Run 목록·상세 = MVP-2), `form`(P1-1), 브랜드 색, 차트·모션 라이브러리, a11y 자동 판정(MVP-2 에서 켬) |
+| 완료 판정 | `pnpm -F web run build`·`typecheck`·`lint`·`test:unit` 0. `pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` 0. `RunStatusBadge` 가 7개 상태를 6절 표대로 렌더하는 테스트. `app/`·`components/`(ui 제외)에 `@radix-ui` 직접 import 0건, 임의 색 클래스(`bg-[`, `text-[#`, `-slate-`, `-gray-` 등) 0건 — grep 으로 확인. 보호 파일(`tsconfig.json`, `eslint.config.js`) 무수정 |
+| 걸리는 규칙 | AR-1. DESIGN.md D-1 ~ D-7. `tailwind.config.*`·`postcss.config.*` 는 가드 경고 파일(만들 수 있음) |
+| 근거 | spec 0001 개정 6, D-14. PROVENANCE 7.1 |
 
 ### P0-4 `apps/worker` 최소 기동
 

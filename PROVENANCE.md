@@ -108,6 +108,28 @@
 
 이 개념들을 자연어로만 두지 않고 import-linter 계약으로 옮기는 이유는 이 저장소의 원칙([AGENTS.md](AGENTS.md) Learning) 그대로입니다 — 자연어 지시보다 arch-rule 이 먼저입니다.
 
+### 7.1 UI 기반 — shadcn/ui
+
+[DESIGN.md](DESIGN.md) 가 `apps/web` 의 표현 규약을 소유합니다. 그 바탕은 우리가 만들지 않은 것입니다.
+
+| 항목 | 값 |
+| --- | --- |
+| 출처 | shadcn/ui (https://ui.shadcn.com) — Radix UI 프리미티브 + Tailwind CSS 위의 컴포넌트 **소스 복사** 모델 |
+| 함께 오는 것 | Tailwind CSS v4, Radix UI, lucide-react, next-themes, Geist(`next/font`) |
+| 라이선스 | shadcn/ui MIT, Radix MIT, Tailwind MIT, lucide ISC. 전부 저장소의 MIT 와 호환 |
+| 가져온 날짜 | 2026-09-10 (결정). 설치는 P0-3b |
+| 대상 | `apps/web/components/ui/`(생성물, 커밋), `app/globals.css` 의 토큰 |
+
+| 원본 | aether 에서 |
+| --- | --- |
+| shadcn 의 기본값(style `new-york`, base `neutral`, radius, CSS 변수) | **그대로 채택.** 바꾸지 않는 것이 결정입니다 — 디자인 결정을 최소화하는 것이 DESIGN.md 의 목적이고, 기본값이 곧 디자인 시스템입니다 |
+| "필요한 것만 `add`" | 채택. 초기 세트는 DESIGN.md 4절(MVP-2 가 필요로 하는 것). 더 필요하면 그 단위에서 `add` 하고 표에 한 줄 |
+| 생성물을 수정하는 자유 | 채택하되 이유를 파일 머리에 남기고, 고친 파일은 다시 덮지 않음(D-6) |
+| 브랜드 테마 | **결정하지 않음.** `neutral` 의 `primary` 가 그 자리. 결정할 때 DESIGN.md 2절을 고침 |
+| — | 도메인 → 표현 표(Run 상태 ↔ badge)와 외부 텍스트 렌더 규약(신뢰 경계)을 더했습니다. shadcn 은 이것을 모릅니다 |
+
+왜 이것을 채택했는가: 화면을 만드는 사람이나 에이전트가 색·간격·모양을 고르는 순간을 없애기 위해서입니다. 결정이 한 곳(DESIGN.md)에 있고 기본값이 답이면, 화면 단위의 작업은 조합만 하게 됩니다. 컴포넌트 소스가 저장소에 들어오므로 오프라인(DP-4)과 장기 유지에도 외부 서비스 의존이 없습니다.
+
 ## 8. 도입 이력
 
 | 날짜 | 무엇을 |
@@ -128,4 +150,5 @@
 | 2026-09-09 | 개발 기계 Node v23 → **24.19.0**(Active LTS, winget). `.nvmrc` 24, `engines >=24`. `tests/arch` 5/5 — **P0-6 완료.** AR-1(depcruise)·AR-2~12(import-linter) 전부 fixture 로 발화 증명 |
 | 2026-09-10 | `main` 을 `origin` 에 첫 push. CI(harness 워크플로) 첫 성공. GitHub 초기 커밋의 `LICENSE`(MIT)를 `main` 에 병합하고 기본 브랜치를 `main` 으로, `master` 삭제 |
 | 2026-09-10 | **P0-2 완료** — `apps/api` 최소 기동(implementer, 반복 1회). `/healthz` 계약, `AETHER_` 설정, OTel no-op 초기화, `aether-api openapi`. 조립은 `main.py`, CLI 진입점 `main:cli`. 실제 기동 200 확인. lint-imports 11 kept — AR-8~12 가 실제 import 를 처음 검사한 단위 |
+| 2026-09-10 | UI 기반 결정 — shadcn/ui 기본값을 디자인 시스템으로(7.1). `DESIGN.md` 신설, spec 0001 개정 6(2.5, D-14), backlog·plan 에 P0-3b 추가 |
 | 2026-09-10 | **P0-4 완료** — `apps/worker` 최소 기동(implementer, 반복 1회). Redis Streams consumer group 대기, 순수 백오프 규칙, stop 이벤트 종료. 구현 세션이 주 세션의 지시("pending 0")를 spec 2.3 근거로 거부하고 PEL 의미대로 테스트 — 리뷰 승인. **wave 2 종료** |

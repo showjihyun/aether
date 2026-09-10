@@ -26,6 +26,7 @@ spec 이 정한 요구사항(R)·결정(D)·계약은 반복하지 않습니다.
 | 2 | **P0-2** api 최소 기동 | P0-1 만 필요 | — |
 | 2 | **P0-4** worker 최소 기동 | P0-1 만 필요. P0-2 와 병렬 가능 | — |
 | 3 | **P0-3** sdk + web | P0-2 의 OpenAPI 가 필요 | — |
+| 3 | **P0-3b** UI 기반(Tailwind + shadcn/ui + 앱 셸) | P0-3 직후. 같은 `apps/web` 을 만지므로 병렬 불가. `DESIGN.md` 를 코드로 옮기는 단위(spec 개정 6) | — |
 | 3 | **P0-8** 데이터 모델 v1 | P0-2 의 앱 뼈대가 필요. P0-3 과 병렬 가능 | — |
 | 4 | **P0-5** compose + README | api·web·worker 가 전부 있어야 |  — |
 | 5 | **P0-7** 게이트 활성화 + CI | compose(P0-5)와 규칙(P0-6)이 있어야 제품 단계가 전부 통과 가능 | **H-2** |
@@ -95,6 +96,23 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 3 | `apps/web` — `app/layout.tsx`, `app/page.tsx`(서버 컴포넌트에서 sdk 의 `healthz()` 호출, 결과 표시. **동적 렌더링으로 고정** — `fetch(..., { cache: "no-store" })` 또는 `export const dynamic = "force-dynamic"`. 정적 프리렌더가 빌드 시 API 를 부르면 `web-build` 가 API 없이 실패합니다(리뷰 F-4)), `next.config.ts`, `vitest.config.ts`, 컴포넌트 테스트 1건 | A (W) |
 | 4 | `apps/api/tests/test_openapi_drift.py` — `aether-api openapi` 출력을 **파싱해** 커밋된 `packages/sdk/openapi.json` 과 비교(텍스트 비교는 키 순서·공백에 깨집니다) | A |
 | 5 | 판정: `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck`(`HEAD` 와 미추적 확인이 없으면 첫 생성 때 공허하게 통과합니다). `pnpm -F web -F sdk run lint`, `run test:unit`. `pnpm -F web run build`. **`pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` exit 0** — P0-6 에서 옮겨 온 실통과 검사 | A |
+
+### P0-3b UI 기반: Tailwind + shadcn/ui + 앱 셸
+
+[../DESIGN.md](../DESIGN.md) 가 결정을 소유합니다. 이 단위는 그것을 설치하고 셸을 세우는 일이며, 새 시각적 결정을 하지 않습니다.
+
+| 순서 | 무엇 | 누가 |
+| --- | --- | --- |
+| 1 | Tailwind CSS v4: `pnpm -F web add -D tailwindcss @tailwindcss/postcss postcss`, `apps/web/postcss.config.mjs`, `app/globals.css` 에 `@import "tailwindcss"` | A (W) |
+| 2 | `pnpm -F web dlx shadcn@latest init` — style `new-york`, base color `neutral`, CSS variables. 생성되는 `components.json`, `lib/utils.ts`(`cn`), `globals.css` 토큰을 그대로 둠. **`tsconfig.json` 의 `paths`(`@/*`)는 부록 B 에 이미 있음 — init 이 tsconfig 를 고치려 하면 diff 를 보고(H-1 후속)** | A |
+| 3 | DESIGN.md 4절의 초기 세트 `pnpm -F web dlx shadcn@latest add button input textarea label card badge alert skeleton separator scroll-area table tabs dialog sheet dropdown-menu tooltip sonner`. `components/ui/*` 커밋 | A |
+| 4 | `next-themes`(`ThemeProvider`, 헤더 토글), Geist(`next/font`), `lucide-react` | A (W) |
+| 5 | `components/AppShell.tsx` — DESIGN.md 5절의 셸. 사이드바 항목 5개(Agents·Runs·Knowledge·Workflows·Settings — 링크 자리만, 대상 페이지는 MVP-2), `lg` 미만은 `sheet`. `app/layout.tsx` 가 이것으로 감쌈 | A |
+| 6 | `components/RunStatusBadge.tsx` — 6절 표를 코드로(7개 상태 × variant × 아이콘). `RunStatusBadge.test.tsx` 가 7개를 전부 렌더해 텍스트·아이콘 존재 확인 | A |
+| 7 | `app/page.tsx` 를 다시 표현: `card` 안에 status·service·version, 오류 시 `alert destructive`(DESIGN.md 7절). 서버 컴포넌트·동적 렌더링은 P0-3 그대로 | A |
+| 8 | 판정: `pnpm -F web run typecheck`·`lint`·`test:unit`·`build` 0(API 없이). `pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` 0. grep — `app/`·`components/`(ui 제외)에 `@radix-ui` import 0건, `bg-[`·`text-[#`·`-slate-`·`-gray-`·`-zinc-` 0건. `git diff --stat apps/web/tsconfig.json eslint.config.js` 비어 있음. 실동작: api + `next start` 로 `/` 가 카드로 렌더 | A |
+
+`eslint.config.js`(보호)가 Tailwind·shadcn 코드에서 새 규칙 위반을 내면(예: `react/no-unknown-property`), 코드를 규칙에 맞추는 것이 먼저이고 규칙을 바꾸는 것은 사람의 일입니다.
 
 ### P0-8 데이터 모델 v1
 

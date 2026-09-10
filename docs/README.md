@@ -8,6 +8,7 @@
 | [domain.md](domain.md) | Agent, Run, Tool, Context 가 이 제품에서 정확히 무엇을 뜻하는가 | 이름을 붙이거나 스키마를 정하기 전 |
 | [roadmap.md](roadmap.md) | 지금이 어느 Phase 이고 다음에 무엇이 오는가 | 범위를 정하기 전 |
 | [../intents/intent.md](../intents/intent.md) | 이번 작업이 무엇을 왜 하는가 (활성 intent, intent → spec → plan) | 구현을 시작하기 전 |
+| [../DESIGN.md](../DESIGN.md) | `apps/web` 의 표현 규약 — 결정은 shadcn/ui 기본값, 토큰만, 도메인 → 표현 표 | 화면을 만들거나 고치기 전 |
 
 ## 아직 없는 문서
 

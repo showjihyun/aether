@@ -11,6 +11,7 @@
 | 개정 1 | 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 6 | 2026-09-10. UI 기반 결정 — Tailwind CSS v4 + shadcn/ui 를 채택하고 표현 규약은 [../DESIGN.md](../DESIGN.md) 가 소유(D-14). 2.5 갱신, 구현 단위 P0-3b 신설. showjihyun 지시로 승인 |
 | 개정 5 | 2026-09-09. P0-1 실행에서 드러난 것 셋 — 루트가 가상 워크스페이스라 설치는 `uv sync --all-packages`(2.2), Windows 에서 `lint-imports` 는 `PYTHONUTF8=1` 필요(2.11 `api-arch`), import-linter 는 외부 패키지의 하위 패키지를 금지 대상으로 받지 않아 `google.genai` → `google`(2.10 AR-5). 단계 수 10 불변 |
 | 개정 4 | 2026-09-09. C-1 에 사실 하나를 더함: guard hook 은 자기 환경변수만 읽어, 세션 안의 에이전트는 사람이 대행을 지시해도 `HARNESS_ALLOW_GUARDED_EDIT` 통로를 쓸 수 없음(`guard-evaluation-tampering.sh` 274·299행). H-1 대행 요청을 검토하며 확인. 보호 파일의 생성·커밋은 사람의 셸에서 |
 
@@ -137,6 +138,8 @@ DP-1 API-first 이므로 계약을 먼저 적습니다. 구현이 아니라 이�
 ### 2.5 `apps/web`
 
 Next.js App Router. 페이지 하나(`/`)가 sdk 의 `healthz()` 를 호출해 결과를 표시합니다. `apps/web` 은 `packages/sdk` 외의 `packages/*` 와 `apps/api` 를 import 하지 않습니다(AR-1). 이것을 말이 아니라 `.dependency-cruiser.cjs` 가 판정합니다.
+
+표현은 [../DESIGN.md](../DESIGN.md) 가 소유합니다(개정 6). 결정은 **shadcn/ui 기본값** — Tailwind CSS v4, `components/ui/` 에 소스 복사, 토큰만, 앱 셸 하나. "디자인은 최소" 가 뜻하는 것이 바로 이것입니다: 화면 단위의 작업은 조합만 하고 고르지 않습니다. 설치와 앱 셸은 P0-3b 가 하고, P0-3 의 healthz 페이지는 그때 `card`·`badge` 로 다시 표현됩니다.
 
 ### 2.6 `apps/worker`
 
@@ -304,6 +307,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 | D-10 | 큐는 **Redis Streams**. consumer group 과 ack 가 필요하고 List 에는 둘 다 없습니다 | — | 2.3, F-4 |
 | D-11 | **Run 은 Plane 마다 기록이 하나씩**: `control.runs`(선언) + `data.run_executions`(실행 상태). `GET /runs/{id}` 는 `control` 의 투영만 읽습니다 | — | 2.8, F-1. On-Prem Plane 분리에 맞는 쪽 |
 | D-12 | **로컬 verify 전체 예산 10분.** P0-7 에서 실측해 기록하고, 조정은 사람이 `improvement-log/` 근거와 함께 | — | R-11, V-5 |
+| D-14 | **`apps/web` 의 UI 기반은 Tailwind CSS v4 + shadcn/ui, 결정은 기본값.** 표현 규약·토큰·초기 컴포넌트 세트·도메인 → 표현 표는 `DESIGN.md` 가 소유하고, 여기 없는 시각적 결정은 shadcn 기본값이 답입니다 | — | 개정 6. [../DESIGN.md](../DESIGN.md) |
 | D-13 | **모든 Python 패키지는 `domain` / `application`(`ports/inbound`, `ports/outbound`, `usecases`) / `adapters`(`inbound`, `outbound`) 구조**를 가지며 AR-8 ~ AR-12 를 import-linter 로 판정합니다. 포트는 안쪽이 소유하고 어댑터는 포트로만 안을 만납니다. 조립은 `apps/*/main.py`. Phase 0 에서는 빈 껍데기 | — | 개정 1·2. [../docs/architecture.md](../docs/architecture.md) 3.1 |
 
 승인과 함께 [../intents/0001-phase-0-foundation.md](../intents/0001-phase-0-foundation.md) 의 Open Questions 3·4·5 를 닫고, [../intents/intent.md](../intents/intent.md) 의 머리 표를 갱신합니다. D-3 은 승인해도 P0-9 의 구현 검토가 따로 남습니다.
