@@ -168,7 +168,7 @@ uv run pytest -q -m integration
 ./harness/scripts/verify.sh          # self-check 는 여전히 통과해야 합니다
 ```
 
-아직 존재하지 않는 대상(예: P0-2 시점의 web)은 해당 줄을 건너뜁니다. 건너뛴 줄은 완료 보고에 "미측정" 으로 적습니다. 통과로 적지 않습니다(EI-7).
+Windows 에서 testcontainers 가 Ryuk 컨테이너를 못 띄우면 integration 줄 앞에 `TESTCONTAINERS_RYUK_DISABLED=true` 를 붙입니다(P0-4 에서 확인. Linux CI 는 불필요). 아직 존재하지 않는 대상(예: P0-2 시점의 web)은 해당 줄을 건너뜁니다. 건너뛴 줄은 완료 보고에 "미측정" 으로 적습니다. 통과로 적지 않습니다(EI-7).
 
 **P0-7 후.** `./harness/scripts/verify.sh` 하나가 전부입니다. 완료 보고에는 `.harness/verify.json` 의 경로와 실패 단계의 `log` 경로를 붙입니다.
 
