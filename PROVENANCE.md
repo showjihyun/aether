@@ -151,4 +151,5 @@
 | 2026-09-10 | `main` 을 `origin` 에 첫 push. CI(harness 워크플로) 첫 성공. GitHub 초기 커밋의 `LICENSE`(MIT)를 `main` 에 병합하고 기본 브랜치를 `main` 으로, `master` 삭제 |
 | 2026-09-10 | **P0-2 완료** — `apps/api` 최소 기동(implementer, 반복 1회). `/healthz` 계약, `AETHER_` 설정, OTel no-op 초기화, `aether-api openapi`. 조립은 `main.py`, CLI 진입점 `main:cli`. 실제 기동 200 확인. lint-imports 11 kept — AR-8~12 가 실제 import 를 처음 검사한 단위 |
 | 2026-09-10 | UI 기반 결정 — shadcn/ui 기본값을 디자인 시스템으로(7.1). `DESIGN.md` 신설, spec 0001 개정 6(2.5, D-14), backlog·plan 에 P0-3b 추가 |
+| 2026-09-10 | **P0-3 완료** — sdk 타입 생성 + web healthz(implementer, 반복 1회). AR-1 이 실제 코드에서 처음 판정(74 modules, 위반 0). H-1 후속 2(사람): depcruise `tsConfig` 절대 경로, Next 가 다시 쓴 web tsconfig 수용. 세 언어 경계(Python → OpenAPI → TS)가 드리프트 테스트로 닫힘 |
 | 2026-09-10 | **P0-4 완료** — `apps/worker` 최소 기동(implementer, 반복 1회). Redis Streams consumer group 대기, 순수 백오프 규칙, stop 이벤트 종료. 구현 세션이 주 세션의 지시("pending 0")를 spec 2.3 근거로 거부하고 PEL 의미대로 테스트 — 리뷰 승인. **wave 2 종료** |
