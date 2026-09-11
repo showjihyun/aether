@@ -23,6 +23,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Phase 0 제품 단계(spec 0001 2.11)가 uv 워크스페이스와 pnpm 워크스페이스를
+      # 요구합니다. verify.sh 자신은 도구를 설치하지 않으므로 여기서 준비합니다.
+      # 버전은 2026-09-11 기준 각 액션의 최신 메이저입니다 — 확인: 병합 전에 다시 확인.
+      - uses: astral-sh/setup-uv@v10.1.0   # 이동 태그 v10 은 없음(v7 까지만). 릴리스 태그를 그대로 씁니다
+        with:
+          enable-cache: true
+      - uses: pnpm/action-setup@v6    # 확인: 최신 메이저. 버전은 package.json 의 packageManager 필드를 따릅니다
+      - uses: actions/setup-node@v7   # 확인: 최신 메이저
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # 루트가 [tool.uv] package = false 가상 워크스페이스이므로 --all-packages 가
+      # 필수입니다 — 옵션 없는 uv sync 는 멤버를 제거합니다(spec 2.2, improvement-log
+      # 2026-09-11-009).
+      - run: uv sync --all-packages --frozen
+      - run: pnpm install --frozen-lockfile
+
       # 깨끗한 체크아웃에서 돕니다. 로컬에만 있는 상태가 결과를 만들지 못합니다.
       # 진입점의 실행 비트는 git 인덱스에서 옵니다. Windows 에서 core.fileMode=false 로
       # 100644 가 커밋되면 여기서 exit 126 으로 드러납니다.
@@ -64,3 +82,17 @@ jobs:
           esac
           echo "::error::평가·게이트를 규정하는 파일이 바뀌었습니다. 이 PR 에는 harness-change 라벨과 사람 검토가 필요합니다. 라벨 없이 병합하지 마십시오."
           exit 1
+
+  secrets:
+    name: 비밀값 스캔
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      # 확인: 라이선스 조건(무료 사용 범위) — 조직 소유 저장소는 라이선스 키가
+      # 필요할 수 있습니다. 개인 저장소는 무료입니다. 버전은 2026-09-11 기준 최신
+      # 메이저(v3) — 병합 전 다시 확인.
+      - uses: gitleaks/gitleaks-action@v3   # PR 스캔에는 GITHUB_TOKEN 이 필수(v2 부터). 개인 저장소는 라이선스 키 불필요
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
