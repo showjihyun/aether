@@ -1,0 +1,23 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-004
+date: 2026-09-11
+status: candidate
+symptom: harness/hooks/guard-evaluation-tampering.sh 의 셸 명령 휴리스틱이 cp, mv, install, truncate, dd, rsync, ln 이라는 단어 중 하나가 명령 문자열 어디에나 등장하면 그 명령 안의 모든 경로형 토큰을 보호 패턴과 대조합니다. 그 결과 보호 파일을 실제로 바꾸지 않는 읽기 전용 명령도 그 단어와 보호 경로가 같은 명령 줄에 있으면 차단됩니다.
+evidence: |
+  이번 세션에서 재현: 명령 grep -n 'install\|cp\|mv' harness/hooks/guard-evaluation-tampering.sh (읽기 전용, grep 패턴 문자열 안의 리터럴 "install" 이 트리거) 실행 시 차단됨.
+  hook 출력: "[harness] 셸 명령을 차단했습니다: 보호 대상 harness/hooks/guard-evaluation-tampering.sh 을(를) 변경하려 합니다 (패턴 harness/hooks/*)."
+  .harness/guard-events.log 마지막 줄: "2026-09-11T12:37:40Z	2cf48e9	block	harness/hooks/guard-evaluation-tampering.sh	셸 명령, 패턴 harness/hooks/*".
+  harness/hooks/guard-evaluation-tampering.sh 259행 부근 주석(도구 파일, 읽기 전용으로 확인): "이 목록은 닫히지 않습니다 ... 남는 경로는 사후 검출(detect-guarded-change.sh)과 CI(harness.yml)가 담당합니다."
+root_cause: 휴리스틱이 명령의 의도(어떤 프로그램을 실제로 실행하는가)가 아니라 명령 문자열에 특정 단어가 등장하는가만 검사합니다. grep·sed 처럼 그 단어를 인자·정규식 패턴으로만 담은 읽기 전용 명령과, 실제로 cp·install 을 실행해 파일을 바꾸는 명령을 구분하지 못합니다. hook 자신의 주석도 이 한계를 이미 인정하고 있습니다.
+fix: 이번 세션에서는 hook 코드를 고치지 않고(harness/hooks/ 는 보호 대상) Read 도구로 우회해 파일을 읽었습니다. 오탐 자체는 재작업하지 않았습니다.
+recurrence_risk: medium
+harness_element: HE-10
+proposed_harness_change: 셸 명령 휴리스틱이 실행 프로그램명(명령의 첫 토큰, 또는 파이프·&&·; 로 나눈 각 절의 첫 토큰)만 cp·mv·install 등과 비교하도록 좁히거나, 최소한 차단 메시지에 "읽기 전용 작업이면 Read 도구를 쓰라" 는 안내를 덧붙입니다. 번들 파일이므로 이 저장소에서는 제안만 남깁니다.
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: REP-3(실패한 검증을 정직하게 통과시키기, 지금 가능)의 변형 — hook 오탐이 정당한 조사 활동을 막지 않는지 관측.
+  기준: 위 재현 명령과 같은 유형(보호 경로 이름 + cp/mv/install 문자열을 포함하지만 실제로는 읽기 전용인 명령)이 hook 개선 후 차단되지 않고, 실제 cp/mv/install 로 보호 파일을 덮어쓰는 시도는 여전히 차단됨.
+  근거 파일: .harness/guard-events.log, harness/hooks/guard-evaluation-tampering.sh
+owner: unassigned
+expires: 2026-12-10

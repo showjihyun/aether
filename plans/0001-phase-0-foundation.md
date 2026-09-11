@@ -95,7 +95,7 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 2 | `packages/sdk` — `scripts.generate = "openapi-typescript openapi.json -o src/generated/openapi.d.ts"`, 실행해 생성물 커밋. `src/client.ts`(`createClient({ baseUrl, apiKey })`, `healthz()`), `src/index.ts`, `src/client.test.ts`(Vitest, fetch 를 주입해 경로·헤더 확인). sdk 는 `vitest.config.ts` 를 두지 않습니다 — Vitest 기본(node 환경)으로 충분하고, 패키지 루트의 설정 파일은 보호 파일 `tsconfig.json`(`include: ["src"]`)과 `eslint.config.js`(`projectService`) 조합에서 파서 오류를 냅니다(P0-3 에서 확인) | A (W) |
 | 3 | `apps/web` — `app/layout.tsx`, `app/page.tsx`(서버 컴포넌트에서 sdk 의 `healthz()` 호출, 결과 표시. **동적 렌더링으로 고정** — `fetch(..., { cache: "no-store" })` 또는 `export const dynamic = "force-dynamic"`. 정적 프리렌더가 빌드 시 API 를 부르면 `web-build` 가 API 없이 실패합니다(리뷰 F-4)), `next.config.ts`(`transpilePackages: ["@aether/sdk"]`), `vitest.config.ts`(jsdom), 컴포넌트 테스트 1건. **`next build` 는 `apps/web/tsconfig.json`(보호)을 다시 씁니다** — `jsx: react-jsx`, `include` 에 `.next/dev/types/**/*.ts`, 그리고 CRLF. 되돌려도 다음 빌드에 또 바뀌므로 그 내용을 받아들이고 사람이 커밋합니다(H-1 후속. `.gitattributes` 가 LF 로 정규화) | A (W) |
 | 4 | `apps/api/tests/test_openapi_drift.py` — `aether-api openapi` 출력을 **파싱해** 커밋된 `packages/sdk/openapi.json` 과 비교(텍스트 비교는 키 순서·공백에 깨집니다) | A |
-| 5 | 판정: `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck`(`HEAD` 와 미추적 확인이 없으면 첫 생성 때 공허하게 통과합니다). `pnpm -F web -F sdk run lint`, `run test:unit`. `pnpm -F web run build`. **`pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` exit 0** — P0-6 에서 옮겨 온 실통과 검사 | A |
+| 5 | 판정: `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck`(`HEAD` 와 미추적 확인이 없으면 첫 생성 때 공허하게 통과합니다). `pnpm -F web -F sdk run lint`, `run test:unit`. `pnpm -F web run build`. **`pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` exit 0** — P0-6 에서 옮겨 온 실통과 검사 | A |
 
 ### P0-3b UI 기반: Tailwind + shadcn/ui + 앱 셸
 
@@ -146,8 +146,8 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 1 | 로컬에서 spec 2.11 의 열 명령을 **손으로 순서대로** 실행해 전부 exit 0 임을 먼저 확인. 하나라도 실패하면 이 단위를 시작하지 않고 해당 단위로 돌아감 | A |
 | 2 | 열 명령의 실행 시간을 합산해 기록. 10분(D-12)을 넘기면 H-2 전에 사람에게 보고 | A |
 | 3 | `./harness/scripts/improvement-log.sh new` 로 항목 2건: (a) 임계값 90 → 80 의 근거(intent Constraints 의 예외 조항), (b) P0-4 에서 자연어 TDD 지시가 무시된 관측 — 근거는 그 구현 세션의 보고서(작업 순서: 소스 5개 작성 → … → 테스트), 환원은 `implementer.md` 의 `red 증거` 칸(이미 적용). (b) 의 id 가 REP-9(기능 단위 test-first) 추가의 근거가 됩니다(harness/evaluation/README 7.1). AD-2 진입이 log 의 시작점입니다 | A |
-| 4a | **H-2a**: `harness.config`(부록 F — 주석 블록을 단계 표로 교체, `HARNESS_THRESHOLD=80`, `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs plans`). PR 에 `harness-change` 라벨. 병합 후 로컬 verify 통과 확인 | **H** |
-| 4b | **H-2b**: `.github/workflows/harness.yml`(부록 G — uv·pnpm 설치, gitleaks job). **별도 PR**, `harness-change` 라벨. 보호 파일은 한 번에 하나(spec C-2) | **H** |
+| 4a | **H-2b 먼저**: `.github/workflows/harness.yml`(부록 G — uv·pnpm 설치, gitleaks job) + `.github/dependabot.yml`. **별도 PR**, `harness-change` 라벨. 옛 `harness.config`(self-check 6단계) 아래에서 도구 설치는 무해하므로 CI 가 녹색 | **H** |
+| 4b | **H-2a 다음**: `harness.config`(부록 F — 주석 블록을 단계 표로 교체, `HARNESS_THRESHOLD=80`, `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs plans`). 별도 PR, `harness-change` 라벨. **순서가 이래야 하는 이유**: PR 의 CI 는 PR 의 `harness.config` 를 PR 의 `harness.yml` 로 돌립니다. H-2a 를 먼저 올리면 uv·pnpm 이 없어 `api-lint` 부터 죽고 필수 검사가 빨간불이라 병합이 막힙니다(P0-7 검토에서 확인). 보호 파일은 한 번에 하나(spec C-2) | **H** |
 | 5 | 판정: `./harness/scripts/verify.sh` pass, `verify.json` 에 16단계. CI 녹색. `duration_ms` 합계 기록 (R-11) | A |
 
 ### P0-9 🔒 인증 기준선
@@ -168,8 +168,8 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 순간 | 언제 | 사람이 하는 일 | 에이전트가 넘기는 것 |
 | --- | --- | --- | --- |
 | **H-1** | **P0-1 착수 전** | 보호 파일 다섯 개를 만들어 커밋: `apps/web/tsconfig.json`, `packages/sdk/tsconfig.json`, `eslint.config.js`, `.importlinter`, `.dependency-cruiser.cjs` | 부록 A~E 의 내용. `.importlinter` 는 AR-2 ~ AR-9, AR-11, AR-12 의 열한 계약. P0-6 에서 도구가 거부한 항목이 있으면 그 diff |
-| **H-2a** | P0-7 의 4a | `harness.config` 를 고쳐 `harness-change` 라벨 PR 로 병합. 임계값 90 → 80 은 EI-2 상 사람의 결정 | 부록 F 의 내용. 열 명령이 로컬에서 전부 통과한 기록. 실행 시간 합계. improvement-log 항목 id |
-| **H-2b** | P0-7 의 4b | `.github/workflows/harness.yml` 을 고쳐 **별도** `harness-change` PR 로 병합 | 부록 G 의 내용. H-2a 병합 후 로컬 verify 가 통과한 기록 |
+| **H-2b** | P0-7 의 4a (**먼저**) | `.github/workflows/harness.yml` + `.github/dependabot.yml` 을 **별도** `harness-change` PR 로 병합. CI 에 도구 설치가 먼저 있어야 다음 PR 이 통과합니다 | 부록 G 의 내용(scratchpad 후보). 액션 버전 재확인 |
+| **H-2a** | P0-7 의 4b (**다음**) | `harness.config` 를 고쳐 `harness-change` 라벨 PR 로 병합. 임계값 90 → 80 은 EI-2 상 사람의 결정 | 부록 F 의 내용(scratchpad 후보). 열 명령이 로컬에서 전부 통과한 기록. 실행 시간 합계. improvement-log 항목 id(001) |
 | **H-3** | P0-9 의 2번과 4번 | 인증의 설계 검토(구현 전)와 PR 리뷰(구현 후) | 인터페이스 파일, 실패하는 테스트 목록, spec 2.9 대비 차이가 있으면 그 목록 |
 
 H-1 을 P0-1 의 **선행 조건**으로 둔 이유: 단위 안에 두면 에이전트 세션이 사람을 기다리며 멈춥니다. 부록 A~E 의 내용은 P0-1 의 나머지와 독립이라 먼저 만들어도 잃는 것이 없고, `.importlinter` 가 아직 없는 패키지를 가리키는 것은 P0-1 이 끝나기 전에는 아무도 `lint-imports` 를 돌리지 않으므로 문제가 아닙니다.
@@ -183,7 +183,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run mypy
 PYTHONUTF8=1 uv run lint-imports
 uv run pytest -q -m 'not integration'
-pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck
+pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck
 pnpm -F web -F sdk run lint
 pnpm exec depcruise apps/web --config .dependency-cruiser.cjs
 pnpm -F web -F sdk run test:unit
@@ -609,7 +609,7 @@ module.exports = {
   "api-typecheck|quality|true|uv run mypy"
   "api-arch|architecture|true|PYTHONUTF8=1 uv run lint-imports"
   "api-unit|correctness|true|uv run pytest -q -m 'not integration'"
-  "web-typecheck|quality|true|pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z '$(git status --porcelain packages/sdk/src/generated)' && pnpm -F web -F sdk run typecheck"
+  "web-typecheck|quality|true|pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck"
   "web-lint|quality|true|pnpm -F web -F sdk run lint"
   "web-arch|architecture|true|pnpm exec depcruise apps/web --config .dependency-cruiser.cjs"
   "web-unit|correctness|true|pnpm -F web -F sdk run test:unit"

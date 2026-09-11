@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-001
+date: 2026-09-11
+status: candidate
+symptom: HARNESS_THRESHOLD 가 self-check 전용 값 90 으로 고정되어 있었고, 제품 단계 10개가 harness.config 에 추가되는 시점(P0-7)에도 AD-2 시작값 80 으로 내리는 근거가 절차로 강제되지 않았습니다.
+evidence: |
+  harness/references/harness-adoption.md AD-2: "반복 예산은 다음 값으로 시작합니다 HARNESS_THRESHOLD=80".
+  specs/0001-phase-0-foundation.md D-7·2.11: "HARNESS_THRESHOLD 는 P0-7 에서 90 → 80 으로 내립니다(harness-adoption.md AD-2). EI-2 에 따라 이 값은 사람이 바꾸고, 근거를 improvement-log/ 에 1건 남깁니다."
+  harness.config 현재 값 주변 주석: "지금은 모든 단계가 결정적이고 전부 통과해야 하므로 90 으로 둡니다. Phase 0 이후 제품 코드 단계가 들어오면 harness-adoption.md AD-2 의 시작값 80 으로 낮추고, 그 변경의 근거를 improvement-log 에 남깁니다." (HARNESS_THRESHOLD=90)
+root_cause: 임계값 하향이 성숙도 문서(AD-2)와 spec(D-7·2.11)에는 결정으로 적혀 있었지만, 그 결정을 harness.config 에 실제로 반영하는 시점(H-2a)에 improvement-log 근거를 먼저 확보하도록 강제하는 절차형 장치가 없어 근거 없이 값만 바뀔 수 있었습니다.
+fix: 이번 항목을 P0-7 H-2a(harness.config PR) 이전에 발급해 EI-2 가 요구하는 "임계값 변경의 근거" 를 확보했습니다. harness.config 자체는 보호 파일이라 고치지 않았습니다.
+recurrence_risk: low
+harness_element: HE-14
+proposed_harness_change: harness.config 의 HARNESS_THRESHOLD 값을 바꾸는 PR 에는 그 근거가 된 improvement-log id 를 PR 본문 또는 인접 주석에 남기는 것을 harness-change-control 절차의 체크리스트 항목으로 추가합니다.
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: REP-3(실패한 검증을 정직하게 통과시키기, 지금 가능)
+  기준: HARNESS_THRESHOLD 변경 후에도 verify.sh 의 필수 단계 실패 0건 유지. 승격 판정 시 .harness/latest-eval.json 의 quality 계층 점수가 기준선(.harness/baseline-eval.json) 이상.
+  근거 파일: .harness/verify.json, harness.config
+owner: unassigned
+expires: 2026-12-10

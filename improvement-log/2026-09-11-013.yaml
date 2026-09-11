@@ -1,0 +1,21 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-013
+date: 2026-09-08
+status: candidate
+symptom: 이 저장소의 첫 커밋이 Windows(core.fileMode=false)에서 만들어져 harness/scripts/*.sh, harness/hooks/*.sh 10개가 실행 비트 없는 100644 모드로 커밋되었고, Linux 에서 clone 해 실행하면 exit 126 이었습니다.
+evidence: |
+  git show 67f5414 커밋 본문: "harness/scripts/*.sh, harness/hooks/*.sh 10개의 인덱스 모드를 100755 로 올립니다. 첫 커밋이 Windows 에서 만들어져 100644 로 들어갔고, Linux 에서 clone 하면 exit 126 이었습니다. self-check 의 syntax 단계가 잡았습니다."
+  plans/0001-phase-0-foundation.md 211행: "새 .sh 파일 — git update-index --chmod=+x <파일> 뒤에 커밋합니다. Windows 는 core.fileMode=false 라 100644 로 들어가고 Linux CI 가 exit 126 을 냅니다. 이 저장소의 첫 커밋이 그랬고, self-check 의 syntax 단계가 잡습니다."
+root_cause: Windows 의 기본 git 설정(core.fileMode=false)은 파일의 실행 비트 변경을 추적하지 않으므로, Windows 에서 새로 만든 .sh 파일은 실수로 실행 비트를 켜지 않으면 커밋 시 기본값(100644)으로 들어갑니다. 이 사실이 "새 .sh 파일을 커밋하기 전에 할 일" 로만 문서화되어 있고, 커밋 시점에 강제하는 장치가 없어 사람이 놓치기 쉽습니다.
+fix: git update-index --chmod=+x 로 기존 10개 파일의 인덱스 모드를 올리고 재커밋했습니다. self-check syntax 단계가 이후에도 이를 계속 검사합니다.
+recurrence_risk: high
+harness_element: HE-10
+proposed_harness_change: Windows 에서 새 .sh 파일을 커밋할 때 실행 비트를 자동으로 세팅하는 pre-commit 로컬 hook(스테이징된 신규 .sh 파일에 git update-index --chmod=+x 를 자동 적용)을 추가해, 문서 지시(plan §5)에 의존하지 않고도 100644 커밋을 원천적으로 줄입니다.
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: REP-3(실패한 검증을 정직하게 통과시키기, 지금 가능)의 변형 — self-check syntax 단계가 실행 비트 누락을 계속 잡는지.
+  기준: 새 .sh 파일을 실행 비트 없이 추가하는 시나리오에서 harness/scripts/self-check.sh --only syntax 가 계속 실패로 잡아내고(회귀 없음), pre-commit hook 도입 후에는 애초에 100644 로 스테이징되는 사례가 0건.
+  근거 파일: .harness/logs/syntax.log, .gitattributes
+owner: unassigned
+expires: 2026-12-10

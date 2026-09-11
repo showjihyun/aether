@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-005
+date: 2026-09-09
+status: candidate
+symptom: Windows 의 기본 로캘(cp949, 한국어)에서 UTF-8 텍스트를 여는 세 도구가 각각 다른 방식으로 실패했습니다 — lint-imports 는 .importlinter 의 UTF-8 주석에서 UnicodeDecodeError, Alembic 은 alembic.ini 를 로캘로 읽어 URL 자리표시자를 ASCII 로만 둘 수 있었고, worker 프로세스의 표준에러 로그는 한국어 문구가 mojibake 로 깨졌습니다.
+evidence: |
+  specs/0001-phase-0-foundation.md 17행 개정 5: "Windows 에서 lint-imports 는 PYTHONUTF8=1 필요(2.11 api-arch)".
+  specs/0001-phase-0-foundation.md 244행: "PYTHONUTF8=1 uv run lint-imports (Windows 의 cp949 locale 이 .importlinter 의 UTF-8 주석을 못 읽습니다. Linux 에서는 무해)".
+  apps/api/migrations/alembic.ini 6~8행 주석: "Kept ASCII-only: Alembic reads this file with encoding=\"locale\", which is not UTF-8 on every machine (observed: cp949 on a Korean-locale Windows host)."
+root_cause: Python·Alembic 생태계의 여러 파일 읽기 경로가 명시적 인코딩을 지정하지 않고 OS 로캘에 의존합니다. 이 저장소의 문서·설정·로그는 UTF-8(한국어 포함)로 작성되는데, Windows 한국어 로캘의 기본값은 cp949 라 이 가정이 세 곳에서 독립적으로 깨졌습니다.
+fix: PYTHONUTF8=1 을 api-arch 검증 명령 앞에 붙이고(spec 2.11), alembic.ini 의 sqlalchemy.url 자리표시자를 ASCII 전용으로 유지하며 그 이유를 파일 머리에 주석으로 남겼습니다.
+recurrence_risk: high
+harness_element: HE-11
+proposed_harness_change: Windows 개발 환경에서 UTF-8 을 가정하는 모든 검증·마이그레이션 명령 앞에 PYTHONUTF8=1(또는 동등한 로캘 고정)을 붙이는 것을 이 저장소의 Windows 개발 환경 규약으로 한 곳에 모으고, 새 Python 진입점을 추가할 때 이 규약을 점검 항목으로 둡니다.
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: REP-5(프로젝트 고유 규약을 따르는 작업, 지금 가능)
+  기준: Windows 세션에서 PYTHONUTF8 규약이 신규 진입점에도 적용된 흔적이 발견 경로(spec 2.13 또는 진입점 문서)에서 확인됨. api-arch 단계가 Windows 에서 계속 exit 0.
+  근거 파일: specs/0001-phase-0-foundation.md 2.11·2.13, apps/api/migrations/alembic.ini
+owner: unassigned
+expires: 2026-12-10

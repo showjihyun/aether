@@ -1,0 +1,27 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-014
+date: 2026-09-11
+status: candidate
+symptom: P0-7 의 harness.config 후보에서 web-typecheck 단계 명령이 test -z '$(git status …)' 로 전사되어, bash -c 로 실행하면 작은따옴표 안의 $(…) 가 확장되지 않아 리터럴 비교가 되고 단계가 항상 실패했다. bash -n 문법 검사는 통과했다.
+evidence: |
+  harness/scripts/verify.sh 234행: `if bash -c "$cmd" >"$log_abs" 2>&1; then` — 단계 명령은 bash -c 로 실행됩니다.
+  재현(Git Bash): bash -c "test -z '\$(git status --porcelain packages/sdk/src/generated)' && echo pass || echo FAIL" → FAIL
+  (작은따옴표 안의 $(…) 는 확장되지 않아 리터럴 문자열이 비교됨).
+  대조: bash -c "! git status --porcelain packages/sdk/src/generated | grep -q . && echo pass || echo FAIL" → pass,
+  packages/sdk/src/generated/zz_dirty.tmp 를 만든 뒤 같은 명령 → FAIL (의도대로 동작).
+  후보 파일 scratchpad/p0-7/harness.config.candidate 의 web-typecheck 행이 작은따옴표 형태였음.
+  원인 위치: plans/0001-phase-0-foundation.md 부록 F — spec 2.11 의 test -z "$(…)" 를 배열 원소(큰따옴표) 안에서
+  작은따옴표로 바꾼 전사. 후보 검증은 bash -n(문법)만 수행해 통과했음.
+root_cause: spec 의 셸 명령을 harness.config 의 큰따옴표 배열 원소로 전사할 때 따옴표 중첩이 실행 의미를 바꾸는데, 후보 검증이 bash -n(문법)에 그쳐 실행 의미를 보지 않았다. 문법 검사와 실행 검사를 같은 것으로 취급한 절차 결함.
+fix: "명령을 따옴표가 필요 없는 형태로 바꿈: ! git status --porcelain <경로> | grep -q . — spec 2.11(개정 9), plan 부록 F·4절, 후보 파일. 후보의 web-typecheck 를 bash -c 로 실제 실행해 exit 0 확인."
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "게이트 설정 단위(P0-7 류)의 후보 파일 판정에 \"각 단계 명령을 bash -c 로 실제 실행해 exit 0\" 을 포함한다. bash -n 은 실행 검사를 대체하지 못한다. verify.sh 에 각 단계를 실행만 하고 집계하지 않는 사전 점검 옵션을 두는 것을 상류에 제안."
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: P0-7 판정(H-2a 병합 뒤 verify.sh 16단계) 과 이후 게이트 설정 단위(P1-9 smoke, MVP-4 e2e)
+  기준: 후보 파일의 모든 단계 명령이 bash -c 실행에서 exit 0. .harness/verify.json 의 web-typecheck 가 pass
+  근거 파일: .harness/verify.json, harness.config
+owner: unassigned
+expires: 2026-12-10

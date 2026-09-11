@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-009
+date: 2026-09-09
+status: candidate
+symptom: 루트 pyproject.toml 이 [tool.uv] package = false 인 가상 워크스페이스라서, 옵션 없이 uv sync 를 실행하면 워크스페이스 멤버 패키지들이 설치되는 것이 아니라 제거되었습니다.
+evidence: |
+  specs/0001-phase-0-foundation.md 87행: "루트는 [tool.uv] package = false 가상 루트이므로 설치는 uv sync --all-packages — 옵션 없는 uv sync 는 멤버를 제거합니다".
+  plans/0001-phase-0-foundation.md 47행: "루트가 package = false 가상 워크스페이스라 옵션 없는 uv sync 는 멤버를 설치하지 않고 제거합니다(P0-1 실행에서 확인)".
+  specs/0001-phase-0-foundation.md 17행 개정 5: "루트가 가상 워크스페이스라 설치는 uv sync --all-packages(2.2)".
+root_cause: uv 의 워크스페이스 동작이 루트 패키지 존재 여부(package = true/false)에 따라 기본 uv sync 의 대상 범위가 달라지는데, 이 차이가 uv 문서의 기본 예제에는 뚜렷하게 드러나지 않아 P0-1 실행 전까지 발견되지 않았습니다.
+fix: 모든 설치·CI 명령을 uv sync --all-packages(옵션 포함)로 통일했습니다.
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: 가상 워크스페이스(package = false)를 쓰는 Python 모노레포에서는 설치 명령에 --all-packages 를 항상 붙이는 것을 언어 팩 문서(harness/language/python)에 참고 사례로 남기는 것을 제안합니다. 이 저장소 안에서는 이미 spec·plan·README·CI 네 곳에 반영되어 있습니다.
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: REP-5(프로젝트 고유 규약을 따르는 작업, 지금 가능) — 신규 설치 관련 문서·CI 변경이 --all-packages 를 유지하는지.
+  기준: 루트 README, .github/workflows/harness.yml(H-2b 병합 후)의 uv sync 호출에 --all-packages 가 계속 포함됨.
+  근거 파일: README.md, plans/0001-phase-0-foundation.md 47행
+owner: unassigned
+expires: 2026-12-10
