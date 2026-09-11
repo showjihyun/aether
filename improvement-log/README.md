@@ -12,7 +12,7 @@
 
 ## 현재 상태
 
-**AD-2(Week 1)에 진입했습니다.** 2026-09-11, P0-7 에서 candidate 14건을 발급했습니다(`2026-09-11-001` ~ `014`. 014 는 후보 파일 검토 중 관측). 전부 `status: candidate`, `trust: untrusted` 이며 `promoted` 는 아직 0건입니다.
+**AD-2(Week 1)에 진입했습니다.** 2026-09-11, P0-7 에서 candidate 15건을 발급했습니다(`2026-09-11-001` ~ `015`. 014·015 는 후보 파일 검토와 H-2b 의 CI 실패에서 관측). 전부 `status: candidate`, `trust: untrusted` 이며 `promoted` 는 아직 0건입니다.
 
 이 13건은 Phase 0 실행(P0-1 ~ P0-6, P0-8) 중 실제로 관측되어 `PROVENANCE.md` 8절 이력·커밋 본문·테스트 docstring 에 그림자 로그로만 남아 있던 사건들과, 이 항목을 발급하는 세션 자체에서 재현한 사건(`2026-09-11-004`, guard hook 오탐) 하나를 포함합니다. `validate` 는 통과했지만 사람의 승격 판정(`../harness/rules/promotion-gate.rule.md`)은 아직 거치지 않았습니다 — 그 전까지는 여기 적힌 내용을 결론이 아니라 후보로 다룹니다.
 

@@ -150,7 +150,7 @@ AR-8 은 import-linter `layers` 계약 하나(`containers` 로 전 패키지), A
 
 ## 6. 지금 없는 것
 
-Phase 0 미착수이므로 `apps/`, `packages/`, `infra/` 는 아직 존재하지 않습니다. 이 문서의 경로는 **만들 때 놓을 자리**이지 현재 상태가 아닙니다. 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
+Phase 0 진행 중입니다. `apps/{api,web,worker}` 와 `infra/docker` 는 있고 동작하며, `packages/*` 는 세 층(3.1)의 **빈 껍데기**입니다 — 구현은 Phase 1 부터. AR-1 ~ AR-12(AR-10 제외)는 `.importlinter`·`.dependency-cruiser.cjs` 로 verify 의 `api-arch`·`web-arch` 단계에서 판정되고 있습니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
 
 ## 관련 문서
 

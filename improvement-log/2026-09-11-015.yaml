@@ -1,0 +1,19 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-015
+date: 2026-09-11
+status: candidate
+symptom: "H-2b PR(#4)의 첫 CI 가 두 job 에서 실패했다. verify: 'Unable to resolve action astral-sh/setup-uv@v10' — 이동 태그 v10 이 존재하지 않음(v7 까지만, 최신 릴리스는 v10.1.0). 비밀값 스캔: gitleaks-action v3 가 'GITHUB_TOKEN is now required to scan pull requests' 로 중단."
+evidence: "GitHub Actions run 34603490951: '##[error]Unable to resolve action astral-sh/setup-uv@v10, unable to find version v10' 와 '##[error]GITHUB_TOKEN is now required to scan pull requests'. gh api repos/astral-sh/setup-uv/tags 의 v* 태그: v7 v6 v5 v4 (v10 없음), releases/latest = v10.1.0. 후보 harness.yml.candidate 는 구현 세션이 '릴리스 API 로 최신 메이저를 실측' 했다고 보고했으나 latest 태그 v10.1.0 에서 이동 태그 v10 을 추정한 것. 후보 검증은 PyYAML 파싱만 수행. 수정 커밋 5d89945."
+root_cause: "워크플로 후보의 검증이 YAML 문법 파싱에 그쳐 액션 참조(uses:)가 실제로 해석되는지, 외부 액션의 실행 요건(토큰 등)이 충족되는지를 보지 않았다. 014 와 같은 종류 — 문법 검사를 실행 검사로 취급한 절차 결함. 릴리스 latest 태그에서 이동 메이저 태그의 존재를 추정한 것도 검증 없는 추론."
+fix: setup-uv 를 릴리스 태그 v10.1.0 으로, gitleaks 단계에 env GITHUB_TOKEN 추가(커밋 5d89945, 사람). 재실행에서 verify·보호 파일 변경 검토·비밀값 스캔 전부 pass.
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "워크플로 후보 파일의 판정에 \"uses: 의 모든 액션 참조가 실제로 해석되는지\" 를 포함한다 — 릴리스 API 의 latest 태그가 아니라 refs/tags 의 존재를 확인(gh api repos/<owner>/<repo>/git/ref/tags/<tag>). 외부 액션은 PR 스캔·토큰 같은 실행 요건을 README 에서 확인한다. YAML 파싱은 액션 해석 검사를 대체하지 못한다."
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: 이후 .github/workflows/* 를 바꾸는 모든 PR(H-2b 류)
+  기준: PR 의 CI 첫 실행에서 "Unable to resolve action" 0건. 후보 파일의 uses: 참조 전부가 refs/tags 조회로 실재 확인됨
+  근거 파일: .github/workflows/harness.yml, 해당 PR 의 CI 로그
+owner: unassigned
+expires: 2026-12-10

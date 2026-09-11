@@ -11,6 +11,7 @@
 | 개정 1 | [실질] 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | [실질] 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | [편집] 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 10 | [편집] 2026-09-11. R-11 실측 기록 — 로컬 verify 16단계 104.0초(Windows, Docker Desktop), CI `verify` job 1분 33초(도구 설치 포함). D-12 예산 10분의 1/5. 2.11 에 기록 |
 | 개정 9 | [편집] 2026-09-11. 2.11 `web-typecheck` 의 미추적 확인을 `test -z "$(…)"` 에서 `! git status --porcelain … \| grep -q .` 로 — `harness.config` 배열 원소(큰따옴표) 안에서는 큰따옴표를 못 쓰고 작은따옴표는 `$(…)` 를 확장하지 않아 단계가 항상 실패했음(P0-7 후보 검토에서 `bash -c` 실행으로 확인) |
 | 개정 8 | [편집] 2026-09-10. 2.7 `.dockerignore` 패턴은 `**/.env*` — dockerignore 의 접두어 없는 패턴은 컨텍스트 루트에서만 매칭되어 `infra/docker/.env` 가 이미지에 들어갔음을 P0-5 가 실측. worker 의 healthcheck 는 Phase 0 에 probe 가능한 표면이 없어 Phase 1(Redis 하트비트 키)로 |
 | 개정 7 | [편집] 2026-09-10. 2.8 `data.run_executions` 의 `started_at`·`finished_at` 을 nullable 로 명시 — `queued` 시점에는 값이 없습니다(P0-8 구현 세션의 판단, 리뷰 승인). 열의 정본은 `docs/data-model.md` |
@@ -255,7 +256,9 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 
 뺀 것: `smoke`·`e2e`·`load`(Phase 1 이후, [../intents/mvp-backlog.md](../intents/mvp-backlog.md) P1-9·MVP-4). Phase 1 에서 단계를 더할 때는 R-11 의 예산을 먼저 봅니다.
 
-`HARNESS_THRESHOLD` 는 P0-7 에서 90 → 80 으로 내립니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-2). EI-2 에 따라 이 값은 사람이 바꾸고, 근거를 `improvement-log/` 에 1건 남깁니다. `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs` 를 더합니다(이 디렉터리의 링크가 지금은 검사되지 않습니다).
+**실측(P0-7, 2026-09-11)**: 16단계 로컬 104.0초(self-check 27초 + 제품 단계 77초), CI `verify` job 1분 33초. R-11 성립.
+
+`HARNESS_THRESHOLD` 는 P0-7 에서 90 → 80 으로 내렸습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-2, 근거 `improvement-log/2026-09-11-001`). EI-2 에 따라 이 값은 사람이 바꾸고, 근거를 `improvement-log/` 에 1건 남깁니다. `HARNESS_SELF_CHECK_LINK_DIRS` 에 `specs` 를 더합니다(이 디렉터리의 링크가 지금은 검사되지 않습니다).
 
 ### 2.12 CI
 

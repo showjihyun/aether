@@ -63,7 +63,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | P0-4 | `apps/worker` 최소 기동 | P0-1 | — | 완료 |
 | P0-5 | Docker Compose 로 전부 기동 | P0-2, P0-3, P0-4 | — | 완료 |
 | P0-6 | AR-* 를 기계 판정으로 | P0-1 | — | 완료 |
-| P0-7 | `harness.config` 제품 단계 활성화와 CI | P0-5, P0-6 | — | 대기 |
+| P0-7 | `harness.config` 제품 단계 활성화와 CI | P0-5, P0-6 | — | 완료 |
 | P0-8 | 데이터 모델 v1 (Agent / Agent Version / Run) | P0-2 | — | 완료 |
 | P0-9 | 🔒 인증 기준선 | P0-8 | — | 대기 |
 
