@@ -1,0 +1,20 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-012
+date: 2026-09-11
+status: candidate
+symptom: apps/worker 통합 테스트가 caplog 를 고정 5초 폴링으로 확인했는데, 세션 스코프 postgres 컨테이너와 자원을 다투는 상황에서 ready 로그가 5초 뒤에 찍혀 테스트가 실패했습니다(단독 실행 시에는 통과).
+evidence: |
+  git show 052173e 커밋 본문 "버그 2": "원인: 테스트가 caplog 를 고정 5초 폴링. 세션 스코프 postgres 컨테이너와 자원을 다투면 ready 가 5초 뒤에 찍혀 실패(단독 실행은 통과)". "red: 전체 integration 스위트 → 1 failed \"ready 로그가 5초 안에 나타나지 않았습니다\"". "green: serve(on_ready=…) 콜백 + threading.Event.wait(10) — 시간이 아니라 사건을 기다림. 전체 스위트 4회 연속 9 passed".
+root_cause: 테스트가 "일정 시간 안에 어떤 사건이 일어났을 것" 이라는 시간 기반 가정으로 비동기 준비 상태를 확인했고, 이 가정은 테스트를 단독으로 돌릴 때의 자원 여건에서만 성립했습니다. 다른 테스트와 자원(포트·컨테이너 시작 시간)을 다투면 깨지는, 스위트 전체 실행에서만 드러나는 플레이크였습니다.
+fix: serve() 에 on_ready 콜백을 추가하고 테스트가 threading.Event.wait(10) 으로 그 사건 자체를 기다리도록 바꿔, 시간이 아니라 이벤트로 동기화했습니다.
+recurrence_risk: medium
+harness_element: HE-5
+proposed_harness_change: 비동기 준비 상태를 확인하는 테스트에서 로그 폴링 같은 고정 시간 대기 대신 콜백·이벤트 기반 동기화를 쓰는 것을 이 저장소의 테스트 작성 규약으로 삼고, 신규 통합 테스트 리뷰에서 고정 sleep·polling 패턴을 점검 항목으로 둡니다.
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  대상: REP-2(재현 테스트를 동반한 버그 수정, Phase 1 완료 후 실행 가능). 지금은 apps/worker integration 스위트를 대리 지표로 사용.
+  기준: TESTCONTAINERS_RYUK_DISABLED=true uv run pytest -q -m integration 을 연속 4회 실행해 flake 재발 0건(이미 이번 세션에서 1회 확인: 9 passed).
+  근거 파일: apps/worker/tests/test_connect.py, .harness/logs/api-integration.log
+owner: unassigned
+expires: 2026-12-10

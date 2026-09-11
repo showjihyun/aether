@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-010
+date: 2026-09-10
+status: candidate
+symptom: 루트 eslint.config.js 의 parserOptions.projectService: true 와 각 패키지 tsconfig.json 의 include 조합에서, apps/web·packages/sdk 안의 .mjs/.js 설정 파일(예: PostCSS 설정)을 린트하려 하면 타입 인식 파싱 오류가 났습니다.
+evidence: |
+  DESIGN.md 12행: "PostCSS 설정은 apps/web/package.json 의 postcss 필드에 둡니다 — 별도 .mjs 설정 파일은 보호 파일 두 개(tsconfig.json 의 include, eslint.config.js 의 projectService)의 조합에서 lint 파싱 오류를 냅니다(P0-3b)".
+  apps/web/package.json 의 postcss 필드(파일 대신 package.json 안에 설정을 둠으로써 문제를 우회).
+  git show d266b01 커밋 본문: "사람에게 넘길 후보(보호 파일, 지금은 안 함): eslint.config.js 에 allowDefaultProject 또는 typed-lint 범위를 **/*.ts(x) 로 — apps/web·packages/sdk 의 .js/.mjs 설정 파일이 매번 걸림".
+root_cause: eslint.config.js(보호 파일)의 projectService 가 타입 인식 린트 대상 범위를 tsconfig 의 include 로 판단하는데, include 가 .ts/.tsx 위주라 .mjs/.js 확장자의 설정 파일이 그 범위 밖에 있으면서도 lint 대상에는 포함되어 파서가 프로젝트를 찾지 못합니다. 보호 파일이라 구현 세션이 직접 고칠 수 없어 매번 회피책을 써야 했습니다.
+fix: 이번에는 재작업하지 않고, PostCSS 설정을 .mjs 파일 대신 apps/web/package.json 의 postcss 필드에 두는 기존 회피를 유지했습니다.
+recurrence_risk: medium
+harness_element: HE-6
+proposed_harness_change: eslint.config.js 에 .js/.mjs 설정 파일 전용 블록을 추가해 languageOptions.parserOptions.projectService: false(또는 allowDefaultProject)를 지정하거나, 타입 인식 규칙의 files 범위를 **/*.{ts,tsx} 로 좁힙니다. 보호 파일이므로 사람이 별도 harness-change PR 로 적용합니다.
+preferred_enforcement: lint
+trust: untrusted
+regression_check: |
+  대상: REP-1(계층 경계를 지키는 기능 추가, Phase 0 완료 후 실행 가능 — web-lint 단계 포함)
+  기준: apps/web·packages/sdk 에 새 .mjs/.js 설정 파일을 추가해도 pnpm -F web -F sdk run lint 가 파싱 오류 없이 exit 0.
+  근거 파일: eslint.config.js, DESIGN.md, .harness/logs/web-lint.log
+owner: unassigned
+expires: 2026-12-10
