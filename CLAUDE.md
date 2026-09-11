@@ -7,7 +7,7 @@
 | 목적 | 명령 또는 문서 |
 | --- | --- |
 | 완료 선언 전 검증 | `./harness/scripts/verify.sh` → `.harness/verify.json` |
-| 하네스 자기 점검 | `./harness/scripts/self-check.sh` (현재 verify 단계 전부가 이것입니다) |
+| 하네스 자기 점검 | `./harness/scripts/self-check.sh` (verify 의 앞 단계들. 뒤 단계들은 제품 코드) |
 | 계층별 평가 | `./harness/scripts/eval.sh` → `.harness/latest-eval.json` |
 | 개선 후보 기록 | `./harness/scripts/improvement-log.sh new` → `improvement-log/` |
 | 보호 목록 확인 | `./harness/hooks/guard-evaluation-tampering.sh --list` |
@@ -30,7 +30,7 @@
 
 ## 아직 없는 것
 
-`apps/`, `packages/`, `infra/` 는 Phase 0 에서 생깁니다. 지금 그 경로를 참조하는 코드를 만들지 않습니다.
+Phase 1 의 것 — Agent Registry API, Run API, 스트리밍, `packages/*` 의 구현(지금은 세 층의 빈 껍데기). 인증(P0-9)도 아직입니다. 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
 
 ## 이 파일의 규칙
 

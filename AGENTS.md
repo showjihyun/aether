@@ -1,6 +1,6 @@
 # Repository Guide
 
-aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 AI Runtime 을 실행하는 Open Hybrid Enterprise AI OS 입니다. 현재 **Phase 0 미착수** 이며 저장소에는 하네스 번들과 문서만 있습니다. 없는 코드를 있다고 가정하고 작업하지 않습니다.
+aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 AI Runtime 을 실행하는 Open Hybrid Enterprise AI OS 입니다. 현재 **Phase 0 진행 중**(P0-9 인증만 남음)이며 `apps/{api,web,worker}`, `packages/*`(빈 껍데기), `infra/docker` 가 있습니다. 진행 상태의 정본은 [intents/mvp-backlog.md](intents/mvp-backlog.md) 입니다. 없는 코드를 있다고 가정하고 작업하지 않습니다.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 
 3. 게이트를 통과시키기 위해 테스트·lint·아키텍처 규칙을 약화하지 않습니다. 삭제, 비활성화, skip 주석, 예외 목록 추가는 수정이 아닙니다.
 4. 실제로 실행한 검사만 보고합니다. 실행하지 않은 단계를 통과로 적지 않습니다.
 
-단계 정의는 `harness.config` 가 소유하며 그것이 정본입니다. 개수와 내용을 여기 적지 않습니다. 제품 코드가 없는 지금은 전 단계가 `harness/scripts/self-check.sh` 이며, Phase 0 에서 `apps/` 와 `packages/` 가 들어오면 `harness.config` 의 주석 블록을 풉니다.
+단계 정의는 `harness.config` 가 소유하며 그것이 정본입니다. 개수와 내용을 여기 적지 않습니다. 앞 단계들은 `harness/scripts/self-check.sh`(하네스 자기 점검), 뒤 단계들은 제품 코드(lint·타입·아키텍처·단위·통합·빌드)입니다. Windows 에서는 `TESTCONTAINERS_RYUK_DISABLED=true ./harness/scripts/verify.sh` — 통합 단계가 Docker 를 씁니다.
 
 ## Learning
 
