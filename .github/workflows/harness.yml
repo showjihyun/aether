@@ -26,7 +26,7 @@ jobs:
       # Phase 0 제품 단계(spec 0001 2.11)가 uv 워크스페이스와 pnpm 워크스페이스를
       # 요구합니다. verify.sh 자신은 도구를 설치하지 않으므로 여기서 준비합니다.
       # 버전은 2026-09-11 기준 각 액션의 최신 메이저입니다 — 확인: 병합 전에 다시 확인.
-      - uses: astral-sh/setup-uv@v10   # 확인: 최신 메이저
+      - uses: astral-sh/setup-uv@v10.1.0   # 이동 태그 v10 은 없음(v7 까지만). 릴리스 태그를 그대로 씁니다
         with:
           enable-cache: true
       - uses: pnpm/action-setup@v6    # 확인: 최신 메이저. 버전은 package.json 의 packageManager 필드를 따릅니다
@@ -93,4 +93,6 @@ jobs:
       # 확인: 라이선스 조건(무료 사용 범위) — 조직 소유 저장소는 라이선스 키가
       # 필요할 수 있습니다. 개인 저장소는 무료입니다. 버전은 2026-09-11 기준 최신
       # 메이저(v3) — 병합 전 다시 확인.
-      - uses: gitleaks/gitleaks-action@v3   # 확인: 최신 메이저, 라이선스 조건
+      - uses: gitleaks/gitleaks-action@v3   # PR 스캔에는 GITHUB_TOKEN 이 필수(v2 부터). 개인 저장소는 라이선스 키 불필요
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
