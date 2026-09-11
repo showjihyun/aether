@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-016
+date: 2026-09-11
+status: candidate
+symptom: TDD red 단계에서 fake 계약 테스트(revoke 멱등)가 구현 없이 통과해 red 가 거짓이 될 뻔함 — Windows 시계 해상도로 datetime.now(UTC) 두 번이 같은 값
+evidence: "P0-9 2단계 implementer 보고: test_second_revoke_keeps_first_revoked_at[fake] 가 덮어쓰기 구현에서도 6 passed. 호출 사이 sleep(0.02) 삽입 뒤 1 failed(진짜 red). apps/api/tests/test_api_key_store_contract.py"
+root_cause: red 판정이 실패 여부만 보고 실패(또는 통과)의 원인이 기대한 원인인지 보지 않음. 시간 의존 fake 가 시계 주입 없이 실제 시계를 씀
+fix: 테스트에 sleep(0.02) 임시 보정. 근본은 fake 에 clock 주입
+recurrence_risk: medium
+harness_element: HE-9
+proposed_harness_change: implementer 보고 형식의 red 증거 칸에 실패 원인(오류 종류·메시지)이 기대한 원인과 일치하는지 한 줄을 요구. 통과하는 red 는 원인 확인 전까지 red 가 아님. 시간 의존 fake 는 clock 을 주입받게 한다
+preferred_enforcement: subagent
+trust: untrusted
+regression_check: "대상: 이후 단위의 implementer 보고. 기준: red 증거 칸마다 오류 종류가 적혀 있고 시간 의존 테스트에 sleep 이 없음"
+owner: unassigned
+expires: 2026-12-10

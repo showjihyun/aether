@@ -150,7 +150,7 @@ AR-8 은 import-linter `layers` 계약 하나(`containers` 로 전 패키지), A
 
 ## 6. 지금 없는 것
 
-Phase 0 진행 중입니다. `apps/{api,web,worker}` 와 `infra/docker` 는 있고 동작하며, `packages/*` 는 세 층(3.1)의 **빈 껍데기**입니다 — 구현은 Phase 1 부터. AR-1 ~ AR-12(AR-10 제외)는 `.importlinter`·`.dependency-cruiser.cjs` 로 verify 의 `api-arch`·`web-arch` 단계에서 판정되고 있습니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
+Phase 0 은 끝났습니다(2026-09-11). `apps/{api,web,worker}` 와 `infra/docker` 는 있고 동작하며, `apps/api` 에는 API 키 인증(spec 0001 2.9 — inbound 포트 `Authenticate`·`IssueApiKey`, outbound 포트 `ApiKeyStore`, PostgreSQL 어댑터, `main.py` 조립)이 3.1 의 배치 그대로 들어 있습니다. `packages/*` 는 세 층(3.1)의 **빈 껍데기**입니다 — 구현은 Phase 1 부터. AR-1 ~ AR-12(AR-10 제외)는 `.importlinter`·`.dependency-cruiser.cjs` 로 verify 의 `api-arch`·`web-arch` 단계에서 판정되고 있습니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
 
 ## 관련 문서
 

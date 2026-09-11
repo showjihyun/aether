@@ -84,6 +84,20 @@ def admin_database_url(db_host_port: tuple[str, int]) -> str:
     return _sqlalchemy_url(host, port, _ADMIN_USER, _ADMIN_PASSWORD, _ADMIN_DB)
 
 
+@pytest.fixture
+def control_database_url(migrated_database: None, db_host_port: tuple[str, int]) -> str:
+    """`aether_control` 역할의 SQLAlchemy 형식 URL(spec 2.9 H-3).
+
+    `Settings.database_url`/`AETHER_DATABASE_URL` 이 기대하는 형식과 같습니다 —
+    `Settings.psycopg_dsn` 이 여기서 `+psycopg` 표기를 벗겨 libpq 형식으로 씁니다.
+    CLI 서브프로세스 통합 테스트(`test_keys_cli.py`)와 조립 통합 테스트
+    (`test_auth_end_to_end.py`)가 이 URL 을 씁니다 — 마이그레이션 실행 역할(관리자)이
+    아니라 api 의 런타임 역할로 접속해야 하기 때문입니다.
+    """
+    host, port = db_host_port
+    return _sqlalchemy_url(host, port, CONTROL_ROLE, CONTROL_PASSWORD, _ADMIN_DB)
+
+
 @pytest.fixture(scope="session")
 def db_roles(db_host_port: tuple[str, int]) -> None:
     """`aether_control`, `aether_data` 역할만 만듭니다. 스키마·테이블은 마이그레이션이 만듭니다."""

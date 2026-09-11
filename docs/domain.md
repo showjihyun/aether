@@ -44,6 +44,8 @@
 | --- | --- | --- |
 | `Policy` | 무엇이 허용되는지에 대한 선언. 판정만 하고 실행하지 않습니다 | `Permission` |
 | `Permission` | 특정 주체가 특정 자원에 대해 갖는 권한. `Policy` 판정의 입력 | `Policy` |
+| `API Key` | Phase 0 의 유일한 인증 수단. `aeth_` 접두사 + 256-bit 난수이며 저장소에는 SHA-256 해시만 남습니다(`control.api_keys`, [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.9). 단일 테넌트 — 사용자·조직·역할이 없습니다 | `Permission` |
+| `Principal` | 인증에 성공한 요청이 얻는 신원(키 id 와 label). 권한이 아니라 "누가" 입니다. Trust Layer(Phase 8) 전까지는 `API Key` 하나가 곧 `Principal` 입니다 | `Agent Passport` |
 | `Approval` | 사람이 특정 `Run` 또는 도구 호출을 승인한 사건 | `HITL` |
 | `Decision Provenance` | 어떤 입력·맥락·정책으로 그 결정이 나왔는지의 추적 가능한 기록 | `Audit` |
 | `Audit` | 무슨 일이 일어났는지의 시간순 기록 | `Decision Provenance` |
