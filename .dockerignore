@@ -1,0 +1,18 @@
+# 빌드 컨텍스트는 저장소 루트입니다(uv workspace 전체가 필요 — spec 0001 2.7, plan P0-5 순서 1).
+# Docker 는 빌드 컨텍스트 루트의 이 파일만 읽으므로, `infra/docker/`가 아니라 여기 둡니다.
+# `.env` 가 이미지 layer 에 들어가는 경로를 여기서 끊습니다(R-6).
+#
+# 관측: `.env*`(접두어 없는 패턴)는 dockerignore 에서 **컨텍스트 루트에서만** 매칭되고
+# `.gitignore` 처럼 모든 깊이에서 매칭되지 않습니다 — 실제 `.env` 는 저장소 루트가 아니라
+# `infra/docker/.env` 에 있으므로 접두어 없는 `.env*` 로는 제외되지 않고 이미지에 들어갔습니다
+# (`docker run ... find / -iname '.env*'` 로 재현·확인). `**/.env*` 로 모든 깊이를 잡습니다.
+
+**/.env*
+.git
+**/node_modules
+.venv
+**/.next
+**/dist
+.harness
+.import_linter_cache
+**/__pycache__

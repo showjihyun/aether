@@ -11,6 +11,7 @@
 | 개정 1 | [실질] 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | [실질] 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | [편집] 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 8 | [편집] 2026-09-10. 2.7 `.dockerignore` 패턴은 `**/.env*` — dockerignore 의 접두어 없는 패턴은 컨텍스트 루트에서만 매칭되어 `infra/docker/.env` 가 이미지에 들어갔음을 P0-5 가 실측. worker 의 healthcheck 는 Phase 0 에 probe 가능한 표면이 없어 Phase 1(Redis 하트비트 키)로 |
 | 개정 7 | [편집] 2026-09-10. 2.8 `data.run_executions` 의 `started_at`·`finished_at` 을 nullable 로 명시 — `queued` 시점에는 값이 없습니다(P0-8 구현 세션의 판단, 리뷰 승인). 열의 정본은 `docs/data-model.md` |
 | 개정 6 | [실질] 2026-09-10. UI 기반 결정 — Tailwind CSS v4 + shadcn/ui 를 채택하고 표현 규약은 [../DESIGN.md](../DESIGN.md) 가 소유(D-14). 2.5 갱신, 구현 단위 P0-3b 신설. showjihyun 지시로 승인 |
 | 개정 5 | [편집] 2026-09-09. P0-1 실행에서 드러난 것 셋 — 루트가 가상 워크스페이스라 설치는 `uv sync --all-packages`(2.2), Windows 에서 `lint-imports` 는 `PYTHONUTF8=1` 필요(2.11 `api-arch`), import-linter 는 외부 패키지의 하위 패키지를 금지 대상으로 받지 않아 `google.genai` → `google`(2.10 AR-5). 단계 수 10 불변 |
@@ -158,7 +159,7 @@ Data Plane 의 프로세스입니다. Redis Streams 의 `aether:runs:requested` 
 | `web` | Experience | `api` healthy 후 |
 | `probe` | R-4 판정 전용. `compose.offline.yaml` 에만 있음 | `api` 와 `web` 에 curl 하고 exit 코드로 답하는 일회성 |
 
-장기 실행 서비스에는 healthcheck 를 두고 `depends_on` 에 `condition: service_healthy` 를 씁니다. 베이스 이미지는 digest 로 고정합니다. **저장소 루트의 `.dockerignore`** 가 `.env*`, `.git`, `node_modules`, `.venv`, `.next`, `dist` 를 제외합니다 — Docker 는 빌드 컨텍스트 루트의 것만 읽고, 컨텍스트는 uv workspace 전체가 필요해 저장소 루트입니다. `.env` 가 이미지 layer 에 들어가는 경로를 여기서 끊습니다(R-6). `.env` 자체는 compose 파일 옆 `infra/docker/.env` 에 둡니다 — compose 는 자기 디렉터리의 `.env` 를 읽습니다.
+장기 실행 서비스에는 healthcheck 를 두고 `depends_on` 에 `condition: service_healthy` 를 씁니다. 예외는 `worker` — Phase 0 에는 probe 가능한 표면이 없고 다른 서비스가 그 상태에 의존하지 않습니다. Phase 1 에 Redis 하트비트 키로 healthcheck 를 둡니다. 베이스 이미지는 digest 로 고정합니다. **저장소 루트의 `.dockerignore`** 가 `**/.env*`, `.git`, `**/node_modules`, `.venv`, `**/.next`, `**/dist` 를 제외합니다 — Docker 는 빌드 컨텍스트 루트의 것만 읽고, 컨텍스트는 uv workspace 전체가 필요해 저장소 루트입니다. `**/` 가 필요한 이유: dockerignore 의 접두어 없는 패턴은 `.gitignore` 와 달리 컨텍스트 루트에서만 매칭됩니다(P0-5 에서 `infra/docker/.env` 유출을 실측하고 고침). `.env` 가 이미지 layer 에 들어가는 경로를 여기서 끊습니다(R-6). `.env` 자체는 compose 파일 옆 `infra/docker/.env` 에 둡니다 — compose 는 자기 디렉터리의 `.env` 를 읽습니다.
 
 오프라인은 오버라이드 파일로 표현합니다.
 

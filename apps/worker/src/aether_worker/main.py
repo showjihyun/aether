@@ -82,12 +82,17 @@ def serve(
     stop: Event,
     make_client: Callable[[], Redis] | None = None,
     sleep: Callable[[float], None] = time.sleep,
+    on_ready: Callable[[], None] | None = None,
 ) -> int:
     """연결(백오프) → consumer group → 블록 읽기 대기.
 
     Redis 연결에 최종 실패하면 stderr 에 원인을 남기고 1 을 반환합니다. 연결되면
     `ready` 를 로그·stdout 에 남기고 `stop` 이 set 될 때까지 대기하다가 0 을
     반환합니다. `make_client` 와 `sleep` 은 테스트가 주입합니다.
+
+    `on_ready` 는 `ready` 로그 직후 호출됩니다 — 테스트가 로그 캡처의 타이밍(폴링·
+    스레드 경합)에 기대지 않고 `threading.Event` 로 준비 완료를 직접 기다릴 수
+    있게 하기 위해서입니다. 기본값 `None` 이면 아무 일도 하지 않습니다.
     """
     init_telemetry("worker")
 
@@ -111,6 +116,8 @@ def serve(
         extra={"stream": settings.worker_stream, "group": settings.worker_group},
     )
     print(f"aether-worker: ready (stream={settings.worker_stream}, group={settings.worker_group})")
+    if on_ready is not None:
+        on_ready()
 
     consume_until(
         client,

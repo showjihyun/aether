@@ -11,21 +11,19 @@ set -euo pipefail
 : "${POSTGRES_USER:?POSTGRES_USER 환경변수가 필요합니다}"
 : "${POSTGRES_DB:?POSTGRES_DB 환경변수가 필요합니다}"
 
+# DO $do$ ... $do$ 블록을 쓰지 않습니다 — psql 의 `:'var'` 치환은 dollar-quoting
+# 안에는 적용되지 않아 `CREATE ROLE ... PASSWORD :'control_pw'` 가 리터럴 문자열
+# ":'control_pw'" 로 그대로 들어가거나 구문 오류를 냅니다. `\gexec` 는 psql
+# 메타명령이라 치환이 먼저 일어난 뒤 psql 이 그 결과(SELECT 가 낸 SQL 문자열)를
+# 실행합니다 — heredoc 이 `'SQL'` 로 인용되어 있어도 동작합니다.
 psql -v ON_ERROR_STOP=1 \
      -v control_pw="$AETHER_CONTROL_PASSWORD" \
      -v data_pw="$AETHER_DATA_PASSWORD" \
      --username "$POSTGRES_USER" \
      --dbname "$POSTGRES_DB" <<-'SQL'
-DO
-$do$
-BEGIN
-   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'aether_control') THEN
-      CREATE ROLE aether_control LOGIN PASSWORD :'control_pw';
-   END IF;
+SELECT format('CREATE ROLE aether_control LOGIN PASSWORD %L', :'control_pw')
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'aether_control') \gexec
 
-   IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'aether_data') THEN
-      CREATE ROLE aether_data LOGIN PASSWORD :'data_pw';
-   END IF;
-END
-$do$;
+SELECT format('CREATE ROLE aether_data LOGIN PASSWORD %L', :'data_pw')
+WHERE NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'aether_data') \gexec
 SQL

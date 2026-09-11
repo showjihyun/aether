@@ -1,0 +1,111 @@
+# spec 0001 2.7. 개발용 기동. 첫 실행은 이미지 pull 이 필요합니다(온라인, R-1).
+# 오프라인 판정(R-4)은 옆의 compose.offline.yaml 오버라이드 + `probe` 서비스입니다(C-3).
+#
+# 비밀값은 이 파일 옆의 `.env`(커밋 대상 아님, `.env.example` 참고)에서 읽습니다 —
+# compose 는 compose 파일이 아니라 **자기 실행 디렉터리** 기준으로 `.env` 를 찾으므로
+# 이 파일이 있는 `infra/docker/` 에 `.env` 를 둡니다.
+
+services:
+  postgres:
+    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      AETHER_CONTROL_PASSWORD: ${AETHER_CONTROL_PASSWORD}
+      AETHER_DATA_PASSWORD: ${AETHER_DATA_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # 역할 두 개만 만듭니다(spec 2.8) — 스키마·테이블·GRANT 는 migrate 가 소유합니다.
+      - ./postgres/init/01-roles.sh:/docker-entrypoint-initdb.d/01-roles.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # 일회성: `alembic upgrade head` 를 관리자 역할로 실행하고 끝나면 종료합니다(spec 2.7·2.8).
+  # api 이미지를 재사용합니다 — 같은 uv workspace 설치가 필요하기 때문입니다.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+      args:
+        AETHER_VERSION: ${AETHER_VERSION:-dev}
+    environment:
+      ALEMBIC_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    command: ["alembic", "-c", "apps/api/migrations/alembic.ini", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/api.Dockerfile
+      args:
+        AETHER_VERSION: ${AETHER_VERSION:-dev}
+    environment:
+      # aether_control 역할 URL — 관리자 URL(위 migrate)과 다릅니다(spec 2.8, 세션 계약).
+      AETHER_DATABASE_URL: postgresql+psycopg://aether_control:${AETHER_CONTROL_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/healthz', timeout=2).status == 200 else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  worker:
+    build:
+      context: ../..
+      dockerfile: infra/docker/worker.Dockerfile
+      args:
+        AETHER_VERSION: ${AETHER_VERSION:-dev}
+    environment:
+      AETHER_REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+      args:
+        AETHER_VERSION: ${AETHER_VERSION:-dev}
+    environment:
+      AETHER_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/').then((r) => process.exit(r.status === 200 ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+volumes:
+  postgres_data:
+  redis_data:

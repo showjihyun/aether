@@ -1,0 +1,27 @@
+# R-4 판정 전용 오버라이드(spec 0001 2.7, C-3). 사용:
+#   docker compose -f compose.yaml -f compose.offline.yaml run --rm probe
+#
+# `internal: true` 는 이 네트워크의 컨테이너가 외부로 나가지 못하게 합니다 — 이미지가
+# 이미 빌드/pull 되어 있다는 전제 위에서 "인터넷 없이 뜬다"(DP-4)를 검증합니다.
+# 판정은 호스트의 curl 이 아니라 네트워크 **안**의 `probe` 서비스의 exit 코드입니다 —
+# internal 네트워크의 호스트 포트 공개는 플랫폼·Docker 버전마다 동작이 달라서입니다(F-2).
+
+networks:
+  default:
+    internal: true
+
+services:
+  probe:
+    image: curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -eu
+        curl -fsS -o /dev/null http://api:8000/healthz
+        curl -fsS -o /dev/null http://web:3000/
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    restart: "no"
