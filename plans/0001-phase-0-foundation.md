@@ -95,7 +95,7 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 2 | `packages/sdk` — `scripts.generate = "openapi-typescript openapi.json -o src/generated/openapi.d.ts"`, 실행해 생성물 커밋. `src/client.ts`(`createClient({ baseUrl, apiKey })`, `healthz()`), `src/index.ts`, `src/client.test.ts`(Vitest, fetch 를 주입해 경로·헤더 확인). sdk 는 `vitest.config.ts` 를 두지 않습니다 — Vitest 기본(node 환경)으로 충분하고, 패키지 루트의 설정 파일은 보호 파일 `tsconfig.json`(`include: ["src"]`)과 `eslint.config.js`(`projectService`) 조합에서 파서 오류를 냅니다(P0-3 에서 확인) | A (W) |
 | 3 | `apps/web` — `app/layout.tsx`, `app/page.tsx`(서버 컴포넌트에서 sdk 의 `healthz()` 호출, 결과 표시. **동적 렌더링으로 고정** — `fetch(..., { cache: "no-store" })` 또는 `export const dynamic = "force-dynamic"`. 정적 프리렌더가 빌드 시 API 를 부르면 `web-build` 가 API 없이 실패합니다(리뷰 F-4)), `next.config.ts`(`transpilePackages: ["@aether/sdk"]`), `vitest.config.ts`(jsdom), 컴포넌트 테스트 1건. **`next build` 는 `apps/web/tsconfig.json`(보호)을 다시 씁니다** — `jsx: react-jsx`, `include` 에 `.next/dev/types/**/*.ts`, 그리고 CRLF. 되돌려도 다음 빌드에 또 바뀌므로 그 내용을 받아들이고 사람이 커밋합니다(H-1 후속. `.gitattributes` 가 LF 로 정규화) | A (W) |
 | 4 | `apps/api/tests/test_openapi_drift.py` — `aether-api openapi` 출력을 **파싱해** 커밋된 `packages/sdk/openapi.json` 과 비교(텍스트 비교는 키 순서·공백에 깨집니다) | A |
-| 5 | 판정: `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck`(`HEAD` 와 미추적 확인이 없으면 첫 생성 때 공허하게 통과합니다). `pnpm -F web -F sdk run lint`, `run test:unit`. `pnpm -F web run build`. **`pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` exit 0** — P0-6 에서 옮겨 온 실통과 검사 | A |
+| 5 | 판정: `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck`(`HEAD` 와 미추적 확인이 없으면 첫 생성 때 공허하게 통과합니다). `pnpm -F web -F sdk run lint`, `run test:unit`. `pnpm -F web run build`. **`pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` exit 0** — P0-6 에서 옮겨 온 실통과 검사 | A |
 
 ### P0-3b UI 기반: Tailwind + shadcn/ui + 앱 셸
 
@@ -183,7 +183,7 @@ uv run ruff check . && uv run ruff format --check .
 uv run mypy
 PYTHONUTF8=1 uv run lint-imports
 uv run pytest -q -m 'not integration'
-pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck
+pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck
 pnpm -F web -F sdk run lint
 pnpm exec depcruise apps/web --config .dependency-cruiser.cjs
 pnpm -F web -F sdk run test:unit
@@ -609,7 +609,7 @@ module.exports = {
   "api-typecheck|quality|true|uv run mypy"
   "api-arch|architecture|true|PYTHONUTF8=1 uv run lint-imports"
   "api-unit|correctness|true|uv run pytest -q -m 'not integration'"
-  "web-typecheck|quality|true|pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z '$(git status --porcelain packages/sdk/src/generated)' && pnpm -F web -F sdk run typecheck"
+  "web-typecheck|quality|true|pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck"
   "web-lint|quality|true|pnpm -F web -F sdk run lint"
   "web-arch|architecture|true|pnpm exec depcruise apps/web --config .dependency-cruiser.cjs"
   "web-unit|correctness|true|pnpm -F web -F sdk run test:unit"

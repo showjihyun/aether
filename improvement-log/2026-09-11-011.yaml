@@ -1,0 +1,21 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-011
+date: 2026-09-10
+status: candidate
+symptom: 루트 .dockerignore 의 접두어 없는 .env* 패턴이 .gitignore 처럼 모든 깊이에서 매칭될 것이라 기대했지만, 실제로는 빌드 컨텍스트 루트에서만 매칭되어 infra/docker/.env 가 이미지 레이어에 그대로 들어갔습니다.
+evidence: |
+  .dockerignore 머리 주석: "관측: .env*(접두어 없는 패턴)는 dockerignore 에서 컨텍스트 루트에서만 매칭되고 .gitignore 처럼 모든 깊이에서 매칭되지 않습니다 — 실제 .env 는 저장소 루트가 아니라 infra/docker/.env 에 있으므로 접두어 없는 .env* 로는 제외되지 않고 이미지에 들어갔습니다(docker run ... find / -iname '.env*' 로 재현·확인). **/.env* 로 모든 깊이를 잡습니다."
+  git show 3b53059(P0-5) — .dockerignore 를 **/.env* 로 수정한 커밋.
+root_cause: Docker 의 .dockerignore 매칭 규칙은 .gitignore 와 문법이 비슷해 보이지만 접두어 없는 패턴의 매칭 범위(루트 한정 vs 전체 깊이)가 다르다는 점이 문서화되지 않은 채 .gitignore 관행을 그대로 옮겨 썼습니다. R-6(비밀값 이미지 유입 방지) 판정에 이미지 파일시스템을 실제로 스캔하는 단계가 없었다면 이 문제는 발견되지 않았을 것입니다.
+fix: 패턴을 **/.env* 로 바꾸고, 빌드된 이미지에서 find / -iname '.env*' 로 실제 부재를 확인했습니다.
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: .dockerignore·.gitignore 류 무시 패턴 파일에 새 패턴을 추가할 때는 접두어 없는 패턴의 매칭 범위가 도구마다 다를 수 있음을 전제하고, 보안에 걸린 패턴(비밀값 파일)은 이미지 빌드 후 실제 파일시스템 스캔으로 부재를 확인하는 단계를 R-6 계열 판정에 상시 포함합니다.
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: REP-3(실패한 검증을 정직하게 통과시키기, 지금 가능)의 변형 — 게이트가 실제로 비밀값 유입을 잡는지.
+  기준: infra/docker 로 빌드한 이미지 파일시스템에 find / -iname '.env*' 결과가 0건으로 유지됨(R-6).
+  근거 파일: .dockerignore, README.md 의 probe 명령 로그
+owner: unassigned
+expires: 2026-12-10

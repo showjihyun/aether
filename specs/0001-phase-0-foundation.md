@@ -11,6 +11,7 @@
 | 개정 1 | [실질] 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | [실질] 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | [편집] 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 9 | [편집] 2026-09-11. 2.11 `web-typecheck` 의 미추적 확인을 `test -z "$(…)"` 에서 `! git status --porcelain … \| grep -q .` 로 — `harness.config` 배열 원소(큰따옴표) 안에서는 큰따옴표를 못 쓰고 작은따옴표는 `$(…)` 를 확장하지 않아 단계가 항상 실패했음(P0-7 후보 검토에서 `bash -c` 실행으로 확인) |
 | 개정 8 | [편집] 2026-09-10. 2.7 `.dockerignore` 패턴은 `**/.env*` — dockerignore 의 접두어 없는 패턴은 컨텍스트 루트에서만 매칭되어 `infra/docker/.env` 가 이미지에 들어갔음을 P0-5 가 실측. worker 의 healthcheck 는 Phase 0 에 probe 가능한 표면이 없어 Phase 1(Redis 하트비트 키)로 |
 | 개정 7 | [편집] 2026-09-10. 2.8 `data.run_executions` 의 `started_at`·`finished_at` 을 nullable 로 명시 — `queued` 시점에는 값이 없습니다(P0-8 구현 세션의 판단, 리뷰 승인). 열의 정본은 `docs/data-model.md` |
 | 개정 6 | [실질] 2026-09-10. UI 기반 결정 — Tailwind CSS v4 + shadcn/ui 를 채택하고 표현 규약은 [../DESIGN.md](../DESIGN.md) 가 소유(D-14). 2.5 갱신, 구현 단위 P0-3b 신설. showjihyun 지시로 승인 |
@@ -243,7 +244,7 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | `api-typecheck` | quality | true | `uv run mypy` |
 | `api-arch` | architecture | true | `PYTHONUTF8=1 uv run lint-imports` (Windows 의 cp949 locale 이 `.importlinter` 의 UTF-8 주석을 못 읽습니다. Linux 에서는 무해) |
 | `api-unit` | correctness | true | `uv run pytest -q -m 'not integration'` |
-| `web-typecheck` | quality | true | `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && test -z "$(git status --porcelain packages/sdk/src/generated)" && pnpm -F web -F sdk run typecheck` |
+| `web-typecheck` | quality | true | `pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck` |
 | `web-lint` | quality | true | `pnpm -F web -F sdk run lint` |
 | `web-arch` | architecture | true | `pnpm exec depcruise apps/web --config .dependency-cruiser.cjs` |
 | `web-unit` | correctness | true | `pnpm -F web -F sdk run test:unit` |
