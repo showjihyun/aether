@@ -1,6 +1,7 @@
 {
   "name": "aether",
   "private": true,
+  "packageManager": "pnpm@10.34.5",
   "type": "module",
   "engines": {
     "node": ">=24"
