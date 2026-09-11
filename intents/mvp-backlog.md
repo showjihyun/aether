@@ -50,7 +50,7 @@ Phase 가 바뀔 때는 새 intent 를 발급합니다(`cp _template.md NNNN-<�
 
 ## Phase 0 — Architecture & Foundation
 
-Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (승인됨 2026-09-09). Plan: [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) (승인됨 2026-09-09 — 순서는 plan 이 소유하며 P0-6 을 앞당깁니다). 기간: Week 1~2.
+Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08 · **완료 2026-09-11**, 마지막 PR #10). Spec: [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (승인됨 2026-09-09). Plan: [../plans/0001-phase-0-foundation.md](../plans/0001-phase-0-foundation.md) (승인됨 2026-09-09 — 순서는 plan 이 소유하며 P0-6 을 앞당깁니다). 기간: Week 1~2.
 
 **Phase 완료 판정** — 새로 clone 한 사람이 저장소 정보만으로 명령 하나를 찾아 실행하면 Web 과 API 가 뜨고, `verify.sh` 가 제품 코드를 실제로 검사하며, AR-2·AR-3·AR-5 위반이 `arch-test` 에서 exit 0 이 아닌 값으로 드러나고, `docker compose up` 이 인터넷 없이 성립합니다.
 
@@ -65,7 +65,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08). Spec: [../spe
 | P0-6 | AR-* 를 기계 판정으로 | P0-1 | — | 완료 |
 | P0-7 | `harness.config` 제품 단계 활성화와 CI | P0-5, P0-6 | — | 완료 |
 | P0-8 | 데이터 모델 v1 (Agent / Agent Version / Run) | P0-2 | — | 완료 |
-| P0-9 | 🔒 인증 기준선 | P0-8 | — | 대기 |
+| P0-9 | 🔒 인증 기준선 | P0-8 | — | 완료 |
 
 ### P0-1 모노레포 뼈대와 빈 패키지 경계
 

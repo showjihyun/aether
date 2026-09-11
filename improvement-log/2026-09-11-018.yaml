@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-018
+date: 2026-09-11
+status: candidate
+symptom: 사람 검토 대기 상태(의도된 red 테스트만 있는 트리)에서 stop-verify-gate 가 종료를 막아 git stash 로 우회함
+evidence: "P0-9 1단계: verify fail(api-typecheck·api-unit·api-integration, 없는 2단계 모듈의 ModuleNotFoundError) → 종료 차단 → git stash push -u → verify pass → H-3 승인 뒤 stash pop. .harness/verify.json 2026-09-11T14:02:10Z / 14:17:51Z"
+root_cause: 게이트가 완료 선언과 사람 검토 대기 중간 상태를 구분하지 못함. 🔒 단위는 설계 검토 전 red 만 있는 상태가 규칙상 필수
+fix: stash 로 트리를 비워 게이트 통과(테스트 약화 없음)
+recurrence_risk: medium
+harness_element: HE-10
+proposed_harness_change: "verify.sh 에 검토 대기(pending-review) 기록 옵션: 의도된 red 단계 목록과 사유를 verify.json 에 남기고 stop 게이트는 종료를 허용하되 완료로 집계하지 않음. 상류 harness-zzing 에 제안"
+preferred_enforcement: script
+trust: untrusted
+regression_check: "대상: 이후 🔒 단위(P1 Policy, MCP Firewall). 기준: 설계 검토 대기 상태에서 stash 없이 종료 가능, verify.json 이 그 상태를 pending 으로 기록"
+owner: unassigned
+expires: 2026-12-10

@@ -5,8 +5,9 @@
 | 번호 | 0001 |
 | 작성일 | 2026-09-08 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 0 (Week 1~2) |
-| 상태 | 승인됨 |
+| 상태 | 완료 |
 | 승인 | showjihyun, 2026-09-08 |
+| 완료 | 2026-09-11 — P0-1 ~ P0-9 전부 병합(마지막 PR #10). R-1 ~ R-11 의 판정 단위는 plan §6 |
 | 후속 spec | [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (승인됨 2026-09-09) |
 
 ## Problem

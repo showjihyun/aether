@@ -30,7 +30,7 @@
 
 ## 아직 없는 것
 
-Phase 1 의 것 — Agent Registry API, Run API, 스트리밍, `packages/*` 의 구현(지금은 세 층의 빈 껍데기). 인증(P0-9)도 아직입니다. 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
+Phase 1 의 것 — Agent Registry API, Run API, 스트리밍, `packages/*` 의 구현(지금은 세 층의 빈 껍데기). 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
 
 ## 이 파일의 규칙
 
