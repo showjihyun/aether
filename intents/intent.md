@@ -2,12 +2,12 @@
 
 | 키 | 값 |
 | --- | --- |
-| 활성 intent | [0001 — Phase 0: Architecture & Foundation](0001-phase-0-foundation.md) |
-| 상태 | 완료 — Phase 0 의 아홉 단위 전부 병합(2026-09-11). 다음 활성 intent 0002(Phase 1)는 발급 대기 |
-| 승인 | showjihyun, 2026-09-08 |
-| 후속 spec | [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) (승인됨 2026-09-09) |
-| 열린 질문 | 5건 전부 닫힘. Q1 uv · Q2 pnpm 단독 · Q3 verify 한 번에 · Q4 API 키 · Q5 타입 생성 + 호출 수기 |
-| 갱신일 | 2026-09-11 |
+| 활성 intent | [0002 — Phase 1: Agent Runtime](0002-phase-1-agent-runtime.md) |
+| 상태 | 초안 — 승인 대기. 승인 전에는 spec 0002 를 쓰지 않습니다. 0001 은 완료(2026-09-11) |
+| 승인 | (비어 있음) |
+| 후속 spec | 없음 — 승인 뒤 `specs/0002-phase-1-agent-runtime.md` |
+| 열린 질문 | 8건 열림 — Q6 로컬 LLM 서버 후보, 상태 투영 소비자(AR-7), `definition` 스키마, SSE 이벤트 스키마, 도구 인터페이스, collector, 성능 기준 측정 정의, `smoke` 와 D-7 단계 상한. 답은 spec 0002 또는 P1-9 |
+| 갱신일 | 2026-09-12 |
 
 ## 이 파일이 무엇인가
 
@@ -21,10 +21,10 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 
 | 단계 | 산출물 | 이 저장소의 자리 | 누가 통과시키는가 | 지금 |
 | --- | --- | --- | --- | --- |
-| 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0001, 승인됨 |
-| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0001 승인됨 2026-09-09 |
-| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 0001 승인됨 2026-09-09 |
-| 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **완료.** P0-1 ~ P0-9 전부 `verify.sh` 16단계 통과 + PR 병합(마지막 PR #10, 2026-09-11). Phase 1 은 intent 0002 승인 뒤 |
+| 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | **0002 초안, 승인 대기.** 0001 완료 |
+| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0002 미작성(intent 승인 뒤). 0001 승인됨 2026-09-09 |
+| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 0002 미작성(spec 승인 뒤). 0001 승인됨 2026-09-09 |
+| 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **완료.** P0-1 ~ P0-9 전부 `verify.sh` 16단계 통과 + PR 병합(마지막 PR #10, 2026-09-11). 0002 의 구현은 spec·plan 승인 뒤 |
 
 `specs/` 와 `plans/` 는 각각 0001 의 첫 산출물이 나오면서 생겼습니다. 빈 디렉터리를 미리 만들지 않은 것은 의도였습니다 — 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
 
@@ -47,8 +47,9 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | 번호 | 제목 | 대상 Phase | 상태 | 후속 spec |
 | --- | --- | --- | --- | --- |
 | [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 완료 | [0001](../specs/0001-phase-0-foundation.md) 승인됨 |
+| [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [Phase 1](../docs/roadmap.md) | 초안 (2026-09-12) | — |
 
-아직 발급하지 않은 intent(0002 ~ 0006, Phase 1 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
+아직 발급하지 않은 intent(0003 ~ 0006, Phase 2 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
 
 ## 버전 관리
 

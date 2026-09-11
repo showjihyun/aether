@@ -166,7 +166,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08 · **완료 202
 
 ## Phase 1 — Agent Runtime
 
-Intent: 0002 (미발급. Phase 0 완료 후 발급). 기간: Week 3~5.
+Intent: [0002](0002-phase-1-agent-runtime.md) (초안 2026-09-12, 승인 대기). 기간: Week 3~5.
 
 **Phase 완료 판정** — `POST /agents` 로 만든 Agent 를 `POST /agents/{id}/run` 으로 실행하면 worker 가 Model → Tool → Observation → Model 루프를 돌아 `GET /runs/{id}` 가 최종 상태를 답하고, 이벤트가 스트리밍되며, 취소·타임아웃·재시도가 상태에 반영되고, 모든 과정이 트레이스로 남습니다. 인터넷 없이 됩니다.
 
