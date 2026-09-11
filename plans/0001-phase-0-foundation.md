@@ -9,7 +9,7 @@
 | 작성일 | 2026-09-09 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-09 (리뷰 F-1 ~ F-6, P-1 ~ P-7 반영본) |
-| 개정 | — |
+| 개정 | 1 — 2026-09-11 P0-9 절에 H-3 설계 검토 결과 추가(3번 구현 지시의 구체화. 순서·담당 불변) |
 
 spec 이 정한 요구사항(R)·결정(D)·계약은 반복하지 않습니다. 이 문서는 아홉 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 게이트가 켜지기 전에는 무엇으로 판정하는지를 정합니다.
 
@@ -160,6 +160,21 @@ H-1 이 규칙 파일을 만들었으므로 이 단위는 **규칙이 동작함�
 | 3 | 구현: `application/usecases/authenticate.py`·`issue_api_key.py`(키 생성 `aeth_` + 256-bit, SHA-256, constant-time 비교 — 전부 표준 라이브러리. outbound 포트 `ApiKeyStore` 만 봄), `adapters/outbound/db/api_keys.py`(`ApiKeyStore` 의 PostgreSQL 구현), `adapters/inbound/http/auth.py`(`Depends` — `Authenticate` **포트 타입**을 받아 라우터 전체에 적용, `/healthz` 제외), `adapters/inbound/cli.py` 에 `keys create --label`(`IssueApiKey` 포트를 부름). `main.py` 에서 조립: 유스케이스에 PostgreSQL 어댑터를 꽂고, 라우터와 CLI 에 유스케이스를 포트 타입으로 건넴. CLI 진입점은 P0-2 의 `main:cli` 그대로(AR-10·AR-12). 1번의 테스트가 전부 통과 — green. 그 뒤 정리(refactor)에서 테스트는 바꾸지 않습니다 | A |
 | 4 | **H-3 (구현 검토)**: PR 리뷰. 비밀값이 로그·테스트 fixture 에 원문으로 없는지 | **H** |
 | 5 | 판정: `verify.sh` pass(P0-7 뒤이므로 게이트가 켜져 있음). R-9 의 테스트 통과 | A |
+
+**H-3 설계 검토 결과(2026-09-11, 승인 showjihyun)** — 결정의 정본은 spec 2.9 의 같은 제목 블록이고, 여기는 3번 구현이 따를 배치와 테스트입니다. 3번 행의 "라우터 전체에 적용" 은 Phase 1 라우터가 `require_principal(app.state.authenticate)` 로 붙는 것을 뜻하며, P0-9 에는 보호할 제품 경로가 없습니다. 테스트를 고치거나 더하는 항목은 전부 **수정 → red 기록 → green** 순서입니다.
+
+| 결정 | 3번에서 할 일 |
+| --- | --- |
+| 클래스명 | `AuthenticateUseCase(store)`, `IssueApiKeyUseCase(store, rand=secrets.token_bytes)`, `PostgresApiKeyStore(connect)`, `require_principal(authenticate)` |
+| 연결 | `PostgresApiKeyStore(connect: Callable[[], psycopg.Connection])` — 메서드마다 `with connect() as conn:`. 계약 테스트의 `PostgresApiKeyStore(conn)` 를 **먼저** 팩토리 형태로 고치고, 해시를 테스트마다 고유하게(`hash_key(generate_raw_key())`) — 커밋된 행이 세션 DB 에 남기 때문 |
+| revoke | 계약 테스트 2건 추가(두 번째 revoke 는 첫 `revoked_at` 유지, 없는 id → `KeyError`) 뒤 fake·PostgreSQL 둘 다 맞춤 |
+| 로깅 | `adapters/inbound/http/auth.py` 가 `Unauthenticated` 를 잡아 WARNING 으로 사유만 기록하고 401 + `WWW-Authenticate: Bearer`, 본문에 사유 없음. 테스트: 실제 `AuthenticateUseCase(FakeApiKeyStore())` 에 형식은 맞고 미등록인 키 → 401 이고 `caplog.text` 에 원문 없음 |
+| 헤더·입력 | 스킴 대소문자 무시 테스트 1건(`bearer …` → 200). 비ASCII 불량 키 테스트 1건(`Unauthenticated`, `UnicodeEncodeError` 아님 — `is_well_formed` 가 `hash_key` 보다 먼저) |
+| 조립 | `create_app(settings, *, authenticate: Authenticate \| None = None)` → `app.state.authenticate`. 통합 테스트 `tests/test_auth_end_to_end.py`: PostgreSQL store 로 발급한 키 → 테스트 경로에 Bearer → 200, revoke → 401 |
+| CLI | `adapters/inbound/cli.py` 에 `keys create --label`(`IssueApiKey` 포트만 봄), `main.cli` 가 조립. 단위 테스트(fake + `capsys`: stdout 은 원문 한 줄, stderr 에 id·label, stderr 에 원문 없음) + 통합 테스트(`uv run aether-api keys create` 를 서브프로세스로, `AETHER_DATABASE_URL` 은 컨테이너의 `aether_control` URL → 출력이 `is_well_formed` 이고 store 에서 조회됨) |
+| 설정 | `Settings.psycopg_dsn` 프로퍼티 + `tests/test_settings.py`(`postgresql+psycopg://` → `postgresql://`, 이미 libpq 형식이면 그대로) |
+| 구조 테스트 | `tests/arch/test_usecases_have_tests.py` 의 둘째 케이스(glob 이 예외를 안 내는지만 확인) 삭제 |
+| 문서 | 루트 `README.md` 에 키 발급 절(`docker compose exec api aether-api keys create --label <이름>`, 원문은 이때 한 번). `docs/`·spec·plan 은 주 세션 |
 
 ## 3. 사람 손
 

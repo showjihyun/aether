@@ -20,3 +20,13 @@ class Settings(BaseSettings):
     """spec 2.8. `apps/api/migrations/env.py` 가 기본으로 읽는 DB 접속 문자열
     (`ALEMBIC_URL` 환경변수가 있으면 그것이 우선). 관리자 역할로 접속합니다 —
     런타임 역할(`aether_control`)과는 다릅니다."""
+
+    @property
+    def psycopg_dsn(self) -> str:
+        """`database_url` 에서 `+psycopg` 드라이버 표기(SQLAlchemy 형식)만 벗깁니다.
+
+        psycopg 로 직접 연결하는 outbound 어댑터(`adapters/outbound/db/api_keys.py`,
+        spec 2.9)가 쓰는 libpq 형식입니다. 이미 그 형식(`postgresql://`)이면 그대로
+        돌려줍니다.
+        """
+        return self.database_url.replace("postgresql+psycopg://", "postgresql://", 1)

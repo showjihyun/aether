@@ -11,6 +11,7 @@
 | 개정 1 | [실질] 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | [실질] 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | [편집] 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 11 | [실질] 2026-09-11. H-3 설계 검토(showjihyun 승인) — 2.9 범위 행에 OpenAPI 문서 경로 제외 명시, 2.9 에 검토 결과 8항 추가(실패 사유 로깅 위치, revoke 멱등·`KeyError`, 호출마다 연결, `create_app` 의 `authenticate` 주입과 `app.state`, CLI stdout 원문만·`Settings.psycopg_dsn`, 키 길이 고정, 스킴 대소문자, constant-time 확인 방식) |
 | 개정 10 | [편집] 2026-09-11. R-11 실측 기록 — 로컬 verify 16단계 104.0초(Windows, Docker Desktop), CI `verify` job 1분 33초(도구 설치 포함). D-12 예산 10분의 1/5. 2.11 에 기록 |
 | 개정 9 | [편집] 2026-09-11. 2.11 `web-typecheck` 의 미추적 확인을 `test -z "$(…)"` 에서 `! git status --porcelain … \| grep -q .` 로 — `harness.config` 배열 원소(큰따옴표) 안에서는 큰따옴표를 못 쓰고 작은따옴표는 `$(…)` 를 확장하지 않아 단계가 항상 실패했음(P0-7 후보 검토에서 `bash -c` 실행으로 확인) |
 | 개정 8 | [편집] 2026-09-10. 2.7 `.dockerignore` 패턴은 `**/.env*` — dockerignore 의 접두어 없는 패턴은 컨텍스트 루트에서만 매칭되어 `infra/docker/.env` 가 이미지에 들어갔음을 P0-5 가 실측. worker 의 healthcheck 는 Phase 0 에 probe 가능한 표면이 없어 Phase 1(Redis 하트비트 키)로 |
@@ -208,11 +209,22 @@ Run 의 흐름(Phase 1 에서 완성, 여기서는 자리): api 가 `control.run
 | 저장 | `control.api_keys.key_hash` = SHA-256(키). **salt 없음** — 키가 256-bit 난수라 사전 공격이 성립하지 않고, bcrypt 류는 저엔트로피 비밀번호를 위한 것입니다. 이 근거가 바뀌면(사람이 고르는 키) 결정도 바뀝니다 |
 | 조회 | 요청 키를 해시해 `key_hash` 로 직접 조회. 비교는 constant-time. `revoked_at` 이 있으면 거부 |
 | 발급 | `uv run aether-api keys create --label <이름>`. 원문은 이때 한 번 출력. 환경변수로 키를 주입하는 부트스트랩은 두지 않습니다 — `.env` 에 동작하는 비밀값이 놓이는 경로가 됩니다 |
-| 범위 | `/healthz` 를 제외한 모든 경로. 단일 테넌트. 사용자·조직·역할 없음 |
+| 범위 | `/healthz` 와 OpenAPI 문서 경로(`/openapi.json`, `/docs`, `/redoc`)를 제외한 모든 경로 — 스키마는 이미 `packages/sdk/openapi.json` 으로 저장소에 공개되어 있어 숨길 것이 없습니다(H-3, 개정 11). 단일 테넌트. 사용자·조직·역할 없음 |
 | 구조 | inbound 포트 `Authenticate`·`IssueApiKey`, outbound 포트 `ApiKeyStore`, 유스케이스 둘, outbound 어댑터는 PostgreSQL 구현. HTTP 의존성과 CLI 는 inbound 포트만 봅니다(AR-12). `ApiKeyStore` 의 fake 와 PostgreSQL 구현은 같은 포트 계약 테스트를 통과합니다 |
 | 뺀 것 | 세션, OIDC/SSO, Permission, rate limit. Identity 는 Control Plane 의 항목이지만 Trust Layer(Phase 8) 전에는 키 하나로 충분합니다 |
 
 이 절은 DP-6 과 AGENTS.md Trust 에 걸립니다. 에이전트는 P0-9 에서 인터페이스와 테스트 목록까지만 만들고 구현은 사람 검토를 거칩니다.
+
+**H-3 설계 검토 결과(2026-09-11, showjihyun 승인)** — 위 표를 구현 수준에서 확정한 결정입니다. 파일 배치와 테스트는 plan P0-9 절이 정합니다.
+
+- 실패 사유: 유스케이스는 `Unauthenticated(사유)` 만 던지고, HTTP 어댑터가 WARNING 으로 사유 문자열만 기록합니다. 키 원문·조각은 어떤 로그에도 남기지 않습니다. 응답 본문은 사유를 담지 않습니다.
+- `ApiKeyStore.revoke` 는 멱등(두 번째 호출은 첫 `revoked_at` 유지), 없는 id 는 `KeyError`.
+- PostgreSQL 어댑터는 연결 팩토리를 받아 **호출마다** 연결을 열고 커밋하고 닫습니다. 조립 시점에 연결을 열지 않습니다 — `create_app` 은 import 시 실행되고 DB 없는 테스트와 `aether-api openapi` 가 이를 부르기 때문입니다. 커넥션 풀은 Phase 1.
+- `create_app(settings, *, authenticate=None)`. `None` 이면 PostgreSQL 어댑터로 지연 조립해 `app.state.authenticate` 에 둡니다. 보호 경로는 `require_principal(app.state.authenticate)` 를 의존성으로 받습니다 — Phase 1 의 라우터부터. P0-9 에는 보호할 제품 경로가 없습니다.
+- `keys create --label` 은 stdout 에 원문만(줄바꿈 하나), stderr 에 id·label. DB 접속은 `AETHER_DATABASE_URL` — `Settings.psycopg_dsn` 이 `+psycopg` 드라이버 표기를 벗겨 libpq 형식으로 만듭니다.
+- 키 형식은 접두사 뒤 정확히 43자. 형식이 바뀌면 새 접두사로 구분합니다.
+- `Authorization` 스킴 비교는 대소문자 무시(RFC 7235). 비ASCII 입력은 형식 검사에서 거부되어 해시에 닿지 않습니다.
+- constant-time 비교는 `hmac.compare_digest` 호출을 테스트가 직접 확인합니다(블랙박스 대안 없음).
 
 ### 2.10 아키텍처 규칙의 기계 판정
 

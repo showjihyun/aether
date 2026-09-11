@@ -31,6 +31,18 @@ curl localhost:8000/healthz   # {"status":"ok","service":"api","version":"<git d
 
 브라우저로 http://localhost:3000 을 엽니다.
 
+## API 키 발급
+
+`/healthz` 와 OpenAPI 문서 경로를 제외한 모든 경로는 `Authorization: Bearer <key>` 를
+요구합니다([specs/0001-phase-0-foundation.md](specs/0001-phase-0-foundation.md) 2.9).
+
+```bash
+docker compose -f infra/docker/compose.yaml exec api aether-api keys create --label <이름>
+```
+
+원문 키는 이때 **한 번만** stdout 에 출력됩니다 — 다시 조회할 방법이 없으니 그 자리에서
+저장하십시오. 환경변수나 `.env` 로 키를 주입하는 부트스트랩은 없습니다.
+
 ## 검증
 
 ```bash
