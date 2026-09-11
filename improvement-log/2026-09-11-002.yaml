@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-002
+date: 2026-09-10
+status: candidate
+symptom: P0-4 구현 세션이 .claude/agents/implementer.md 의 "테스트를 먼저 씁니다" 라는 자연어 지시를 따르지 않고, 도메인·어댑터·설정·조립 소스 5개를 전부 작성한 뒤에야 테스트를 작성했습니다.
+evidence: |
+  git show 739a844(P0-4: apps/worker 최소 기동) 커밋 본문 "구현" 절: "- domain/backoff.py: ... - adapters/inbound/stream.py: ... - adapters/outbound/telemetry.py: ... - settings.py: ... - main.py: ... - tests: backoff(단위), startup_failure(...), connect(integration, ...)" — tests 항목이 소스 5개 뒤 마지막에 나열됨.
+  PROVENANCE.md 8절 2026-09-10 행: "TDD 점검 — 문장(implementer.md 한 줄)으로만 있었고 P0-4 는 구현 먼저였음. 자연어 지시가 무시된 예측된 실패."
+  당시 리뷰에는 구현 순서를 확인할 칸이 없어 통과됨. 수정 후 .claude/agents/implementer.md 59행: "이 칸이 비어 있거나 순서가 뒤바뀐 보고는 리뷰가 반려합니다"(git show 8fbbfc0).
+root_cause: TDD 요구가 implementer.md 안내문(자연어 지시, instruction 등급)으로만 존재했고, 주 세션의 리뷰 절차에도 "구현 전 테스트 실행 기록" 을 확인하는 칸이 없어, 지시를 어겨도 아무 검증도 이를 잡지 못했습니다.
+fix: P0-4 자체는 재작업하지 않고 완료 처리된 채로 두었습니다. .claude/agents/implementer.md 의 작업 순서를 red → green → refactor 로 명시하고 보고 형식에 red 증거 칸을 추가해 이후 단위부터 적용했습니다(git show 8fbbfc0).
+recurrence_risk: high
+harness_element: HE-9
+proposed_harness_change: subagent 보고의 red 증거 칸이 비어 있거나 구현 뒤 테스트 순서로 적혀 있으면 주 세션이 그 보고를 반려하는 규칙을 AGENTS.md Loop 와 backlog 완료 정의에 명시하고, 이를 측정하는 REP-9(기능 단위 test-first)를 평가 세트에 추가합니다.
+preferred_enforcement: subagent
+trust: untrusted
+regression_check: |
+  대상: REP-9(기능 단위 test-first, 신설 제안 — harness_element HE-9, 이 항목 id 를 근거로 evaluation/README.md 7.1 절차에 따라 발급 검토). 발급 전 대리 지표로 P0-8 이후 단위의 완료 보고 red 증거 칸 사용.
+  기준: REP-9 실행 시 대표 세션 완료 보고의 red 증거 칸이 100% 채워짐(구현 전 실패 실행 기록 포함). REP-9 발급 전에는 P0-8 이후 단위 완료 보고 표본에서 red 증거 누락 0건.
+  근거 파일: .claude/agents/implementer.md, PROVENANCE.md 8절, .harness/latest-eval.json(REP-9 발급 후)
+owner: unassigned
+expires: 2026-12-10

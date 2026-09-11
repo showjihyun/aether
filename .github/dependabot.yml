@@ -1,0 +1,38 @@
+# .github/dependabot.yml — 후보(H-2b). 보호 파일 목록(harness/hooks/lib/guard-lib.sh)에는
+# 아직 없지만(.github/workflows/* 는 경고 대상, dependabot.yml 자체는 목록 밖), P0-7 plan
+# 순서 4b·부록에 따라 harness-change 라벨을 붙인 별도 PR 로 사람이 병합합니다.
+#
+# 대상 4곳:
+#   - uv(Python)   : 루트 pyproject.toml / uv.lock. package-ecosystem "uv" 는 Dependabot
+#                    버전 업데이트가 2025-03-13 GA 로 지원합니다(별도 pip 생태계 불필요).
+#   - npm(pnpm)     : 루트 package.json / pnpm-lock.yaml. Dependabot 의 npm 생태계가
+#                    pnpm 워크스페이스 lockfile 을 읽습니다(공식 문서: pnpm 은 npm 생태계로 다룸).
+#   - github-actions: .github/workflows/*.yml 안의 액션 버전.
+#   - docker        : infra/docker 의 Dockerfile.
+#
+# 전부 주간(weekly), PR 상한 5.
+version: 2
+updates:
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: "docker"
+    directory: "/infra/docker"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5

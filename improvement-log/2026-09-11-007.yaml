@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-007
+date: 2026-09-10
+status: candidate
+symptom: shadcn@latest 가 v4 로 올라가면서 init 명령이 프리셋 8종 선택 방식으로 바뀌어, DESIGN.md 가 요구하는 style new-york + base color neutral 조합을 그대로 지정할 수 없었습니다.
+evidence: |
+  DESIGN.md 13행: "컴포넌트 shadcn/ui — style new-york, base color neutral, CSS variables 켬. CLI 는 shadcn@3.8.5 로 고정(apps/web devDependency) ... v4 CLI 는 init 을 프리셋 8종으로 바꿔 new-york + neutral 을 지정할 수 없고, 프리셋을 고르는 것은 그 자체가 새 시각적 결정이라 3.x 마지막 안정판에 고정했습니다(P0-3b)."
+  apps/web/package.json 39행: "\"shadcn\": \"3.8.5\",".
+  PROVENANCE.md 125행: "shadcn CLI 버전 3.8.5 고정. v4 CLI 는 init 을 프리셋 8종으로 바꿔 new-york + neutral 을 지정할 수 없습니다."
+root_cause: DESIGN.md 가 "디자인 결정 최소화" 를 위해 shadcn 의 특정 기본값 조합을 고정 규약으로 삼았는데, 그 규약이 전제한 CLI 동작(원하는 조합을 그대로 지정 가능)이 도구의 메이저 업그레이드로 깨졌고, @latest 를 쓰는 한 이 전제가 다시 깨질 수 있습니다.
+fix: shadcn CLI 버전을 3.8.5 로 고정하고 pnpm -F web exec shadcn add(고정 버전 경유)만 쓰도록 DESIGN.md 에 명시했습니다. dlx shadcn@latest 사용을 금지했습니다.
+recurrence_risk: low
+harness_element: HE-12
+proposed_harness_change: 소스-복사형 CLI 도구(shadcn 류)를 채택할 때는 버전을 @latest 가 아니라 고정 버전으로 두고, 그 버전이 전제한 동작(프리셋·플래그)이 유지되는지를 그 도구의 메이저 버전이 오를 때만 재검토하는 것을 DESIGN.md 류 UI 규약 문서의 공통 항목으로 둡니다.
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: REP-5(프로젝트 고유 규약을 따르는 작업, 지금 가능)
+  기준: apps/web/package.json 의 shadcn 버전이 3.8.5 로 유지되거나, 올리는 PR 이 DESIGN.md 갱신을 동반함. pnpm -F web exec shadcn add 이외의 dlx shadcn@latest 호출이 코드에 없음.
+  근거 파일: DESIGN.md, apps/web/package.json
+owner: unassigned
+expires: 2026-12-10

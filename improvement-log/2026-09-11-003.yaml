@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-11-003
+date: 2026-09-10
+status: candidate
+symptom: P0-8 의 완료 판정이 infra/docker/postgres/init/01-roles.sh 를 실제로 실행하도록 요구하지 않았고, DO $do$…$do$ 블록 안에서 psql 변수 치환(:'control_pw')이 적용되지 않아 역할이 만들어지지 않는 버그가 그 판정을 통과했습니다.
+evidence: |
+  git show 052173e 커밋 본문 "버그 1": "원인: DO $do$…$do$ 안에서는 psql 변수 치환(:'control_pw')이 적용되지 않아 역할이 만들어지지 않음. P0-8 테스트는 스크립트를 실행하지 않고 psycopg 로 역할을 만들어 이것을 못 잡음".
+  apps/api/tests/test_roles_script_runs.py docstring: "P0-8 의 단위 테스트(test_roles_script.py)는 스크립트 내용을 grep 만 했고, conftest.py 의 db_roles fixture 는 psycopg 로 역할을 직접 만들어 스크립트 자체를 실행하지 않았습니다."
+  P0-5 의 완료 판정(README 명령을 실제로 기동)이 이 버그를 잡아 P0-8 후속 수정(LP-2)으로 이어짐 — P0-8 자체의 판정 문구에는 스크립트 실행 요구가 없었음.
+root_cause: 완료 판정 기준을 쓸 때 "그 기능을 구현하는 실제 산출물(쉘 스크립트)을 실행하는 테스트" 와 "같은 결과를 흉내 내는 다른 경로(psycopg 직접 호출)로 만든 테스트" 를 구분하지 않아, 후자만으로도 판정을 통과할 수 있었습니다.
+fix: 스크립트를 postgres 컨테이너의 /docker-entrypoint-initdb.d/ 에 실제로 마운트해 초기화 과정에서 실행시키는 회귀 테스트(apps/api/tests/test_roles_script_runs.py)를 추가하고, 스크립트를 \gexec 형태로 수정했습니다.
+recurrence_risk: medium
+harness_element: HE-5
+proposed_harness_change: 인프라 스크립트(쉘·SQL 초기화 스크립트 등)를 포함하는 단위의 완료 판정에는 "그 스크립트 파일 자체를 실행하는 테스트가 최소 1건 존재" 를 backlog 완료 정의의 공통 항목으로 추가합니다.
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  대상: REP-1(계층 경계를 지키는 기능 추가, Phase 0 완료 후 실행 가능)
+  기준: apps/api/tests/test_roles_script_runs.py 가 verify.sh 의 api-integration 단계에서 계속 통과하고, 향후 유사 인프라 스크립트 단위의 완료 판정 문구에 "스크립트 실행" 조건이 포함됨.
+  근거 파일: apps/api/tests/test_roles_script_runs.py, .harness/logs/api-integration.log
+owner: unassigned
+expires: 2026-12-10

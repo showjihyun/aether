@@ -12,11 +12,11 @@
 
 ## 현재 상태
 
-**비어 있습니다.** 2026-09-08 하네스 도입 시점 기준으로 aether 에서 관측된 실패가 아직 없습니다.
+**AD-2(Week 1)에 진입했습니다.** 2026-09-11, P0-7 에서 candidate 14건을 발급했습니다(`2026-09-11-001` ~ `014`. 014 는 후보 파일 검토 중 관측). 전부 `status: candidate`, `trust: untrusted` 이며 `promoted` 는 아직 0건입니다.
 
-비어 있는 것이 정상입니다. 하네스 도입 단계는 AD-1(Day 1)이고, [../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) 3.3 은 이 단계에서 improvement log 를 만들지 말라고 규정합니다. 남길 실패의 근거가 되는 검증이 먼저 있어야 하기 때문입니다. 지금 채워 넣는 항목은 관측이 아니라 상상입니다.
+이 13건은 Phase 0 실행(P0-1 ~ P0-6, P0-8) 중 실제로 관측되어 `PROVENANCE.md` 8절 이력·커밋 본문·테스트 docstring 에 그림자 로그로만 남아 있던 사건들과, 이 항목을 발급하는 세션 자체에서 재현한 사건(`2026-09-11-004`, guard hook 오탐) 하나를 포함합니다. `validate` 는 통과했지만 사람의 승격 판정(`../harness/rules/promotion-gate.rule.md`)은 아직 거치지 않았습니다 — 그 전까지는 여기 적힌 내용을 결론이 아니라 후보로 다룹니다.
 
-실운영은 AD-3(Month 1), 로드맵 기준 Phase 4 전후에 시작합니다([../docs/roadmap.md](../docs/roadmap.md)).
+AD-1(Day 1)의 "비어 있는 것이 정상" 규칙([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) 3.3)은 검증(verify)이 자리 잡기 전 단계의 이야기였습니다. P0-7 이 그 단계를 닫았으므로, 지금부터 남기는 항목은 상상이 아니라 관측입니다.
 
 ## 항목 만들기
 
