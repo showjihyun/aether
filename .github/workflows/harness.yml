@@ -21,7 +21,7 @@ jobs:
     name: verify
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Phase 0 제품 단계(spec 0001 2.11)가 uv 워크스페이스와 pnpm 워크스페이스를
       # 요구합니다. verify.sh 자신은 도구를 설치하지 않으므로 여기서 준비합니다.
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -87,7 +87,7 @@ jobs:
     name: 비밀값 스캔
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       # 확인: 라이선스 조건(무료 사용 범위) — 조직 소유 저장소는 라이선스 키가
