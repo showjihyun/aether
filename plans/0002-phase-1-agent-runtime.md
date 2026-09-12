@@ -9,7 +9,7 @@
 | 작성일 | 2026-09-12 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (리뷰 F-1 ~ F-19 반영본. 순서 5 wave·11 단위, 사람 손 두 순간 네 접촉 + Q6 확인에 동의. spec 0002 개정 1 [실질] 도 이 승인으로 확정) |
-| 개정 | — (실행 중 갱신: P1-2a 순서 2 의 conftest 배치를 실제대로 — 개정으로 세지 않음) |
+| 개정 | — (실행 중 갱신: P1-2a 순서 2·P1-2b 순서 1 의 conftest 배치를 실제대로, P1-2b 에 PG lease 만료 테스트 — 개정으로 세지 않음) |
 
 spec 이 정한 요구사항(R-1 ~ R-16)·결정(D-1 ~ D-19)·계약은 반복하지 않습니다. 이 문서는 열한 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`, Sonnet 5), **M** 주 세션(`docs/`·backlog·spec·plan — implementer 는 `docs/` 를 고칠 수 없습니다), **H** 사람(보호 파일, spec 0001 C-1), **W** 가드가 경고만 내는 파일.
 
@@ -63,7 +63,7 @@ P1-2a·2b 를 P1-1 보다 앞에 둔 것은 의도입니다(backlog 번호 순�
 
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
-| 1 | **red** — `packages/runtime/tests/`: `conftest.py`(`pytest_plugins = ["tests.support.pg"]`), `fakes.py`(`FakeRunStateStore`, `FakeClock` — import 는 `from packages.runtime.tests.fakes import …`), `test_run_state_machine.py`(전이표 전부: 허용 전이, 불허 → `IllegalTransition`, 종결에서 나가는 전이 0건), `test_run_state.py`(`RunState` 직렬화 왕복, `seq` 단조), `test_agent_definition.py`(spec 2.3 검증 규칙 전부 — `schema_version` 아닌 값, 빈 `system_prompt`, `BUILTIN_TOOL_NAMES` 밖 도구, 범위 밖 정책 값), `test_lease.py`(R-15: 유효 lease → `acquire_lease` 실패, 만료 → 성공, `renew`·`release`), `test_run_state_store_contract.py`(**포트 계약** — fake 와 PostgreSQL 에 같은 케이스: `save`/`load` 왕복, lease 조건부 UPDATE 원자성, 없는 run → `None`, **새 store 인스턴스가 같은 `RunState` 를 load**(재개의 저장소 절반 — 유스케이스 절반은 P1-4 `test_resume.py`). PostgreSQL 은 `integration`, `aether_data`). 실행해 실패 기록 | A |
+| 1 | **red** — `packages/runtime/tests/`: (conftest 없음 — PG fixture 는 루트 `conftest.py` 가 등록, spec 개정 3) `fakes.py`(`FakeRunStateStore`(+공유 `_Backend`), `FakeClock` — import 는 `from packages.runtime.tests.fakes import …`), `test_run_state_machine.py`(전이표 전부: 허용 전이, 불허 → `IllegalTransition`, 종결에서 나가는 전이 0건), `test_run_state.py`(`RunState` 직렬화 왕복, `seq` 단조), `test_agent_definition.py`(spec 2.3 검증 규칙 전부 — `schema_version` 아닌 값, 빈 `system_prompt`, `BUILTIN_TOOL_NAMES` 밖 도구, 범위 밖 정책 값), `test_lease.py`(R-15: 유효 lease → `acquire_lease` 실패, 만료 → 성공, `renew`·`release`), `test_run_state_store_contract.py`(**포트 계약** — fake 와 PostgreSQL 에 같은 케이스: `save`/`load` 왕복, lease 조건부 UPDATE 원자성, 없는 run → `None`, **새 store 인스턴스가 같은 `RunState` 를 load**(재개의 저장소 절반 — 유스케이스 절반은 P1-4 `test_resume.py`). PostgreSQL 은 `integration`, `aether_data`. PG 의 lease **만료** 경로는 관리자 접속으로 `lease_until` 을 과거로 심어 판정 — 시간 의존 없이). 실행해 실패 기록 | A |
 | 2 | **green** — `aether_runtime/domain/{run,task,failure,agent,tools}.py`(`RunStatus`, `transition`, `RunState`, `IllegalTransition`, `LeaseHeld`, `Task`, `FailureReason`, `AgentDefinition`, `BUILTIN_TOOL_NAMES`·`ToolCall`·`ToolResult`), `application/ports/outbound/{run_state_store,clock}.py`(`Clock` 은 `now`·`monotonic`·`sleep`), `adapters/outbound/db/run_state_store.py`(lease 는 `UPDATE … WHERE lease_until IS NULL OR lease_until < now() RETURNING` 한 문장 — DB 시계 하나만) | A |
 | 3 | **refactor**. 판정: `verify.sh` pass. `packages/runtime` 의 `domain`·`application` 이 `psycopg`·`redis` 를 import 하지 않음(`api-arch` AR-9). backlog P1-2 완료 판정의 "죽였다 살려도 같은 State 에서 재개" 는 **P1-4 의 `test_resume.py` 에서 완결**됨을 P1-2b 완료 보고와 backlog 상태 갱신에 적습니다 | A / M |
 
