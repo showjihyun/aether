@@ -166,20 +166,24 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08 · **완료 202
 
 ## Phase 1 — Agent Runtime
 
+2026-09-12 plan 0002 리뷰로 P1-2 → **P1-2a·P1-2b**, P1-5 → **P1-5a·P1-5b** 로 분할했습니다(범위의 합은 불변, 반복 예산 8회 안에 끝내기 위해). 순서는 plan 이 소유합니다.
+
 Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12 — 결정 D-1 ~ D-19 가 아홉 단위의 공통 결정). 기간: Week 3~5.
 
 **Phase 완료 판정** — `POST /agents` 로 만든 Agent 를 `POST /agents/{id}/run` 으로 실행하면 worker 가 Model → Tool → Observation → Model 루프를 돌아 `GET /runs/{id}` 가 최종 상태를 답하고, 이벤트가 스트리밍되며, 취소·타임아웃·재시도가 상태에 반영되고, 모든 과정이 트레이스로 남습니다. 인터넷 없이 됩니다.
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| P1-1 | Agent Registry API | P0-8, P0-9 | — | 대기 |
-| P1-2 | Run 상태 기계 (`packages/runtime`) | P0-8 | — | 대기 |
+| P1-1 | Agent Registry API | P0-8, P0-9, P1-2b | — | 대기 |
+| P1-2a | 테스트 도구 · 마이그레이션 0002 · 의존성 | P0-8 | — | 대기 |
+| P1-2b | Run 상태 기계 · lease · `RunStateStore` · `AgentDefinition` (`packages/runtime`) | P1-2a | — | 대기 |
 | P1-3 | Model gateway 와 첫 어댑터 | P0-1 | Q6 | 대기 |
-| P1-4 | Planner/Executor 루프 (도구는 프로세스 내부) | P1-2, P1-3 | — | 대기 |
-| P1-5 | Run API (`run` / `runs/{id}` / `cancel`) | P1-1, P1-4, P0-4 | — | 대기 |
-| P1-6 | Streaming | P1-5 | — | 대기 |
-| P1-7 | Retry / Timeout / Error Handling | P1-5 | — | 대기 |
-| P1-8 | Trace | P1-5 | — | 대기 |
+| P1-4 | Planner/Executor 루프 (도구는 프로세스 내부) | P1-2b, P1-3 | — | 대기 |
+| P1-5a | worker 실행 경로 (`ExecuteRun` 호출 · heartbeat · Redis/DB 어댑터) | P1-4, P0-4 | — | 대기 |
+| P1-5b | Run API (`run` / `runs/{id}` / `cancel`) · 투영 · e2e | P1-1, P1-5a | — | 대기 |
+| P1-6 | Streaming | P1-5b | — | 대기 |
+| P1-7 | Retry / Timeout / Error Handling | P1-5b | — | 대기 |
+| P1-8 | Trace | P1-5b | — | 대기 |
 | P1-9 | smoke 단계와 성능 기준값 고정 | P1-6, P1-8 | — | 대기 |
 
 ### P1-1 Agent Registry API
@@ -192,14 +196,23 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 | 걸리는 규칙 | DP-1, AR-2. `Agent` 와 `Agent Version` 과 `Run` 을 혼용하지 않습니다 |
 | 열리는 것 | 평가 세트 REP-1, REP-5 가 실행 가능해집니다 |
 
-### P1-2 Run 상태 기계
+### P1-2a 테스트 도구, 마이그레이션 0002, 의존성
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `packages/runtime` 에 `Run` 의 상태와 전이: `queued → running → (waiting) → succeeded / failed / cancelled / timed_out`. `State` 는 재시작 후 이어붙일 수 있게 영속. `Task` 모델. LLM 없이 순수 도메인 |
-| 범위 밖 | 모델 호출, 도구 호출, API. 이 단위는 테스트만으로 완결됩니다 |
-| 완료 판정 | 허용되지 않은 전이가 예외를 내는 테스트. 프로세스를 죽였다 살려도 `running` Run 이 같은 `State` 에서 재개되는 테스트 |
-| 걸리는 규칙 | [../docs/domain.md](../docs/domain.md) 1절: `State` 와 `Memory` 를 섞지 않습니다 |
+| 범위 | 루트 `pyproject.toml` 의 pytest·mypy 설정(spec 0002 D-18 개정 1: `pythonpath`, `explicit_package_bases` + `mypy_path`, `pytest-socket` 플래그), 루트 `conftest.py`, `tests/support/{pg,waiting}.py`, 기존 테스트의 네임스페이스 import 전환과 `sleep` 제거(프로덕션 무변경), `tests/arch/test_no_sleep_in_tests.py`(`ast`), 마이그레이션 0002(spec 2.10 전부), `packages/runtime` 의존성(pydantic·psycopg·redis), `docs/data-model.md`(주 세션) |
+| 범위 밖 | 도메인 코드. 인증 어댑터 시그니처 변경(🔒) |
+| 완료 판정 | `verify.sh` pass(`api-unit` 이 loopback 외 소켓 차단 상태로), `uv run mypy` 0, 마이그레이션 왕복과 새 열·권한 테스트, `test_no_sleep_in_tests.py` 0건, `apps/api/src` 무변경 |
+| 걸리는 규칙 | spec 0002 R-6·R-11·D-18, spec 0001 R-7(역할 권한 불변) |
+
+### P1-2b Run 상태 기계, lease, `RunStateStore`, `AgentDefinition`
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | `packages/runtime` 에 `Run` 의 상태와 전이: `queued → running → (waiting) → succeeded / failed / cancelled / timed_out`. `State` 는 재시작 후 이어붙일 수 있게 영속(`data.run_states`). `Task` 모델. 실행 권한 lease(spec 0002 D-10). `AgentDefinition`(2.3)과 `BUILTIN_TOOL_NAMES`. `RunStateStore` 포트와 fake·PostgreSQL 구현의 계약 테스트. LLM 없이 순수 도메인 |
+| 범위 밖 | 모델 호출, 도구 호출, API, 루프. 이 단위는 테스트만으로 완결됩니다 |
+| 완료 판정 | 허용되지 않은 전이가 예외를 내는 테스트. lease 가 있으면 두 번째 실행자가 물러나는 테스트(R-15). 새 store 인스턴스가 같은 `State` 를 load 하는 테스트 — "프로세스를 죽였다 살려도 `running` Run 이 같은 `State` 에서 재개" 의 유스케이스 절반은 P1-4 의 `test_resume.py` 가 완결합니다 |
+| 걸리는 규칙 | [../docs/domain.md](../docs/domain.md) 1절: `State` 와 `Memory` 를 섞지 않습니다. AR-9 |
 
 ### P1-3 Model gateway 와 첫 어댑터
 
@@ -220,14 +233,23 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 | 완료 판정 | fake 어댑터로 "도구를 부르는 시나리오" 와 "부르지 않는 시나리오" 가 결정적으로 통과. `Observation` 이 모델에 들어갈 때 신뢰 경계 밖 데이터로 표시됨 |
 | 걸리는 규칙 | `Observation` 은 데이터이지 지시가 아닙니다 |
 
-### P1-5 Run API
+### P1-5a worker 실행 경로
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `POST /agents/{id}/run` → Run 을 `queued` 로 만들고 큐에 넣고 id 반환. worker 가 집어 P1-4 루프 실행. `GET /runs/{id}`, `POST /runs/{id}/cancel`. `docs/api.md`([../docs/README.md](../docs/README.md) 가 Phase 1 에 약속한 계약 문서) 는 이 단위의 산출물 |
+| 범위 | worker 가 `aether:runs:requested` 를 집어(자기 PEL 먼저, `XAUTOCLAIM`, `count=1`) runtime 의 `ExecuteRun` 을 부르고 ack. runtime 의 Redis `EventSink`(같은 `seq` 재발행 흡수)·`StatusNotifier`, PostgreSQL `RunDeclarationReader`. heartbeat healthcheck(spec 2.14). compose 의 worker 설정(`AETHER_DATABASE_URL` = `aether_data`) |
+| 범위 밖 | HTTP 경로, 투영, e2e(P1-5b) |
+| 완료 판정 | fake `ExecuteRun` 으로 ack/미ack 규칙, `integration` 으로 PEL·`XAUTOCLAIM`·heartbeat TTL·재-XADD 흡수. compose 에서 `worker` 가 healthy |
+| 걸리는 규칙 | **AR-7**(worker 는 api 를 모름), AR-12 |
+
+### P1-5b Run API, 투영, e2e
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | `POST /agents/{id}/run` → `control.runs` 에 선언(커밋 뒤 통지) → `202`. `GET /runs/{id}`(투영만 읽음), `POST /runs/{id}/cancel`(`cancel_requested_at`). api 안의 `aether:runs:status` 소비자가 `seq` 로 멱등 투영. sdk 함수 셋. `docs/api.md` 의 runs 절과 스트림 계약 표(주 세션) |
 | 범위 밖 | 스트리밍(P1-6), 재시도·타임아웃(P1-7) |
-| 완료 판정 | compose 환경에서 실제로 Run 이 `succeeded` 까지 감. `cancel` 후 `GET` 이 `cancelled`. api 가 worker 의 코드를 import 하지 않고 큐로만 선언(AR-7) |
-| 걸리는 규칙 | **AR-7.** Control Plane 은 선언만 합니다 |
+| 완료 판정 | 통합 e2e 에서 Run 이 `succeeded` 까지 감(R-2). `cancel` 후 `cancelled`. api 가 worker 의 코드를 import 하지 않고 `aether_runtime.domain` 만 봄(AR-7 확장, `api-arch`). compose 에서 손으로 Run 하나 `succeeded` |
+| 걸리는 규칙 | **AR-7.** Control Plane 은 선언만 합니다. DP-1 |
 | 열리는 것 | REP-2 가 실행 가능해집니다 |
 
 ### P1-6 Streaming
