@@ -5,7 +5,7 @@
 | 활성 intent | [0002 — Phase 1: Agent Runtime](0002-phase-1-agent-runtime.md) |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 |
-| 후속 spec | 다음 단계 — `specs/0002-phase-1-agent-runtime.md` 작성 예정 |
+| 후속 spec | [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (초안 2026-09-12, 승인 대기) |
 | 열린 질문 | 8건 중 Q6 의 모델은 답함(Qwen3.8 27B 양자화, 2026-09-12). 남은 것 — Q6 의 서버·태그, 상태 투영 소비자(AR-7), `definition` 스키마, SSE 이벤트 스키마, 도구 인터페이스, collector, 성능 기준 측정 정의, `smoke` 와 D-7 단계 상한. 답은 spec 0002 또는 P1-9 |
 | 갱신일 | 2026-09-12 |
 
@@ -22,7 +22,7 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 | 단계 | 산출물 | 이 저장소의 자리 | 누가 통과시키는가 | 지금 |
 | --- | --- | --- | --- | --- |
 | 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0002 승인됨 2026-09-12. 0001 완료 |
-| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | **0002 — 다음 단계입니다.** 열린 질문 8건을 여기서 답합니다. 0001 승인됨 2026-09-09 |
+| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | **0002 초안, 승인 대기** — 열린 질문 8건에 D-1 ~ D-16 으로 답함. 0001 승인됨 2026-09-09 |
 | 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 0002 미작성(spec 승인 뒤). 0001 승인됨 2026-09-09 |
 | 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **완료.** P0-1 ~ P0-9 전부 `verify.sh` 16단계 통과 + PR 병합(마지막 PR #10, 2026-09-11). 0002 의 구현은 spec·plan 승인 뒤 |
 
@@ -47,7 +47,7 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | 번호 | 제목 | 대상 Phase | 상태 | 후속 spec |
 | --- | --- | --- | --- | --- |
 | [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 완료 | [0001](../specs/0001-phase-0-foundation.md) 승인됨 |
-| [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [Phase 1](../docs/roadmap.md) | 승인됨 (2026-09-12) | — |
+| [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [Phase 1](../docs/roadmap.md) | 승인됨 (2026-09-12) | [0002](../specs/0002-phase-1-agent-runtime.md) 초안 |
 
 아직 발급하지 않은 intent(0003 ~ 0006, Phase 2 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
 
