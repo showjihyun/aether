@@ -7,7 +7,9 @@
 | 작성일 | 2026-09-12 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
-| 후속 plan | `plans/0002-phase-1-agent-runtime.md` — 다음 단계, 작성 예정 |
+| 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 2 | [편집] 2026-09-12. plan 0002 리뷰 반영 — 2.7 `EventSink` 는 같은 `seq` 재발행을 성공으로(Redis 가 top ID 이하의 explicit `XADD` 를 거부하므로 어댑터가 흡수), 2.9·2.11 collector 출력은 `.harness/`(가드 보호 패턴) 대신 `infra/docker/out/`, 2.11 smoke 는 `compose.ci.yaml` 의 `image:` + `--no-build`·bake target `api worker`·`docker/bake-action`, 2.12 R-7 은 `src` 만 복사해 `PYTHONPATH` 앞에, 2.16 `wait_until`·PG fixture 는 `tests/support/`, 2.4 `XAUTOCLAIM min-idle` 은 설정, C-9 의 `.importlinter` 시점 |
+| 개정 1 | [실질] 2026-09-12. plan 0002 리뷰 — **D-18 교체**: `--import-mode=importlib` 는 기존 `from fakes import …` 를 깨고, `explicit_package_bases` 단독은 src 레이아웃 모듈 이름을 갈라 놓습니다(실험으로 확인). 채택은 pytest `pythonpath = ["."]`(기본 prepend) + mypy `explicit_package_bases = true` + `mypy_path` 9개 `src` + 테스트의 네임스페이스 경로 import. `pytest-socket` 은 `--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1` 을 `addopts` 에(단독 `--disable-socket` 은 `TestClient` 9건을 깸), `integration` 은 `enable_socket` — R-6 은 "loopback 외 네트워크 0". **D-13**: 벤더 SDK ignore 셋 삭제(매칭되지 않는 ignore 는 `error` 를 실패시킴), `.importlinter` 변경은 P1-3 병합 뒤 한 번. plan 0002 승인(showjihyun, 2026-09-12)이 이 개정의 승인 |
 
 intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문서는 intent 의 `Proposed Outcome` 여덟 항목을 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, intent 의 열린 질문 8건에 답을 제안해 사람이 내릴 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P1-1 ~ P1-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다. Phase 0 의 결정([0001-phase-0-foundation.md](0001-phase-0-foundation.md) D-1 ~ D-14)은 그대로 유효하고, 이 spec 이 바꾸는 것은 D-7 하나(2.11, D-15)뿐입니다. 2.3 의 스트림 문장은 [편집] 으로 사실에 맞춥니다(4절 끝).
 
@@ -22,8 +24,8 @@ intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문�
 | R-3 | Run 이벤트가 SSE 로 흘러나오고 순서가 상태 전이 순서와 같으며, 클라이언트가 끊겨도 Run 은 계속됩니다 | Outcome 3 | `api-integration`: 스트림에서 받은 `run.status` 의 `status` 열 == 상태 기계의 전이 열. 소비자를 중간에 닫은 뒤 `GET /runs/{id}` 가 `succeeded` — 비동기 투영은 `wait_until(predicate, timeout)` 헬퍼(조건 폴링, 2.16) 하나로만 기다립니다 |
 | R-4 | Run 타임아웃은 `timed_out`, 재시도 한도 초과는 사유 있는 `failed` 로 끝나고, 그 테스트는 **주입된 시계**로 결정적입니다 | Outcome 4 | `api-unit`(`packages/runtime/tests`): `FakeClock` 을 전진시켜 `timed_out`, 실패하는 fake 모델로 `failed` + `failure_reason == "model_error"` |
 | R-5 | 한 Run 의 span 트리(Run → Task → 모델 호출 / 도구 호출)가 collector 에서 보이고 `GET /runs/{id}` 에 `trace_id` 가 있습니다 | Outcome 5 | `api-unit`: `Tracer` 포트의 인메모리 구현으로 부모–자식 단언. `smoke`: `GET /runs/{id}` 의 `trace_id` 가 collector 의 file exporter 출력(`.harness/otel/spans.jsonl`)에 상한 30초 폴링 안에 나타남 |
-| R-6 | 전부가 **fake 모델 어댑터로 네트워크 없이** 통과하고, OpenAI-호환 어댑터는 같은 포트 계약 테스트를 통과합니다 | Outcome 6, DP-4 | `api-unit` 은 `pytest-socket` 으로 **소켓을 차단**한 채 돕니다(`--disable-socket`). OpenAI-호환 어댑터의 테스트는 `httpx.MockTransport`. 실제 로컬 LLM 서버 실행은 사람의 수동 확인(2.5) |
-| R-7 | AR-5 와 AR-7 이 **실제 `.importlinter`** 로 발화합니다 | Outcome 6 | `tests/arch/test_real_importlinter_fires.py`: 저장소 트리를 임시 디렉터리에 복사하고 실제 `.importlinter` 그대로 `aether_api/_bad.py`(`import httpx`, `import aether_runtime.application`)를 주입해 `lint-imports` exit ≠ 0. 더해 실제 파일의 contract 본문(`httpx` ∈ AR-5 forbidden, `aether_runtime.application` ∈ AR-7 forbidden)을 단언 |
+| R-6 | 전부가 **fake 모델 어댑터로 네트워크 없이** 통과하고, OpenAI-호환 어댑터는 같은 포트 계약 테스트를 통과합니다 | Outcome 6, DP-4 | `api-unit` 은 `pytest-socket` 으로 **loopback 외 소켓을 차단**한 채 돕니다(`addopts` 의 `--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1` — `TestClient` 의 이벤트 루프가 `socketpair` 를 쓰므로 단독 차단은 불가. 개정 1). `integration` 은 `enable_socket`. OpenAI-호환 어댑터의 테스트는 `httpx.MockTransport`. 실제 로컬 LLM 서버 실행은 사람의 수동 확인(2.5) |
+| R-7 | AR-5 와 AR-7 이 **실제 `.importlinter`** 로 발화합니다 | Outcome 6 | `tests/arch/test_real_importlinter_fires.py`: `apps/*/src`·`packages/*/src` 만 임시 디렉터리에 복사하고 그 경로들을 **`PYTHONPATH` 앞**에 넣어(editable 설치의 `.pth` 보다 앞 — 아니면 복사본이 아니라 실제 src 를 검사합니다) 실제 `.importlinter` 그대로 `aether_api/_bad.py`(`import httpx`, `import aether_runtime.application`)를 주입해 `lint-imports --no-cache` exit ≠ 0(개정 2). 더해 실제 파일의 contract 본문(`httpx` ∈ AR-5 forbidden, `aether_runtime.application` ∈ AR-7 forbidden)을 단언 |
 | R-8 | 새 경로는 전부 인증 뒤에 있습니다. 인증 없는 요청은 401 | Outcome 8, DP-6 | `api-unit`: `app.routes` 를 순회해 예외 목록(`/healthz`, 문서 경로) 밖의 모든 `APIRoute` 에 헤더 없는 요청 → 401 |
 | R-9 | `smoke` 가 `verify.sh` 에 집계되고, 로컬 verify 전체는 spec 0001 D-12 의 10분 안입니다 | Outcome 7 | `.harness/verify.json` 에 `smoke` 단계 `pass`, `duration_ms` 합계 ≤ 600,000, `smoke` 단독 ≤ 240,000. P1-9 에서 로컬·CI 실측 기록 |
 | R-10 | `{{성능_기준}}` 의 값이 사람이 고정한 숫자로 evaluation/README 에 적힙니다 | Outcome 7, EI-2 | `scripts/smoke.sh --bench` 의 출력(2.13)을 근거로 사람이 값을 적음. 에이전트는 값을 정하지 않음 |
@@ -168,7 +170,7 @@ pydantic 모델 `AgentDefinition` 은 `aether_runtime.domain.agent` 에 있습�
 
 - `acquire_lease(run_id, owner, until = now + AETHER_WORKER_LEASE_SECONDS)` 는 `lease_until` 이 비었거나 지난 행만 잡습니다(조건부 UPDATE, 원자적). 잡지 못하면 `LeaseHeld` — 그 worker 는 메시지를 ack 하지 않고 지나갑니다(다음 `XAUTOCLAIM` 주기에 다시 봅니다).
 - 단계마다 `renew_lease`. 종결 시 `release`.
-- worker 는 재시작 시 **자기 PEL 을 먼저** 처리하고(`XREADGROUP … 0`), 그 뒤 `XAUTOCLAIM` 을 `min-idle ≥ 3600초(timeout 상한) + 300초` 로만 돕니다. `count=1`. consumer 이름은 `AETHER_WORKER_CONSUMER`(기본 hostname)로 고정할 수 있습니다 — compose 재생성으로 hostname 이 바뀌면 자기 PEL 을 못 찾고 `XAUTOCLAIM` 만 남기 때문입니다.
+- worker 는 재시작 시 **자기 PEL 을 먼저** 처리하고(`XREADGROUP … 0`), 그 뒤 `XAUTOCLAIM` 을 `min-idle ≥ 3600초(timeout 상한) + 300초` 로만 돕니다(`AETHER_WORKER_XAUTOCLAIM_MIN_IDLE_MS`, 기본 3,900,000 — 테스트는 0 을 주입해 가로채기 경로를 실행합니다). `count=1`. consumer 이름은 `AETHER_WORKER_CONSUMER`(기본 hostname)로 고정할 수 있습니다 — compose 재생성으로 hostname 이 바뀌면 자기 PEL 을 못 찾고 `XAUTOCLAIM` 만 남기 때문입니다.
 
 **재개와 재발행(R-16).** `ExecuteRun(run_id)` 은 `data.run_executions` 의 현재 상태로 분기합니다.
 
@@ -226,7 +228,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 
 | 항목 | 결정 |
 | --- | --- |
-| 전송 | worker 가 Run 마다 Redis Stream `aether:runs:{run_id}:events` 에 `XADD` — **explicit ID `<seq>-0`**(`seq` 는 Run 안에서 1 부터 단조 증가). `MAXLEN ~ 10000`, 종결 뒤 TTL 24시간. api 의 `GET /runs/{id}/events` 는 그 스트림을 **`redis.asyncio` 의 블록 `XREAD`** 로 읽어 SSE 로 내보냅니다(consumer group 없음 — 독자가 여럿). 동기 클라이언트로 스레드풀을 점유하지 않습니다 — 클라이언트 단절 시 읽기를 취소할 수 있어야 R-3 이 성립합니다 |
+| 전송 | worker 가 Run 마다 Redis Stream `aether:runs:{run_id}:events` 에 `XADD` — **explicit ID `<seq>-0`**(`seq` 는 Run 안에서 1 부터 단조 증가). `MAXLEN ~ 10000`, 종결 뒤 TTL 24시간. api 의 `GET /runs/{id}/events` 는 그 스트림을 **`redis.asyncio` 의 블록 `XREAD`** 로 읽어 SSE 로 내보냅니다(consumer group 없음 — 독자가 여럿). 동기 클라이언트로 스레드풀을 점유하지 않습니다 — 클라이언트 단절 시 읽기를 취소할 수 있어야 R-3 이 성립합니다. **같은 `seq` 의 재발행(2.4 의 재개)은 성공으로 취급**합니다 — Redis 는 top ID 이하의 explicit `XADD` 를 `ERR The ID specified in XADD is equal or smaller` 로 거부하므로 `EventSink` 어댑터가 그 오류를 흡수하고, fake 도 계약대로 성공합니다(개정 2) |
 | SSE 필드 | `id: <seq>`, `event: <type>`, `data: <JSON>` |
 | `data` 봉투 | `{ "v": 1, "run_id", "seq", "at", "type", "payload" }` |
 | 이벤트 종류 | `run.status { status, failure_reason? }` · `task.started { task_id, step }` · `task.finished { task_id }` · `model.completed { finish_reason, usage? }` · `tool.called { task_id, tool_call_id, name, arguments }` · `tool.result { task_id, tool_call_id, name, is_error, content, truncated }` · `run.finished { status }`(항상 마지막) · `model.delta { text }`(**예약**. Phase 1 은 발생시키지 않습니다) |
@@ -253,7 +255,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 | --- | --- |
 | span 트리 | `run` → `task` → `model.complete` / `tool.run`. 유스케이스는 `Tracer` 포트로만 만듭니다(AR-9). 속성: `aether.run_id`, `aether.agent_version_id`, `aether.task_id`, `aether.tool.name`, `aether.model.id`. 프롬프트·응답·`reasoning` 본문은 속성에 넣지 않습니다 |
 | 전파 | api 의 `POST /agents/{id}/run` span 이 `traceparent` 를 `requested` 메시지 필드에 넣고(2.18), worker 가 부모로 삼습니다 — 한 Run 이 한 trace. `trace_id` 는 worker 가 `data.run_executions.trace_id` 에 쓰고 `StatusMessage` 에 실어 `control.runs.trace_id` 로 투영 |
-| collector(D-7) | compose 에 `otel-collector`(`otel/opentelemetry-collector-contrib`, digest 고정)를 **기본 서비스**로. 수신 OTLP/HTTP 4318, exporter 는 `debug` 와 `file`. 파일은 **호스트 bind mount** `.harness/otel/spans.jsonl`(이미지에 셸이 없어 `exec cat` 이 불가하고, `docker cp` 보다 단순). `smoke` 는 그 파일을 상한 30초로 폴링합니다 — `BatchSpanProcessor` 의 기본 지연이 있어 즉시 나타나지 않습니다 |
+| collector(D-7) | compose 에 `otel-collector`(`otel/opentelemetry-collector-contrib`, digest 고정)를 **기본 서비스**로. 수신 OTLP/HTTP 4318, exporter 는 `debug` 와 `file`. 파일은 **호스트 bind mount** `infra/docker/out/otel/spans.jsonl`(`AETHER_OTEL_DIR`, gitignore. `.harness/*` 는 가드 보호 패턴이라 피합니다 — 개정 2. 이미지에 셸이 없어 `exec cat` 이 불가하고 `docker cp` 보다 단순). Linux CI 에서는 없는 디렉터리를 Docker 가 root 소유로 만들어 uid 10001 의 collector 가 쓰지 못하므로 `smoke.sh` 가 `mkdir -p && chmod 0777` 을 먼저 합니다. `smoke` 는 그 파일을 상한 30초로 폴링합니다 — `BatchSpanProcessor` 의 기본 지연이 있어 즉시 나타나지 않습니다 |
 | 테스트 | `api-unit` 은 인메모리 `Tracer` 로 부모–자식. collector 는 `smoke` 에서만 |
 
 ### 2.10 데이터 모델 변경 (마이그레이션 0002)
@@ -278,7 +280,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 | --- | --- |
 | 격리 | compose 프로젝트 `-p aether-smoke`. `infra/docker/.env` 를 쓰지 않고 **임시 `.env`** 를 생성해 `--env-file` 로 넘깁니다 — 값은 랜덤(`openssl rand -hex 24`)이고 실행 뒤 지웁니다. 비밀값이 아니라 일회용 시험값이지만 어디에도 커밋·출력하지 않습니다. CI 에 `.env` 가 없어도 뜹니다 |
 | 기동 | `docker compose -p aether-smoke --env-file <tmp> -f infra/docker/compose.yaml [-f infra/docker/compose.ci.yaml] up --build -d --wait postgres redis migrate otel-collector api worker` — web 은 띄우지 않습니다. `--wait` 와 일회성 `migrate`(`service_completed_successfully`)의 조합은 compose 버전에 따라 실패 사례가 있어 **P1-9 착수 전 확인 항목**입니다(C-12). 실패하면 `up -d` 뒤 `migrate` 종료 코드와 healthcheck 를 스크립트가 직접 기다립니다 |
-| 시나리오 | `docker compose exec -T api aether-api keys create --label smoke` → `POST /agents` → `POST /agents/{id}/run` → `GET /runs/{id}` 가 `succeeded` 가 될 때까지 상한 60초 폴링 → `trace_id` 가 `.harness/otel/spans.jsonl` 에 나타날 때까지 상한 30초 폴링 |
+| 시나리오 | `docker compose exec -T api aether-api keys create --label smoke` → `POST /agents` → `POST /agents/{id}/run` → `GET /runs/{id}` 가 `succeeded` 가 될 때까지 상한 60초 폴링 → `trace_id` 가 `infra/docker/out/otel-smoke/spans.jsonl`(smoke 전용 디렉터리 — 개발 스택과 공유하지 않음) 에 나타날 때까지 상한 30초 폴링 |
 | 종료 | 항상 `down -v --remove-orphans`(trap). 임시 `.env` 삭제. Windows Git Bash 는 `MSYS_NO_PATHCONV=1`, `exec -T` |
 | 모델 | `AETHER_MODEL_ADAPTER=fake`(compose 기본값) |
 | `--bench` | 2.13 |
@@ -293,7 +295,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 
 **이 spec 은 (b) 를 채택합니다(D-15).** 상한의 취지는 **시간** 예산이고 그것은 D-12(10분)가 지킵니다. 시간을 지키는 장치는 셋 — `smoke` 는 web 을 띄우지 않음, 이미지 레이어 캐시, 그리고 **숫자로 된 회귀 조건**: `smoke` 단독 ≤ 4분(로컬), CI `verify` job 전체 ≤ 8분. P1-9 가 실측하고, 넘으면 (a) 로 돌아갑니다 — 그 판정도 사람이 합니다.
 
-**CI 빌드 캐시.** compose 파일의 `cache_from` 한 줄로는 되지 않습니다. CI 는 `docker/setup-buildx-action` 뒤 **`docker buildx bake -f infra/docker/compose.yaml -f infra/docker/compose.ci.yaml --set '*.cache-from=type=gha' --set '*.cache-to=type=gha,mode=max' --load`** 로 이미지를 먼저 만들고, `smoke.sh` 는 `--build` 없이 그 이미지를 씁니다(`SMOKE_NO_BUILD=1`). 캐시 설정은 **CI 전용 오버라이드 `compose.ci.yaml`** 에만 두어 로컬 `docker compose build` 에 영향이 없습니다. 이 절차는 실재를 확인했습니다(bake 의 `type=gha`). `harness.yml` 변경은 보호 파일이라 사람(C-9).
+**CI 빌드 캐시.** compose 파일의 `cache_from` 한 줄로는 되지 않습니다. CI 는 `docker/setup-buildx-action` 뒤 **`docker buildx bake -f infra/docker/compose.yaml -f infra/docker/compose.ci.yaml --set '*.cache-from=type=gha' --set '*.cache-to=type=gha,mode=max' --load`** 로 **`api`·`worker` 두 target 만** 이미지를 먼저 만들고(`docker/bake-action` 이 런타임 토큰 노출을 대신합니다. target 을 주지 않으면 `web`·`migrate` 까지 빌드해 8분 조건을 위협합니다), `smoke.sh` 는 `SMOKE_NO_BUILD=1` 이면 `-f compose.ci.yaml` 을 더해 `--no-build` 로 그 이미지를 씁니다. `compose.ci.yaml` 은 `api`·`migrate` 에 같은 `image:`, `worker` 에 `image:`, `pull_policy: never` 를 주며 로컬 `docker compose build` 에 영향이 없습니다(개정 2). 이 절차는 실재를 확인했습니다(bake 의 `type=gha`). `harness.yml` 변경은 보호 파일이라 사람(C-9).
 
 `harness.config` 의 배열 원소는 큰따옴표 문자열이라 명령 안의 따옴표는 작은따옴표입니다(spec 0001 2.11). 후보 파일은 `bash -c` 로 **실제 실행**해 검증합니다(improvement-log `2026-09-11-014`).
 
@@ -305,7 +307,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 | AR-7 | `aether_api` → `aether_runtime.application`, `aether_runtime.adapters` 금지 추가(`aether_runtime.domain` 만 허용) | 2.1. Control Plane 은 타입만 알고 실행을 모릅니다. backlog P1-1 의 "`apps/api` 가 `packages/runtime` 의 내부 모듈을 import 하지 않음" 은 이 뜻으로 [편집] |
 | AR-10 | **구조 테스트로 승격** — `tests/arch/test_composition_only_in_main.py`: `adapters.inbound` 와 `adapters.outbound` 를 함께 import 하는 모듈은 `apps/*/main.py` 만 | `.importlinter` 로는 "main 만 예외" 를 표현하기 어렵고, AST 검사 하나로 충분합니다 |
 
-**R-7 의 판정 방식.** 기존 `tests/arch` 는 fixture 전용 설정으로 돌아 "fixture 의 규칙이 동작한다" 만 증명합니다. Phase 1 은 **실제 `.importlinter`** 를 돌립니다: 저장소의 `apps/`, `packages/`, `.importlinter`, `pyproject.toml` 을 임시 디렉터리에 복사하고 `aether_api/_bad.py` 에 위반 import 를 주입한 뒤 `lint-imports --config <임시>/.importlinter` 로 exit ≠ 0 을 단언합니다. 정상 트리에서는 exit 0. 이 테스트는 `api-unit` 안에서 돕니다(수 초).
+**R-7 의 판정 방식.** 기존 `tests/arch` 는 fixture 전용 설정으로 돌아 "fixture 의 규칙이 동작한다" 만 증명합니다. Phase 1 은 **실제 `.importlinter`** 를 돌립니다: `apps/*/src`·`packages/*/src`·`.importlinter` 를 임시 디렉터리에 복사하고(통째 복사는 `node_modules`·`.next` 를 끌고 옵니다), 복사된 9개 `src` 경로를 **`PYTHONPATH` 앞**에 넣어 editable 설치보다 먼저 잡히게 한 뒤 `aether_api/_bad.py` 에 위반 import 를 주입하고 `lint-imports --config <임시>/.importlinter --no-cache` 로 exit ≠ 0 을 단언합니다(개정 2). 정상 트리에서는 exit 0. 이 테스트는 `api-unit` 안에서 돕니다(수 초).
 
 Phase 2 의 MCP HTTP 전송이 `httpx` 를 쓰면 AR-5 ignore 에 `aether_mcp.adapters.outbound.**` 를 더하는 것은 그때의 spec 이 정합니다.
 
@@ -337,6 +339,7 @@ worker 는 `AETHER_WORKER_HEARTBEAT_SECONDS`(기본 5)마다 Redis 키 `aether:w
 | `AETHER_EVENTS_MAXLEN` / `AETHER_EVENTS_TTL_SECONDS` | worker | `10000` / `86400` | 2.7 |
 | `AETHER_WORKER_LEASE_SECONDS` | worker | `60` | 2.4. 단계마다 갱신 |
 | `AETHER_WORKER_CONSUMER` | worker | hostname | 2.4 |
+| `AETHER_WORKER_XAUTOCLAIM_MIN_IDLE_MS` | worker | `3900000` | 2.4. 테스트는 0 |
 | `AETHER_WORKER_HEARTBEAT_SECONDS` | worker | `5` | 2.14 |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | api, worker | (없음) | compose 에서 `http://otel-collector:4318`. 없으면 no-op |
 
@@ -344,16 +347,16 @@ worker 는 `AETHER_WORKER_HEARTBEAT_SECONDS`(기본 5)마다 Redis 키 `aether:w
 
 | 대상 | 추가 | 단위 |
 | --- | --- | --- |
-| `packages/runtime/pyproject.toml` | `pydantic`, `httpx`, `redis`, `psycopg[binary]`, `opentelemetry-sdk`(어댑터용) | P1-2(pydantic·psycopg·redis), P1-3(httpx), P1-8(otel) |
+| `packages/runtime/pyproject.toml` | `pydantic`, `httpx`, `redis`, `psycopg[binary]`, `opentelemetry-sdk`(어댑터용) | P1-2a(pydantic·psycopg·redis), P1-3(httpx), P1-8(otel) |
 | `apps/api/pyproject.toml` | `redis`, `aether-runtime`(workspace) | P1-1 |
-| `apps/worker/pyproject.toml` | `psycopg[binary]`, `aether-runtime`(workspace) | P1-2 |
-| 루트 dev 그룹 | `pytest-socket`(R-6) | P1-2 |
+| `apps/worker/pyproject.toml` | `psycopg[binary]`, `aether-runtime`(workspace) | P1-5a |
+| 루트 dev 그룹 | `pytest-socket`(R-6) | P1-2a |
 | `packages/sdk/package.json` | `json-schema-to-typescript`(devDependency) | P1-6 |
 | `uv.lock`, `pnpm-lock.yaml` | 위와 함께 갱신 — Dockerfile 이 `--frozen` 이라 lock 이 빠지면 이미지 빌드가 실패합니다 | 각 단위 |
 
-**테스트 모듈 이름(D-18).** `packages/runtime/tests` 에 `conftest.py`·`fakes.py` 가 생기면 루트 mypy(`files = ["apps", "packages", "tests"]`)가 `apps/api/tests` 의 같은 이름과 "Duplicate module named" 로 실패합니다(지금은 api 한 곳뿐이라 통과). P1-2 가 `pyproject.toml`(보호 파일 아님)에 `[tool.mypy] explicit_package_bases = true` 와 pytest `addopts = "--import-mode=importlib"` 를 넣습니다. 그 뒤 basename 이 겹쳐도 됩니다.
+**테스트 모듈 이름(D-18).** `packages/runtime/tests` 에 `conftest.py`·`fakes.py` 가 생기면 루트 mypy(`files = ["apps", "packages", "tests"]`)가 `apps/api/tests` 의 같은 이름과 "Duplicate module named" 로 실패합니다(지금은 api 한 곳뿐이라 통과). P1-2a 가 `pyproject.toml`(보호 파일 아님)에 `[tool.mypy] explicit_package_bases = true` 와 **`mypy_path` 에 9개 `src` 경로**(없으면 `apps/api/src/aether_api` 가 `apps.api.src.aether_api` 로 잡혀 설치된 이름과 갈라집니다), `[tool.pytest.ini_options] pythonpath = ["."]` 를 넣고, 테스트는 헬퍼를 **네임스페이스 경로**로 import 합니다(`from apps.api.tests.fakes import …`). `--import-mode=importlib` 는 쓰지 않습니다 — `sys.path` 를 바꾸지 않아 기존 `from fakes import …` 가 깨지고, 기본 모드에서 basename 이 겹치면 다른 앱의 fake 를 import 합니다(둘 다 실험 확인, 개정 1). 네임스페이스 import 뒤에는 basename 이 겹쳐도 됩니다.
 
-**기다림(R-3, R-11).** 통합 테스트가 비동기 결과를 기다릴 때는 `apps/api/tests/waiting.py` 의 `wait_until(predicate, timeout, interval)` 하나만 씁니다 — 내부는 `threading.Event.wait(interval)` 로 폴링합니다(`time.sleep` 아님). 단위 테스트는 기다리지 않습니다(전부 주입).
+**기다림과 공용 fixture(R-3, R-11).** PostgreSQL 세션 fixture(컨테이너·역할·`alembic upgrade`·접속 팩토리)는 `tests/support/pg.py` 로 올려 `apps/api`·`apps/worker`·`packages/runtime` 의 테스트가 `pytest_plugins` 로 함께 씁니다(개정 2). 통합 테스트가 비동기 결과를 기다릴 때는 `tests/support/waiting.py` 의 `wait_until(predicate, timeout, interval)` 하나만 씁니다 — 내부는 `threading.Event.wait(interval)` 로 폴링합니다(`time.sleep` 아님). 단위 테스트는 기다리지 않습니다(전부 주입).
 
 ### 2.17 `packages/sdk` (spec 0001 D-2 유지)
 
@@ -389,7 +392,7 @@ Control Plane 은 `requested` 에 쓰고 `status` 와 events 를 **읽습니다*
 | C-6 | **이벤트 스트림의 메모리** | `MAXLEN ~ 10000`, TTL 24시간. 부하는 `load` 단계의 일 |
 | C-7 | **모델은 비결정적입니다** | 판정은 전부 fake(R-6, `pytest-socket`). 실제 모델은 사람의 수동 확인. `AETHER_MODEL_ADAPTER` 기본 `fake` |
 | C-8 | **비밀값 하나가 늘 수 있습니다** — `AETHER_MODEL_API_KEY` | 환경변수만, 로그·span·이벤트에 넣지 않음. `reasoning` 본문도 같은 취급. 비밀값 스캔 job 이 계속 봅니다 |
-| C-9 | **보호 파일 변경이 네 곳** — `.importlinter`(2.12, P1-3 **착수 전**), `harness.config`(`smoke`, P1-9), `harness.yml`(bake 캐시, P1-9), `evaluation/README.md`(값, P1-9) | 각각 별도 PR, `harness-change` 라벨, 사람. `pyproject.toml`·`compose.yaml`·`compose.ci.yaml` 은 보호 파일이 아닙니다 |
+| C-9 | **보호 파일 변경이 네 곳** — `.importlinter`(2.12, **P1-3 병합 뒤·P1-1 착수 전 한 번** — `httpx` ignore 는 어댑터가 있어야 매칭되고 `error` 는 매칭되지 않는 ignore 를 실패로 봅니다. 개정 1), `harness.config`(`smoke`, P1-9), `harness.yml`(bake 캐시, P1-9), `evaluation/README.md`(값, P1-9) | 각각 별도 PR, `harness-change` 라벨, 사람. `pyproject.toml`·`compose.yaml`·`compose.ci.yaml` 은 보호 파일이 아닙니다 |
 | C-10 | **D-7 을 넘습니다**(2.11) | 사람 결정 D-15 + `improvement-log/` 1건. 회귀 조건은 숫자(`smoke` ≤ 4분, CI ≤ 8분). 넘으면 (a) |
 | C-11 | **`Observation` 표지는 완화이지 방어가 아닙니다**(2.6) | Phase 1 의 도구는 신뢰할 수 있는 프로세스 내부 함수 둘. Phase 2 에서 MCP Firewall 이 같은 지점에 붙습니다 |
 | C-12 | **`up --wait` + 일회성 `migrate`** 조합의 compose 동작이 버전마다 다릅니다(로컬 v2.29, CI 는 최신) | P1-9 착수 전 확인 항목. 실패하면 `smoke.sh` 가 `migrate` 종료 코드와 healthcheck 를 직접 기다립니다(2.11) |
@@ -407,18 +410,18 @@ Control Plane 은 `requested` 에 쓰고 `status` 와 events 를 **읽습니다*
 | D-4 | SSE 이벤트는 2.7 의 봉투와 8종(`model.delta` 는 예약). Run 별 Redis Stream, **explicit ID `<seq>-0`**. 스키마는 `events.schema.json` 으로 커밋, TS 타입 생성 | intent OQ 4 | 2.7, R-12 |
 | D-5 | 프로세스 내부 도구도 **MCP tool 모양**(`name`, `description`, `input_schema`, `run → ToolResult`). `Task` 는 모델 호출마다 하나 | intent OQ 5 | 2.6 |
 | D-6 | `Observation` 은 `role: tool` + `tool_call_id` + `trust: untrusted` 표지로만 모델에 들어갑니다 | — | 2.6, R-14 |
-| D-7 | compose 에 `otel-collector` 를 **기본 서비스**로, exporter 는 `debug` + `file`(host bind mount `.harness/otel/`). 대시보드 없음 | intent OQ 6 | 2.9 |
+| D-7 | compose 에 `otel-collector` 를 **기본 서비스**로, exporter 는 `debug` + `file`(host bind mount `infra/docker/out/otel/`, 개정 2). 대시보드 없음 | intent OQ 6 | 2.9 |
 | D-8 | `{{성능_기준}}` 은 `POST /agents/{id}/run` 응답 P95, `smoke.sh --bench` 순차 200회(워밍업 20 제외), 환경 이름을 붙여 **사람이** 값을 적음 | intent OQ 7 | 2.13 |
 | D-9 | HTTP 계약은 2.2 의 **9개 경로**(`GET /agents/{id}/versions/{version}` 포함). `PUT` 은 `definition` 만, `name` 은 Phase 1 불변, 버전 번호는 `control.agents.current_version` + `SELECT … FOR UPDATE`, 충돌 시 `409 agent_version_conflict`. `requested_by` 를 기록·응답. 삭제·Run 목록 없음 | — | 2.2, 2.10 |
 | D-10 | 상태 기계는 2.4 의 전이표. 실행 권한은 **`data.run_executions` 의 lease**(`lease_owner`, `lease_until`, 단계마다 갱신). worker 는 자기 PEL 먼저, `XAUTOCLAIM` 은 `min-idle ≥ 3900초`, `count=1`. 재개 시 종결이면 **알림·`run.finished` 재발행** 뒤 ack | — | 2.4, R-15, R-16 |
 | D-11 | 취소의 정본은 **`control.runs.cancel_requested_at` 하나**. worker 가 단계 사이에 SELECT. 취소 스트림 없음. 협력적 | — | 2.4, C-3 |
 | D-12 | 마이그레이션 0002: `control.agents.current_version`, `control.runs` 투영·선언 열(`input`, `status`, `status_seq`, …), `data.run_executions` lease 열, `data.run_states` 신설. `aether_control` 의 `data` 권한은 여전히 없음 | — | 2.10 |
-| D-13 | AR-5 에 `httpx` 추가·alerting `error`, AR-7 에 `aether_api → aether_runtime.application/adapters` 금지(`.importlinter`, 사람, P1-3 착수 전). AR-10 은 구조 테스트. R-7 은 **실제 `.importlinter`** 로 판정 | — | 2.12 |
+| D-13 | AR-5 에 `httpx` 추가 + `-> httpx` ignore, **벤더 SDK ignore 셋 삭제**(forbidden 은 유지), alerting `error`; AR-7 에 `aether_api → aether_runtime.application/adapters` 금지. `.importlinter` 는 **P1-3 병합 뒤 한 번**(사람). AR-10 은 구조 테스트. R-7 은 **실제 `.importlinter`** 로 판정(src 복사 + `PYTHONPATH`) | — | 2.12, 개정 1 |
 | D-14 | 테스트의 `sleep` 금지를 구조 테스트로(`time.sleep(`, `from time import sleep`, `asyncio.sleep(`). 기존 2곳은 P1-2 에서 시계 주입으로 제거. 기다림은 `wait_until` 하나 | — | R-11, 2.16 |
 | D-15 | **`smoke` 는 11번째 제품 단계**(`behavior`, `scripts/smoke.sh`, 격리 프로젝트·임시 `.env`). spec 0001 **D-7 을 [실질] 개정** — 제품 단계 11개, 총 17. (c) 합치기는 기각. 회귀 조건: `smoke` 단독 ≤ 4분(로컬), CI `verify` ≤ 8분 — 넘으면 (a). CI 캐시는 `buildx bake … type=gha` + `compose.ci.yaml`. `improvement-log/` 1건 | intent OQ 8 | 2.11, C-10 |
 | D-16 | worker healthcheck 는 Redis 하트비트 키. worker 가 DB(`aether_data`)를, api 가 Redis 를 처음 씁니다 | — | 2.14, 2.15 |
 | D-17 | sdk 는 새 경로 함수 8개 + `streamRunEvents`(`fetch` 기반 SSE 파서). 타입은 생성, 호출은 수기(spec 0001 D-2 유지) | — | 2.17 |
-| D-18 | 테스트 도구: `pytest-socket` 으로 `api-unit` 소켓 차단, `[tool.mypy] explicit_package_bases = true`, pytest `--import-mode=importlib`(`pyproject.toml`, P1-2) | — | 2.16, R-6 |
+| D-18 | 테스트 도구(개정 1): pytest `pythonpath = ["."]`(기본 prepend, importlib 아님) + `addopts` 에 `pytest-socket` 의 `--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1`(`integration` 은 `enable_socket`); mypy `explicit_package_bases = true` + `mypy_path` 9개 `src`; 테스트 헬퍼는 네임스페이스 경로 import; 공용 fixture 는 `tests/support/`(`pyproject.toml`, P1-2a) | — | 2.16, R-6 |
 | D-19 | OpenAI-호환 어댑터는 `reasoning` 을 `text` 에서 분리하고 `AETHER_MODEL_THINKING`(기본 `false`)으로 서버 옵션을 보냅니다. `reasoning` 은 로그·span·이벤트에 넣지 않습니다 | — | 2.5, C-8 |
 
 승인과 함께 다음을 같은 커밋에서 합니다: [../intents/0002-phase-1-agent-runtime.md](../intents/0002-phase-1-agent-runtime.md) 의 Open Questions 1 ~ 8 을 닫음(7 은 "측정 정의 닫힘, 값은 P1-9"); [../intents/intent.md](../intents/intent.md) 머리 표 갱신; spec 0001 에 **개정 12 [실질]**(D-7 → 11개, 근거 D-15) 과 **개정 13 [편집]**(2.3 스트림 문장 → 2.18 의 표, C-6 은 2.12 로 닫힘) 행; [../intents/mvp-backlog.md](../intents/mvp-backlog.md) P1-1 완료 판정 문구를 [편집] 로 고침 — `aether_runtime.domain` 만 허용, P1-5 산출물에 `docs/api.md`([../docs/README.md](../docs/README.md) 가 Phase 1 에 약속) 추가.
@@ -431,9 +434,9 @@ Control Plane 은 `requested` 에 쓰고 `status` 와 events 를 **읽습니다*
 | R-2 | P1-2, P1-4, P1-5 | `api-integration`: PG + Redis testcontainers, worker 스레드, fake 모델 → `succeeded` / `cancelled`. `smoke` |
 | R-3 | P1-6 | `api-integration`: 이벤트 순서 == 전이 순서, 단절 뒤 `wait_until` 로 `succeeded` |
 | R-4 | P1-7 | `api-unit`(`packages/runtime/tests`): `FakeClock` 타임아웃·재시도 |
-| R-5 | P1-8 | `api-unit`: 인메모리 `Tracer`. `smoke`: `.harness/otel/spans.jsonl` 에서 `trace_id` |
-| R-6 | P1-3 | `api-unit`(`--disable-socket`): 두 어댑터 계약 테스트(`httpx.MockTransport`) |
-| R-7 | P1-3, P1-5 | `api-arch` + `tests/arch/test_real_importlinter_fires.py`(실제 `.importlinter`, 위반 주입) |
+| R-5 | P1-4, P1-8 | `api-unit`: 인메모리 `Tracer`. `smoke`: `infra/docker/out/otel-smoke/spans.jsonl` 에서 `trace_id` |
+| R-6 | P1-2a, P1-3 | `api-unit`(`addopts` 소켓 차단, loopback 만 허용): 두 어댑터 계약 테스트(`httpx.MockTransport`) |
+| R-7 | P1-1 (+H-4) | `api-arch` + `tests/arch/test_real_importlinter_fires.py`(실제 `.importlinter`, `src` 복사 + `PYTHONPATH`, 위반 주입) |
 | R-8 | P1-1, P1-5, P1-6 | `api-unit`: `app.routes` 순회 401 |
 | R-9 | P1-9 | `.harness/verify.json`: `smoke` pass, 합계 ≤ 600,000 ms, `smoke` ≤ 240,000 ms |
 | R-10 | P1-9 | `scripts/smoke.sh --bench` → `.harness/smoke-bench.json` → 사람이 evaluation/README 에 값 |
