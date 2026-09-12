@@ -134,8 +134,20 @@ INSERT 성공)과 상충하지 않으려면 `NOT NULL` 로 두고 삽입 시 기
 | `state` | `jsonb` | `NOT NULL` — `RunState` 스냅숏(메시지 목록, 단계 번호, `Task` 목록, 마지막 이벤트 `seq`). 형태는 `packages/runtime` 의 `domain/run.py` 가 소유 |
 | `updated_at` | `timestamptz` | `NOT NULL`, 기본값 `now()` |
 
+`state` 의 형태(`aether_runtime.domain.run.RunState`, P1-2b — 이 표는 요약이고 정본은 그 pydantic 모델):
+
+| 필드 | 타입 | 뜻 |
+| --- | --- | --- |
+| `run_id` | uuid(문자열) | `data.run_states.run_id` 와 같음 |
+| `messages` | `[{role, content, tool_call_id?}]` | `role` ∈ system / user / assistant / tool. `tool_call_id` 는 tool 메시지에만 |
+| `step` | int ≥ 0 | 진행한 단계 수 |
+| `tasks` | `[{task_id, step, tool_calls: [{id, name, arguments}]}]` | 단계마다 하나(spec 0002 D-5) |
+| `last_seq` | int ≥ 0 | 마지막으로 발행한 이벤트 `seq`(spec 0002 2.7). 재개 시 그 다음부터 발행 |
+| `status` | `RunStatus` 값 | 스냅숏 안의 상태 표시 — 정본은 `data.run_executions.status` |
+
 마이그레이션 0002(P1-2a)가 만들었습니다. worker 가 단계마다 저장하고, 죽었다 살아난 worker 가 여기서
-이어갑니다(spec 0002 2.4 재개). 접근 역할은 `aether_data` 만 전부 — `aether_control` 은 여전히 `data`
+이어갑니다(spec 0002 2.4 재개). lease(`data.run_executions.lease_owner`·`lease_until`)의 판정은 어댑터의
+조건부 UPDATE 한 문장(`lease_until IS NULL OR lease_until < now()`)이며 DB 시계만 씁니다(P1-2b). 접근 역할은 `aether_data` 만 전부 — `aether_control` 은 여전히 `data`
 스키마에 권한이 없습니다(spec 0001 R-7 불변, `apps/api/tests/test_plane_roles.py` 의
 `test_control_role_cannot_select_data_run_states`).
 
