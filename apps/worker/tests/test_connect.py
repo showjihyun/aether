@@ -14,14 +14,15 @@ Streams 가 List 와 달리 at-least-once 를 보장하는 방법입니다(spec 
 from __future__ import annotations
 
 import threading
-import time
-from collections.abc import Callable, Iterator
+from collections.abc import Iterator
 
 import pytest
 from aether_worker.main import serve
 from aether_worker.settings import Settings
 from redis import Redis
 from testcontainers.community.redis import RedisContainer
+
+from tests.support.waiting import wait_until
 
 pytestmark = pytest.mark.integration
 
@@ -43,15 +44,6 @@ def _settings_for(container: RedisContainer) -> Settings:
         worker_connect_base_delay=0.1,
         worker_connect_max_delay=0.5,
     )
-
-
-def _wait_until(predicate: Callable[[], bool], timeout: float = _STOP_JOIN_TIMEOUT) -> bool:
-    deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        if predicate():
-            return True
-        time.sleep(0.05)
-    return False
 
 
 def test_serve_becomes_ready_and_creates_the_consumer_group(
@@ -105,13 +97,15 @@ def test_serve_consumes_but_does_not_ack_a_queued_message(
     )
     thread.start()
     try:
-        group_ready = _wait_until(lambda: bool(probe.exists(settings.worker_stream)))
+        group_ready = wait_until(
+            lambda: bool(probe.exists(settings.worker_stream)), timeout=_STOP_JOIN_TIMEOUT
+        )
         assert group_ready, "worker 가 5초 안에 스트림/group 을 만들지 않았습니다"
 
         probe.xadd(settings.worker_stream, {"run_id": "r1", "agent_version_id": "a1"})
 
         # block_ms=1000 짜리 XREADGROUP 이 최소 한 번은 이 메시지를 읽을 시간을 줍니다.
-        delivered = _wait_until(
+        delivered = wait_until(
             lambda: probe.xpending(settings.worker_stream, settings.worker_group)["pending"] > 0,
             timeout=3.0,
         )

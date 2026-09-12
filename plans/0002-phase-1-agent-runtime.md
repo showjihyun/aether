@@ -9,7 +9,7 @@
 | 작성일 | 2026-09-12 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (리뷰 F-1 ~ F-19 반영본. 순서 5 wave·11 단위, 사람 손 두 순간 네 접촉 + Q6 확인에 동의. spec 0002 개정 1 [실질] 도 이 승인으로 확정) |
-| 개정 | — |
+| 개정 | — (실행 중 갱신: P1-2a 순서 2 의 conftest 배치를 실제대로 — 개정으로 세지 않음) |
 
 spec 이 정한 요구사항(R-1 ~ R-16)·결정(D-1 ~ D-19)·계약은 반복하지 않습니다. 이 문서는 열한 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`, Sonnet 5), **M** 주 세션(`docs/`·backlog·spec·plan — implementer 는 `docs/` 를 고칠 수 없습니다), **H** 사람(보호 파일, spec 0001 C-1), **W** 가드가 경고만 내는 파일.
 
@@ -51,7 +51,7 @@ P1-2a·2b 를 P1-1 보다 앞에 둔 것은 의도입니다(backlog 번호 순�
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
 | 1 | 루트 `pyproject.toml` — `[tool.pytest.ini_options] pythonpath = ["."]`, `addopts = "--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1"`(R-6. 단독 `--disable-socket` 은 `TestClient` 의 이벤트 루프가 `socketpair` 를 만들어 9건이 깨집니다 — 확인함); `[tool.mypy] explicit_package_bases = true`, `mypy_path = ["apps/api/src", "apps/worker/src", "packages/runtime/src", …(9개 src)]`(이것이 없으면 src 레이아웃 모듈이 `apps.api.src.aether_api.*` 로 갈라져 `import-untyped` 67건 — 확인함); dev 그룹에 `pytest-socket`. `packages/runtime/pyproject.toml` 에 `pydantic`, `psycopg[binary]`, `redis`. `uv sync --all-packages` → `uv.lock` | A (W) |
-| 2 | 루트 `conftest.py` — `pytest_collection_modifyitems` 로 `integration` 마커 항목에 `enable_socket` 부여(컨테이너 테스트는 실제 소켓). `tests/__init__.py`, `tests/support/__init__.py`, `tests/support/pg.py`(현재 `apps/api/tests/conftest.py` 의 PostgreSQL 세션 fixture — 컨테이너·역할·`alembic upgrade`·세 접속 팩토리 — 를 **옮김**. api conftest 는 `pytest_plugins = ["tests.support.pg"]` 로 재사용), `tests/support/waiting.py`(`wait_until(predicate, timeout, interval)` — `Event.wait` 폴링). 기존 4개 테스트 파일의 `from fakes import …` 를 `from apps.api.tests.fakes import …` 로(네임스페이스 경로. `pythonpath = ["."]` 로 import 가능 — 확인함) | A (W) |
+| 2 | 루트 `conftest.py` — `pytest_collection_modifyitems` 로 `integration` 마커 항목에 `enable_socket` 부여(컨테이너 테스트는 실제 소켓). `tests/__init__.py`, `tests/support/__init__.py`, `tests/support/pg.py`(현재 `apps/api/tests/conftest.py` 의 PostgreSQL 세션 fixture — 컨테이너·역할·`alembic upgrade`·세 접속 팩토리 — 를 **옮김**. 등록은 **루트 `conftest.py`** 의 `pytest_plugins = ["tests.support.pg"]` — pytest 9 는 top-level 이 아닌 conftest 의 `pytest_plugins` 를 거부해 `apps/api/tests/conftest.py` 는 **삭제**(실행 중 확인, spec 개정 3)), `tests/support/waiting.py`(`wait_until(predicate, timeout, interval)` — `Event.wait` 폴링). 기존 4개 테스트 파일의 `from fakes import …` 를 `from apps.api.tests.fakes import …` 로(네임스페이스 경로. `pythonpath = ["."]` 로 import 가능 — 확인함) | A (W) |
 | 3 | **red** — `tests/arch/test_no_sleep_in_tests.py`(R-11. **`ast`** 로 `Call` 노드의 `time.sleep`/`asyncio.sleep`/`sleep` 바인딩 검사 — grep 은 docstring 의 `time.sleep` 에 오탐, `import … as` 에 누락). 지금 2곳이 걸려 red: `apps/api/tests/test_api_key_store_contract.py:123`, `apps/worker/tests/test_connect.py:53`. 실행해 실패 기록 | A |
 | 4 | **green(3)** — `apps/api/tests/fakes.py` 의 `FakeApiKeyStore` 에 `clock` 주입(테스트 파일). PostgreSQL 쪽 "두 번째 revoke 가 `revoked_at` 유지" 는 **프로덕션 무변경**으로: 첫 revoke 뒤 관리자 연결로 `revoked_at = now() - interval '1 hour'` 를 심고 두 번째 revoke 뒤 그 값이 유지됨을 단언(`PostgresApiKeyStore.revoke` 는 SQL `COALESCE(revoked_at, now())` 라 시계 주입이 불가하고, 어댑터 시그니처 변경은 🔒 인증 코드에 닿습니다). `test_connect.py` 는 `Event.wait`. 판정에 "`apps/api/src/aether_api/` 무변경(`git diff --stat`)" | A |
 | 5 | **red** — 기존 `test_migrations.py`(왕복)·`test_plane_roles.py` 에 케이스 추가: `aether_control` 이 `data.run_states` 에 접근하면 permission denied, `control.agents.current_version` 기본 1, `data.run_executions` 에 `lease_owner`·`lease_until` 열. 마이그레이션이 없어 red | A |

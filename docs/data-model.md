@@ -4,8 +4,9 @@
 [../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) 2.8 이 정하고,
 이 문서는 그 표를 열 단위로 확장합니다. 둘이 어긋나면 스키마·역할·GRANT 의 경계는
 spec 2.8 이, 열의 세부(타입·기본값·제약 이름)는 이 문서가 정본입니다. 실체는
-`apps/api/migrations/versions/0001_schemas_and_roles_grants.py` 코드입니다 — 이 문서가
-그 코드와 갈라지면 코드가 이깁니다.
+`apps/api/migrations/versions/0001_schemas_and_roles_grants.py`(Phase 0)와
+`0002_phase1_runs_lease_states.py`(Phase 1, P1-2a) 코드입니다 — 이 문서가 그 코드와
+갈라지면 코드가 이깁니다.
 
 용어(`Agent`, `Agent Version`, `Run`)는 [domain.md](domain.md) 1절이 정의합니다. 여기서는
 그 정의를 저장소로 어떻게 표현하는지만 다룹니다.
@@ -15,7 +16,7 @@ spec 2.8 이, 열의 세부(타입·기본값·제약 이름)는 이 문서가 �
 | 스키마 | 소유(Plane) | 테이블 | 접근 역할과 권한 |
 | --- | --- | --- | --- |
 | `control` | Control Plane(`apps/api`) | `agents`, `agent_versions`, `api_keys`, `runs` | `aether_control`: `USAGE` + 테이블 전부 |
-| `data` | Data Plane(`apps/worker`, `packages/runtime`) | `run_executions` | `aether_data`: `USAGE` + 테이블 전부, 그리고 `control` 스키마 `USAGE` + `control.agent_versions`·`control.runs` **SELECT 만** |
+| `data` | Data Plane(`apps/worker`, `packages/runtime`) | `run_executions`, `run_states` | `aether_data`: `USAGE` + 테이블 전부, 그리고 `control` 스키마 `USAGE` + `control.agent_versions`·`control.runs` **SELECT 만** |
 
 `aether_control` 은 `data` 스키마에 **아무 권한이 없습니다** — `USAGE` 조차 없습니다. `SELECT`
 를 시도하면 relation 이 아니라 스키마 단계에서 `permission denied for schema data` 로
@@ -40,9 +41,10 @@ spec 2.8 이, 열의 세부(타입·기본값·제약 이름)는 이 문서가 �
 | `name` | `text` | `NOT NULL`, `UNIQUE`(`uq_agents_name`) |
 | `created_at` | `timestamptz` | `NOT NULL`, 기본값 `now()` |
 | `updated_at` | `timestamptz` | `NOT NULL`, 기본값 `now()` |
+| `current_version` | `integer` | `NOT NULL`, 기본값 `1` — 마이그레이션 0002. `PUT /agents/{id}` 의 `SELECT … FOR UPDATE` 잠금 대상이자 조회의 정본(spec 0002 D-9) |
 
-`Agent` 는 정의이지 실행이 아닙니다([domain.md](domain.md) 1절). `updated_at` 을 앱이 갱신하는
-로직은 Phase 1 이 만듭니다 — Phase 0 은 열만 확보합니다.
+`Agent` 는 정의이지 실행이 아닙니다([domain.md](domain.md) 1절). `updated_at`·`current_version` 을 앱이
+갱신하는 로직은 P1-1 이 만듭니다.
 
 ### `control.agent_versions`
 
@@ -84,11 +86,19 @@ top-level 존재를 요구합니다(`?` 는 jsonb 최상위 키 존재 연산자
 | `agent_version_id` | `uuid` | `NOT NULL`, FK → `control.agent_versions.id` |
 | `requested_at` | `timestamptz` | `NOT NULL`, 기본값 `now()` |
 | `requested_by` | `uuid` | `NULL` 허용, FK → `control.api_keys.id` |
+| `input` | `text` | `NOT NULL`, 기본값 없음 — 마이그레이션 0002(행이 없는 시점이라 서버 기본값 `''` 을 잠깐 걸고 곧 제거). Run 의 사용자 입력, 선언의 일부 |
+| `status` | `text` | `NOT NULL`, 기본값 `'queued'` — **투영 열**. enum 이 아닙니다: 정본 enum 은 `data` 스키마에 있고 전이 규칙은 `packages/runtime` 이 코드로 소유 |
+| `status_seq` | `integer` | `NULL` 허용 — 마지막으로 적용한 `aether:runs:status` 메시지의 `seq`. 투영 멱등의 근거(spec 0002 D-2) |
+| `started_at` | `timestamptz` | `NULL` 허용(투영) |
+| `finished_at` | `timestamptz` | `NULL` 허용(투영) |
+| `failure_reason` | `text` | `NULL` 허용(투영) |
+| `trace_id` | `text` | `NULL` 허용(투영) |
+| `cancel_requested_at` | `timestamptz` | `NULL` 허용 — 취소의 정본(spec 0002 D-11). worker 가 단계 사이에 읽습니다 |
 
-이 테이블은 **선언**만 합니다 — "이 `Agent Version` 을 실행해 달라" 는 사건의 기록입니다.
-Phase 1(P1-5)이 투영 열(`status`, `finished_at` 등, `data.run_executions` 로부터 복제)을
-더해 `GET /runs/{id}` 가 `control.runs` 만 읽고도 답할 수 있게 합니다. Phase 0 에는 그
-투영 열이 없습니다 — 지금 미리 만들지 않습니다.
+이 테이블은 **선언**과 그 **투영**입니다 — "이 `Agent Version` 을 실행해 달라" 는 사건의 기록에,
+`data.run_executions` 의 상태를 `aether:runs:status` 알림으로 복제한 열이 붙습니다(마이그레이션
+0002, spec 0002 2.4·2.10). `GET /runs/{id}` 는 이 테이블만 읽습니다(spec 0001 D-11). 투영 열을
+**쓰는** 쪽은 api(`aether_control`)뿐이고, worker 는 SELECT 만 합니다(기존 권한).
 
 ### `data.run_executions`
 
@@ -101,6 +111,8 @@ Phase 1(P1-5)이 투영 열(`status`, `finished_at` 등, `data.run_executions` �
 | `finished_at` | `timestamptz` | `NULL` 허용 |
 | `failure_reason` | `text` | `NULL` 허용 |
 | `trace_id` | `text` | `NULL` 허용 |
+| `lease_owner` | `text` | `NULL` 허용 — 마이그레이션 0002. 실행 권한 lease(spec 0002 D-10): 이 Run 을 지금 실행 중인 worker 의 consumer 이름 |
+| `lease_until` | `timestamptz` | `NULL` 허용 — lease 만료 시각. `acquire_lease` 는 `lease_until IS NULL OR lease_until < now()` 인 행만 조건부 UPDATE 로 잡습니다(DB 시계 하나만) |
 
 `status` enum 값: `queued`, `running`, `waiting`, `succeeded`, `failed`, `cancelled`,
 `timed_out`. 전이 규칙(어떤 값에서 어떤 값으로 갈 수 있는가)은 `packages/runtime`(P1-2)이
@@ -113,6 +125,19 @@ Phase 1(P1-5)이 투영 열(`status`, `finished_at` 등, `data.run_executions` �
 INSERT 성공)과 상충하지 않으려면 `NOT NULL` 로 두고 삽입 시 기본값을 강제하는 것보다,
 지금 값이 없다는 사실을 `NULL` 로 정직하게 표현하는 쪽을 택했습니다. Phase 1 에서 실제
 전이 규칙이 정해지면 재검토합니다.
+
+### `data.run_states`
+
+| 열 | 타입 | 제약 |
+| --- | --- | --- |
+| `run_id` | `uuid` | PK, FK → `control.runs.id` |
+| `state` | `jsonb` | `NOT NULL` — `RunState` 스냅숏(메시지 목록, 단계 번호, `Task` 목록, 마지막 이벤트 `seq`). 형태는 `packages/runtime` 의 `domain/run.py` 가 소유 |
+| `updated_at` | `timestamptz` | `NOT NULL`, 기본값 `now()` |
+
+마이그레이션 0002(P1-2a)가 만들었습니다. worker 가 단계마다 저장하고, 죽었다 살아난 worker 가 여기서
+이어갑니다(spec 0002 2.4 재개). 접근 역할은 `aether_data` 만 전부 — `aether_control` 은 여전히 `data`
+스키마에 권한이 없습니다(spec 0001 R-7 불변, `apps/api/tests/test_plane_roles.py` 의
+`test_control_role_cannot_select_data_run_states`).
 
 ## 3. 트리거
 
@@ -132,9 +157,9 @@ On-Prem 배포에서 두 Plane 이 실제로 분리되어 서로 다른 데이�
 애플리케이션과 Run 흐름의 통지(`aether:runs:*` 스트림)가 책임)로 바꿉니다.
 
 D-11(Run 은 Plane 마다 기록이 하나씩)이 이 저장소 설계의 근거이고, 그 덕에 Plane 분리 시
-바꿔야 할 cross-schema 참조가 이 FK **하나뿐**입니다 — `control.agents`, `control.agent_versions`,
-`control.api_keys`, `control.runs` 는 전부 `control` 스키마 안에서만 참조하고, `data.run_executions`
-가 유일하게 스키마 경계를 넘는 FK 를 가진 테이블입니다.
+바꿔야 할 cross-schema 참조는 **둘**뿐입니다 — `data.run_executions.run_id` 와 마이그레이션 0002 가
+더한 `data.run_states.run_id`(둘 다 → `control.runs.id`). `control.agents`, `control.agent_versions`,
+`control.api_keys`, `control.runs` 는 전부 `control` 스키마 안에서만 참조합니다.
 
 ## 5. 접속 문자열과 마이그레이션 실행
 
@@ -142,7 +167,8 @@ D-11(Run 은 Plane 마다 기록이 하나씩)이 이 저장소 설계의 근거
 `postgresql+psycopg://aether:aether@localhost:5432/aether`)이 기본 접속 문자열입니다.
 `apps/api/migrations/env.py` 는 `ALEMBIC_URL` 환경변수가 있으면 그것을 우선하고, 없으면
 `Settings().database_url` 을 씁니다 — testcontainers 통합 테스트는 컨테이너의 동적 포트를
-`ALEMBIC_URL` 로 넘겨 씁니다(`apps/api/tests/conftest.py`).
+`ALEMBIC_URL` 로 넘겨 씁니다(`tests/support/pg.py` — P1-2a 에서 `apps/api/tests/conftest.py` 의
+fixture 를 옮겨 세 앱이 공유. 루트 `conftest.py` 가 `pytest_plugins` 로 등록).
 
 마이그레이션은 관리자 역할로 실행합니다. 관리자 역할과 `aether_control`(api 의 런타임
 역할)은 다릅니다 — 배포·구성은 Control Plane 의 책임이므로 두 스키마의 마이그레이션을

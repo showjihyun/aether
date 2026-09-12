@@ -28,9 +28,10 @@ from aether_api.application.usecases.authenticate import AuthenticateUseCase
 from aether_api.domain.api_key import Principal, Unauthenticated, generate_raw_key
 from aether_api.main import create_app
 from aether_api.settings import Settings
-from fakes import FakeApiKeyStore
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
+
+from apps.api.tests.fakes import FakeApiKeyStore
 
 
 class _FakeAuthenticate:

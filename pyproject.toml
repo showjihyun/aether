@@ -25,6 +25,7 @@ dev = [
     "ruff",
     "mypy",
     "pytest",
+    "pytest-socket",
     "import-linter",
     "testcontainers[postgres,redis]",
     "httpx>=0.28.1",
@@ -41,10 +42,24 @@ select = ["E", "F", "I", "UP", "B"]
 strict = true
 files = ["apps", "packages", "tests"]
 exclude = ["tests/arch/fixtures"]
+explicit_package_bases = true
+mypy_path = [
+    "apps/api/src",
+    "apps/worker/src",
+    "packages/runtime/src",
+    "packages/workflow/src",
+    "packages/context/src",
+    "packages/memory/src",
+    "packages/mcp/src",
+    "packages/policy/src",
+    "packages/evaluation/src",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["apps", "packages", "tests"]
 norecursedirs = ["fixtures", "node_modules", ".venv"]
+pythonpath = ["."]
+addopts = "--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1"
 markers = [
     "integration: 실제 컨테이너가 필요한 테스트",
 ]

@@ -1,9 +1,12 @@
-"""spec R-7, 2.8: `control` / `data` 스키마 권한 분리.
+"""spec 0001 R-7, 2.8: `control` / `data` 스키마 권한 분리.
+spec 0002 2.10: 마이그레이션 0002 가 더하는 `data.run_states` 도 같은 경계를 지킵니다(P1-2a).
 
-- `aether_control` 은 `data` 스키마에 아무 권한이 없습니다(USAGE 도 없음).
+- `aether_control` 은 `data` 스키마에 아무 권한이 없습니다(USAGE 도 없음) — 새 테이블
+  `data.run_states` 도 예외가 아닙니다.
 - `aether_data` 는 `control.agent_versions`·`control.runs` 를 SELECT 만 할 수 있고
   INSERT 는 거부됩니다.
-- `aether_data` 는 `data.run_executions` 에 쓸 수 있습니다(Data Plane 이 실행합니다).
+- `aether_data` 는 `data.run_executions`·`data.run_states` 에 쓸 수 있습니다(Data Plane
+  이 실행합니다).
 """
 
 from __future__ import annotations
@@ -46,8 +49,12 @@ def _insert_agent_version(conn: psycopg.Connection) -> uuid.UUID:
 def _insert_run(conn: psycopg.Connection, agent_version_id: uuid.UUID) -> uuid.UUID:
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO control.runs (agent_version_id) VALUES (%s) RETURNING id",
-            (agent_version_id,),
+            """
+            INSERT INTO control.runs (agent_version_id, input)
+            VALUES (%s, %s)
+            RETURNING id
+            """,
+            (agent_version_id, "test-input"),
         )
         row = cur.fetchone()
         assert row is not None
@@ -125,6 +132,44 @@ def test_data_role_can_insert_run_executions_for_an_admin_declared_run(
             cur.execute(
                 "INSERT INTO data.run_executions (run_id, status) VALUES (%s, %s)",
                 (run_id, "queued"),
+            )
+        data_conn.commit()
+    finally:
+        data_conn.close()
+
+
+def test_control_role_cannot_select_data_run_states(
+    control_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0002 2.10: 새 테이블도 `aether_control` 에는 스키마 단계에서 거부됩니다."""
+    conn = control_connection_factory()
+    try:
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM data.run_states")
+        conn.rollback()
+    finally:
+        conn.close()
+
+
+def test_data_role_can_insert_run_states_for_an_admin_declared_run(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+    data_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0002 2.10: `aether_data` 는 `data.run_states` 에 씁니다(Data Plane 이 상태 영속)."""
+    admin_conn = admin_connection_factory()
+    try:
+        version_id = _insert_agent_version(admin_conn)
+        run_id = _insert_run(admin_conn, version_id)
+    finally:
+        admin_conn.close()
+
+    data_conn = data_connection_factory()
+    try:
+        with data_conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO data.run_states (run_id, state) VALUES (%s, %s)",
+                (run_id, json.dumps({"step": 0})),
             )
         data_conn.commit()
     finally:

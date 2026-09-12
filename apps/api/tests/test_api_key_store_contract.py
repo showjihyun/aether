@@ -10,20 +10,32 @@
 
 from __future__ import annotations
 
-import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import psycopg
 import pytest
 from aether_api.application.ports.outbound.api_keys import ApiKeyStore
 from aether_api.domain.api_key import generate_raw_key, hash_key
-from fakes import FakeApiKeyStore
+
+from apps.api.tests.fakes import FakeApiKeyStore
 
 
 def _unique_hash() -> str:
     return hash_key(generate_raw_key())
+
+
+def _advancing_clock(start: datetime, step: timedelta) -> Callable[[], datetime]:
+    """호출할 때마다 `step` 만큼 전진하는 결정적 시계(spec 0002 R-11) — `sleep` 대체."""
+    state = {"current": start - step}
+
+    def _clock() -> datetime:
+        state["current"] = state["current"] + step
+        return state["current"]
+
+    return _clock
 
 
 @contextmanager
@@ -102,30 +114,72 @@ def test_revoke_sets_revoked_at_and_deactivates(
     assert found.is_active is False
 
 
-@pytest.mark.parametrize("store_kind", _store_kinds())
-def test_second_revoke_keeps_first_revoked_at(
-    store_kind: str, request: pytest.FixtureRequest
-) -> None:
-    """spec 2.9 H-3: `revoke` 는 멱등 — 두 번째 호출은 첫 `revoked_at` 을 유지합니다.
+def test_second_revoke_keeps_first_revoked_at_with_fake_store() -> None:
+    """spec 2.9 H-3, spec 0002 R-11: `revoke` 는 멱등 — 두 번째 호출은 첫 `revoked_at` 유지.
 
-    두 호출 사이에 짧게 잠들어(`time.sleep`) 시계가 반드시 움직이게 합니다 — 그렇지
-    않으면 시계 해상도가 낮은 환경(Windows)에서 "덮어쓰기" 구현도 우연히 같은 값을
-    반환해 이 테스트가 거짓으로 통과할 수 있습니다.
+    `sleep` 대신 주입한 시계를 매 호출마다 전진시킵니다(`_advancing_clock`) — 시계가
+    실제로 움직이는데도 두 번째 `revoked_at` 이 첫 값과 같다면, 구현이 정말로 두 번째
+    호출에서 시계를 다시 읽지 않고 기존 값을 지킨다는 뜻입니다. 시계 해상도에 기대는
+    `time.sleep` 과 달리 결정적입니다.
+    """
+    clock = _advancing_clock(datetime(2026, 1, 1, tzinfo=UTC), timedelta(minutes=1))
+    store = FakeApiKeyStore(clock=clock)
+    key_hash = _unique_hash()
+
+    created = store.create("ci", key_hash)
+    store.revoke(created.id)
+    first_revoked_at = store.find_by_hash(key_hash)
+    assert first_revoked_at is not None
+
+    store.revoke(created.id)
+    second_revoked_at = store.find_by_hash(key_hash)
+
+    assert second_revoked_at is not None
+    assert second_revoked_at.revoked_at == first_revoked_at.revoked_at
+
+
+@pytest.mark.integration
+def test_second_revoke_keeps_first_revoked_at_with_postgres_store(
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 2.9 H-3, spec 0002 R-11: PostgreSQL 케이스의 같은 계약, `sleep` 없이.
+
+    `PostgresApiKeyStore.revoke` 의 SQL(`COALESCE(revoked_at, now())`)은 건드리지
+    않습니다(🔒 인증 어댑터, plan P1-2a). 대신 첫 revoke 뒤 **관리자 접속**으로
+    `revoked_at` 을 한 시간 전으로 되돌려 심고, 두 번째 revoke 뒤에도 그 심은 값이
+    그대로 유지되는지 봅니다 — `COALESCE` 는 이미 값이 있으면 건드리지 않으므로,
+    심은 값과 다르면 멱등이 깨진 것입니다.
     """
     key_hash = _unique_hash()
-    with _make_store(store_kind, request) as store:
+    with _postgres_store(control_connection_factory) as store:
         created = store.create("ci", key_hash)
-
         store.revoke(created.id)
-        first_revoked_at = store.find_by_hash(key_hash)
-        assert first_revoked_at is not None
 
-        time.sleep(0.02)
+        admin_conn = admin_connection_factory()
+        try:
+            with admin_conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE control.api_keys
+                    SET revoked_at = now() - interval '1 hour'
+                    WHERE id = %s
+                    RETURNING revoked_at
+                    """,
+                    (created.id,),
+                )
+                row = cur.fetchone()
+                assert row is not None
+                seeded_revoked_at = row[0]
+            admin_conn.commit()
+        finally:
+            admin_conn.close()
+
         store.revoke(created.id)
         second_revoked_at = store.find_by_hash(key_hash)
 
     assert second_revoked_at is not None
-    assert second_revoked_at.revoked_at == first_revoked_at.revoked_at
+    assert second_revoked_at.revoked_at == seeded_revoked_at
 
 
 @pytest.mark.parametrize("store_kind", _store_kinds())

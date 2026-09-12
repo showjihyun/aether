@@ -12,7 +12,8 @@ from uuid import uuid4
 import pytest
 from aether_api.application.usecases.authenticate import AuthenticateUseCase
 from aether_api.domain.api_key import ApiKey, Unauthenticated, generate_raw_key, hash_key
-from fakes import FakeApiKeyStore
+
+from apps.api.tests.fakes import FakeApiKeyStore
 
 
 def _seed_active_key(store: FakeApiKeyStore, *, raw: str, label: str = "ci") -> ApiKey:
