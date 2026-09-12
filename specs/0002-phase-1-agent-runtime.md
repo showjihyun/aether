@@ -7,7 +7,7 @@
 | 작성일 | 2026-09-12 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
-| 후속 plan | `plans/0002-phase-1-agent-runtime.md` — 다음 단계, 작성 예정 |
+| 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (초안 2026-09-12, 승인 대기) |
 
 intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문서는 intent 의 `Proposed Outcome` 여덟 항목을 판정 가능한 요구사항으로 옮기고, 그것을 만족시키는 경계와 계약을 정하고, intent 의 열린 질문 8건에 답을 제안해 사람이 내릴 결정을 한곳에 모읍니다. 작업 단위는 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P1-1 ~ P1-9 이며, 이 spec 은 그 단위들이 공유하는 결정을 소유합니다. Phase 0 의 결정([0001-phase-0-foundation.md](0001-phase-0-foundation.md) D-1 ~ D-14)은 그대로 유효하고, 이 spec 이 바꾸는 것은 D-7 하나(2.11, D-15)뿐입니다. 2.3 의 스트림 문장은 [편집] 으로 사실에 맞춥니다(4절 끝).
 
