@@ -7,6 +7,7 @@ dependencies = [
     "pydantic",
     "psycopg[binary]",
     "redis",
+    "httpx",
 ]
 
 [build-system]
