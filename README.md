@@ -43,6 +43,23 @@ docker compose -f infra/docker/compose.yaml exec api aether-api keys create --la
 원문 키는 이때 **한 번만** stdout 에 출력됩니다 — 다시 조회할 방법이 없으니 그 자리에서
 저장하십시오. 환경변수나 `.env` 로 키를 주입하는 부트스트랩은 없습니다.
 
+## 실제 모델로 돌리기
+
+기본은 `AETHER_MODEL_ADAPTER=fake` — 판정(verify·smoke)은 언제나 이 어댑터로, 네트워크
+없이 갑니다(spec 0002 R-6, C-7). 로컬 LLM 서버로 직접 돌려 보려면:
+
+```bash
+docker compose -f infra/docker/compose.yaml --profile llm up -d llm
+docker compose -f infra/docker/compose.yaml exec llm ollama pull qwen3.8:27b
+```
+
+그다음 `infra/docker/.env` 에서 `AETHER_MODEL_ADAPTER=openai_compatible` 로 바꾸고
+worker 를 재기동합니다. 기본 테스트 모델(Qwen3.8 27B 양자화, 태그 `qwen3.8:27b`)은
+VRAM 약 18 GB 이상이 필요합니다(추정) — 없는 머신은 fake 어댑터만 씁니다.
+
+판정(verify·smoke)은 fake 어댑터로만 갑니다 — 실제 모델은 사람의 수동 확인입니다.
+`AETHER_MODEL_ID` 의 Ollama 태그가 실재하는지는 사람이 P1-3 PR 리뷰에서 확인합니다.
+
 ## 검증
 
 ```bash
