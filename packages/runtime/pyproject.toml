@@ -3,7 +3,11 @@ name = "aether-runtime"
 version = "0.0.0"
 description = ""
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "pydantic",
+    "psycopg[binary]",
+    "redis",
+]
 
 [build-system]
 requires = ["hatchling"]

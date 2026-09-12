@@ -1,4 +1,4 @@
-"""`integration` 마커 통합 테스트 공통 fixture (spec 2.8, R-7, R-8).
+"""`integration` 마커 통합 테스트 공통 PostgreSQL fixture (spec 0001 2.8, R-7, R-8. spec 0002 2.16).
 
 세션당 PostgreSQL 컨테이너 하나(testcontainers)를 띄우고, 관리자 역할로
 `aether_control`·`aether_data` 두 역할을 만든 뒤(`infra/docker/postgres/init/01-roles.sh`
@@ -6,8 +6,13 @@
 관리자·`aether_control`·`aether_data` 세 접속 팩토리를 테스트에 건넵니다.
 
 역할은 클러스터 수준이라 마이그레이션이 만들 수 없고, 초기화 스크립트가 만듭니다
-(spec 2.8). 이 conftest 는 그 스크립트가 없는 testcontainers 환경에서 같은 일을
+(spec 2.8). 이 fixture 모듈은 그 스크립트가 없는 testcontainers 환경에서 같은 일을
 Python 으로 합니다.
+
+원래 `apps/api/tests/conftest.py` 에 있던 fixture 전부를 여기로 옮겼습니다(spec 0002
+P1-2a) — `apps/api`·`apps/worker`·`packages/runtime` 의 테스트가 같은 컨테이너·역할·
+마이그레이션 fixture 를 `pytest_plugins = ["tests.support.pg"]` 한 줄로 공유하기
+위해서입니다. fixture 이름은 그대로라 이 모듈을 쓰던 기존 테스트는 바뀌지 않습니다.
 """
 
 from __future__ import annotations
@@ -23,7 +28,8 @@ from alembic.config import Config
 from psycopg import sql
 from testcontainers.community.postgres import PostgresContainer
 
-MIGRATIONS_DIR = Path(__file__).resolve().parents[1] / "migrations"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+MIGRATIONS_DIR = REPO_ROOT / "apps" / "api" / "migrations"
 
 _ADMIN_USER = "aether_admin"
 _ADMIN_PASSWORD = "aether_admin_pw"

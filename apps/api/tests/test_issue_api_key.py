@@ -12,7 +12,8 @@ from collections.abc import Callable
 import pytest
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.domain.api_key import hash_key, is_well_formed
-from fakes import FakeApiKeyStore
+
+from apps.api.tests.fakes import FakeApiKeyStore
 
 
 def _fixed_rand(byte: bytes) -> Callable[[int], bytes]:
