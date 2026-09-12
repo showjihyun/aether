@@ -7,8 +7,8 @@
 | 근거 intent | [../intents/0002-phase-1-agent-runtime.md](../intents/0002-phase-1-agent-runtime.md) |
 | 작업 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) P1-1 ~ P1-9 (P1-2 → 2a·2b, P1-5 → 5a·5b 로 분할) |
 | 작성일 | 2026-09-12 |
-| 상태 | 초안 (리뷰 F-1 ~ F-19 반영본. 승인 전 수정은 개정으로 세지 않습니다) |
-| 승인 | (비어 있음 — 순서와 사람 손의 횟수에 동의하는 것이 승인입니다) |
+| 상태 | 승인됨 |
+| 승인 | showjihyun, 2026-09-12 (리뷰 F-1 ~ F-19 반영본. 순서 5 wave·11 단위, 사람 손 두 순간 네 접촉 + Q6 확인에 동의. spec 0002 개정 1 [실질] 도 이 승인으로 확정) |
 | 개정 | — |
 
 spec 이 정한 요구사항(R-1 ~ R-16)·결정(D-1 ~ D-19)·계약은 반복하지 않습니다. 이 문서는 열한 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`, Sonnet 5), **M** 주 세션(`docs/`·backlog·spec·plan — implementer 는 `docs/` 를 고칠 수 없습니다), **H** 사람(보호 파일, spec 0001 C-1), **W** 가드가 경고만 내는 파일.

@@ -23,8 +23,8 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 | --- | --- | --- | --- | --- |
 | 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0002 승인됨 2026-09-12. 0001 완료 |
 | 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0002 승인됨 2026-09-12 (D-1 ~ D-19). 0001 승인됨 2026-09-09 |
-| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | **0002 초안, 승인 대기**([../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md)). 0001 승인됨 2026-09-09 |
-| 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **완료.** P0-1 ~ P0-9 전부 `verify.sh` 16단계 통과 + PR 병합(마지막 PR #10, 2026-09-11). 0002 의 구현은 spec·plan 승인 뒤 |
+| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 0002 승인됨 2026-09-12([../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md)). 0001 승인됨 2026-09-09 |
+| 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **0002 — 다음 단계입니다.** P1-2a 부터, 순서는 plan 0002 1절(11 단위, 5 wave). 0001 은 완료(P0-1 ~ P0-9, 마지막 PR #10, 2026-09-11) |
 
 `specs/` 와 `plans/` 는 각각 0001 의 첫 산출물이 나오면서 생겼습니다. 빈 디렉터리를 미리 만들지 않은 것은 의도였습니다 — 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
 
