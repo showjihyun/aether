@@ -7,7 +7,7 @@
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 1 (Week 3~5) — 원본 로드맵 6장 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 |
-| 후속 spec | [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (초안 2026-09-12, 승인 대기) |
+| 후속 spec | [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 P1-1 ~ P1-9 가 소유합니다. 이 문서는 그 아홉 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
 
@@ -87,16 +87,16 @@ Phase 1 이 끝났을 때 다음이 관측 가능합니다. 각 항목은 backlo
 
 | # | 질문 | 누가 답하는가 | 언제까지 |
 | --- | --- | --- | --- |
-| 1 | **Q6** 로컬 LLM 서버의 기본 후보. OpenAI-호환 API 를 내면 어댑터는 같으므로 후보(Ollama, vLLM, llama.cpp server 등)만 여기 두고 채택은 spec 에서. **모델은 답함(2026-09-12, showjihyun): 로컬 LLM 경로의 기본 테스트 모델은 Qwen3.8 27B 양자화.** 단위 테스트·CI 는 fake 어댑터(네트워크 0) 그대로. 남은 것: 그 모델을 내는 서버, 정확한 모델 태그와 양자화 형식, 필요한 자원(VRAM) | 사람(모델, 답함) · spec(서버·태그) | spec 0002 승인 |
-| 2 | `control.runs` 의 투영 열(`status`, `finished_at`, spec 0001 2.8·D-11)을 **누가** `aether:runs:status` 에서 갱신하는가 — api 프로세스 안의 소비자인가 별도 프로세스인가, 소비 실패·중복 전달 시 재처리는 어떻게 하는가 | spec 작성자 → 사람 승인 | spec 0002 |
-| 3 | `agent_versions.definition` 의 내용과 `schema_version` 규칙 — 시스템 프롬프트, 모델 id, 도구 목록, 재시도·타임아웃 정책이 여기 들어가는가 | spec 작성자 → 사람 승인 | spec 0002 |
-| 4 | SSE 이벤트 스키마와 이벤트 id 의 의미(P1-6 은 재접속 이어보기를 범위 밖으로 두되 id 는 남깁니다) | spec 작성자 | spec 0002 |
-| 5 | P1-4 의 프로세스 내부 도구 인터페이스를 지금부터 MCP tool 스키마(JSON Schema 인자)와 같은 모양으로 두어 Phase 2 가 전송 계층만 바꾸게 할 것인가 | spec 작성자 → 사람 승인 | spec 0002 |
-| 6 | compose 의 collector 이미지와, CI 의 `smoke` 가 collector 까지 띄우는가(예산) | spec 작성자 | spec 0002 |
-| 7 | `{{성능_기준}}` 의 측정 정의(Run 생성 응답 P95, 환경, 표본 수). 값 자체는 P1-9 에서 사람이 고정 | 사람 | P1-9 |
-| 8 | `smoke` 를 verify 에 어떻게 넣는가. spec 0001 D-7 의 제품 단계 상한 10개가 이미 찼으므로 — 기존 단계(예: `api-integration`)에 compose 시나리오로 접는가, 상한을 재해석하는가(EI-2 상 사람 결정, 후보 기록) | 사람 | spec 0002 |
+| 1 | **Q6** 로컬 LLM 서버의 기본 후보. OpenAI-호환 API 를 내면 어댑터는 같으므로 후보(Ollama, vLLM, llama.cpp server 등)만 여기 두고 채택은 spec 에서. **모델은 답함(2026-09-12, showjihyun): 로컬 LLM 경로의 기본 테스트 모델은 Qwen3.8 27B 양자화.** 단위 테스트·CI 는 fake 어댑터(네트워크 0) 그대로. 남은 것: 그 모델을 내는 서버, 정확한 모델 태그와 양자화 형식, 필요한 자원(VRAM) | 사람(모델) · spec(서버·태그) | **닫힘** 2026-09-12 · 답: **Ollama**, 태그 `qwen3.8:27b`(실재 확인), 판정은 fake (spec 0002 D-1) |
+| 2 | `control.runs` 의 투영 열(`status`, `finished_at`, spec 0001 2.8·D-11)을 **누가** `aether:runs:status` 에서 갱신하는가 — api 프로세스 안의 소비자인가 별도 프로세스인가, 소비 실패·중복 전달 시 재처리는 어떻게 하는가 | spec 작성자 → 사람 승인 | **닫힘** 2026-09-12 · 답: api 프로세스 안의 소비자, `seq` 단조 증가로 멱등, 커밋 뒤 ack (D-2) |
+| 3 | `agent_versions.definition` 의 내용과 `schema_version` 규칙 — 시스템 프롬프트, 모델 id, 도구 목록, 재시도·타임아웃 정책이 여기 들어가는가 | spec 작성자 → 사람 승인 | **닫힘** 2026-09-12 · 답: 전부 들어감 — `AgentDefinition` v1, 도구 이름은 `BUILTIN_TOOL_NAMES` 로 검증, 어댑터 종류·thinking 은 배포 설정 (D-3) |
+| 4 | SSE 이벤트 스키마와 이벤트 id 의 의미(P1-6 은 재접속 이어보기를 범위 밖으로 두되 id 는 남깁니다) | spec 작성자 | **닫힘** 2026-09-12 · 답: 봉투 `v/run_id/seq/at/type/payload`, 8종, Run 별 Redis Stream explicit ID `<seq>-0`, `events.schema.json` (D-4) |
+| 5 | P1-4 의 프로세스 내부 도구 인터페이스를 지금부터 MCP tool 스키마(JSON Schema 인자)와 같은 모양으로 두어 Phase 2 가 전송 계층만 바꾸게 할 것인가 | spec 작성자 → 사람 승인 | **닫힘** 2026-09-12 · 답: 예 — MCP tool 모양 (D-5) |
+| 6 | compose 의 collector 이미지와, CI 의 `smoke` 가 collector 까지 띄우는가(예산) | spec 작성자 | **닫힘** 2026-09-12 · 답: `otel-collector` 기본 서비스, `debug` + `file`(host bind mount), smoke 가 띄움 (D-7) |
+| 7 | `{{성능_기준}}` 의 측정 정의(Run 생성 응답 P95, 환경, 표본 수). 값 자체는 P1-9 에서 사람이 고정 | 사람 | **닫힘** 2026-09-12 · 측정 정의는 답함(P95, 순차 200회, 워밍업 20 제외, 환경 이름 — D-8). **값은 P1-9 에서 사람** |
+| 8 | `smoke` 를 verify 에 어떻게 넣는가. spec 0001 D-7 의 제품 단계 상한 10개가 이미 찼으므로 — 기존 단계(예: `api-integration`)에 compose 시나리오로 접는가, 상한을 재해석하는가(EI-2 상 사람 결정, 후보 기록) | 사람 | **닫힘** 2026-09-12 · 답: 별도 11번째 단계, spec 0001 D-7 [실질] 개정, 회귀 조건 숫자 (D-15) |
 
-Q6 은 backlog 가 P1-3 에 미리 열어 둔 게이트이고, 나머지는 이 intent 를 쓰며 드러난 것입니다. 전부 spec 0002 에서 답하거나 P1-9 로 이월되며, 답 없이 구현을 시작하는 단위는 없습니다.
+여덟 질문 전부 2026-09-12 spec 0002 승인으로 닫혔습니다(7 은 측정 정의만 — 값은 P1-9 에서 사람이 고정). 답의 근거는 spec 0002 4절이 소유합니다.
 
 ## Non-goals
 

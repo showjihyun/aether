@@ -57,7 +57,7 @@ intent 와 spec 은 짝으로 커밋합니다. 요구사항과 그때의 결정�
 | 번호 | 제목 | 근거 intent | 상태 |
 | --- | --- | --- | --- |
 | [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [intents/0001](../intents/0001-phase-0-foundation.md) | 승인됨 |
-| [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [intents/0002](../intents/0002-phase-1-agent-runtime.md) | 초안 (2026-09-12) |
+| [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [intents/0002](../intents/0002-phase-1-agent-runtime.md) | 승인됨 (2026-09-12) |
 
 ## 관련 문서
 

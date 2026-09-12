@@ -166,7 +166,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08 · **완료 202
 
 ## Phase 1 — Agent Runtime
 
-Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). 기간: Week 3~5.
+Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12 — 결정 D-1 ~ D-19 가 아홉 단위의 공통 결정). 기간: Week 3~5.
 
 **Phase 완료 판정** — `POST /agents` 로 만든 Agent 를 `POST /agents/{id}/run` 으로 실행하면 worker 가 Model → Tool → Observation → Model 루프를 돌아 `GET /runs/{id}` 가 최종 상태를 답하고, 이벤트가 스트리밍되며, 취소·타임아웃·재시도가 상태에 반영되고, 모든 과정이 트레이스로 남습니다. 인터넷 없이 됩니다.
 
@@ -188,7 +188,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). 기간: We
 | --- | --- |
 | 범위 | `POST /agents`, `GET /agents`, `GET /agents/{id}`. 생성 시 `Agent Version` 1이 함께 생김. 수정은 새 Version 을 만들고 이전 Version 은 불변 |
 | 범위 밖 | 실행. 도구 바인딩(P2-6). 삭제(soft/hard 는 Control Plane 정책이 정해진 뒤) |
-| 완료 판정 | 계약(OpenAPI)이 먼저 커밋되고 구현이 그것을 만족. `apps/api` 가 `packages/runtime` 의 내부 모듈을 import 하지 않음(`arch-test` 통과). 테스트: 생성 → 조회 → 수정 후 Version 2건 |
+| 완료 판정 | 계약(OpenAPI)이 먼저 커밋되고 구현이 그것을 만족. `apps/api` 가 `packages/runtime` 의 `domain` 만 import 하고 `application`·`adapters` 는 import 하지 않음(spec 0002 D-13, `api-arch` 통과 — 2026-09-12 [편집]). 테스트: 생성 → 조회 → 수정 후 Version 2건 |
 | 걸리는 규칙 | DP-1, AR-2. `Agent` 와 `Agent Version` 과 `Run` 을 혼용하지 않습니다 |
 | 열리는 것 | 평가 세트 REP-1, REP-5 가 실행 가능해집니다 |
 
@@ -224,7 +224,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). 기간: We
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `POST /agents/{id}/run` → Run 을 `queued` 로 만들고 큐에 넣고 id 반환. worker 가 집어 P1-4 루프 실행. `GET /runs/{id}`, `POST /runs/{id}/cancel` |
+| 범위 | `POST /agents/{id}/run` → Run 을 `queued` 로 만들고 큐에 넣고 id 반환. worker 가 집어 P1-4 루프 실행. `GET /runs/{id}`, `POST /runs/{id}/cancel`. `docs/api.md`([../docs/README.md](../docs/README.md) 가 Phase 1 에 약속한 계약 문서) 는 이 단위의 산출물 |
 | 범위 밖 | 스트리밍(P1-6), 재시도·타임아웃(P1-7) |
 | 완료 판정 | compose 환경에서 실제로 Run 이 `succeeded` 까지 감. `cancel` 후 `GET` 이 `cancelled`. api 가 worker 의 코드를 import 하지 않고 큐로만 선언(AR-7) |
 | 걸리는 규칙 | **AR-7.** Control Plane 은 선언만 합니다 |
