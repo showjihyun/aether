@@ -11,6 +11,8 @@
 | 개정 1 | [실질] 2026-09-09. [../docs/architecture.md](../docs/architecture.md) 3.1 에 AR-8 ~ AR-11(패키지 안의 의존 방향: 클린·헥사고날)이 신설되어 2.1 패키지 뼈대, 2.2 테스트 배치, 2.10 계약 매핑, R-3, D-13 을 확장. showjihyun 지시로 승인. (승인 전 리뷰 반영은 개정으로 세지 않았습니다) |
 | 개정 2 | [실질] 2026-09-09. 포트·어댑터를 1급 개념으로 — 포트를 inbound/outbound 로 나누고 유스케이스를 `application/usecases` 로 분리, **AR-12**(어댑터는 포트로만) 신설. 2.1, 2.2, 2.9, 2.10, R-3, D-13 갱신. showjihyun 지시로 승인 |
 | 개정 3 | [편집] 2026-09-09. plan 리뷰 반영 — `.dockerignore` 는 빌드 컨텍스트인 **저장소 루트**(2.1·2.7·R-6), `web-arch` 는 **루트에서** `pnpm exec depcruise apps/web …`(2.2·2.11; 패키지 안에서 돌리면 경로 규칙이 발화하지 않음), `web-typecheck` 의 드리프트 검사에 `HEAD` 와 미추적 확인(2.11). 단계 수 10 불변. showjihyun 지시로 승인 |
+| 개정 13 | [편집] 2026-09-12. 2.3 의 "Control Plane 은 `requested` 에 쓰기만" 을 사실에 맞춤 — Phase 1 부터 Control 은 `status` 와 Run 이벤트 스트림을 **읽습니다**(spec 0002 2.18). 방향(선언은 Control, 실행은 Data)은 그대로. C-6 은 spec 0002 2.12(AR-5 에 `httpx` 금지)로 닫힘 |
+| 개정 12 | [실질] 2026-09-12. **D-7 개정** — 제품 검증 단계 상한을 10개에서 **11개(총 17)** 로. `smoke` 가 11번째(`behavior` 계층). 근거와 회귀 조건(`smoke` ≤ 4분, CI ≤ 8분)은 spec 0002 D-15·2.11. showjihyun 의 spec 0002 승인이 이 개정의 승인 |
 | 개정 11 | [실질] 2026-09-11. H-3 설계 검토(showjihyun 승인) — 2.9 범위 행에 OpenAPI 문서 경로 제외 명시, 2.9 에 검토 결과 8항 추가(실패 사유 로깅 위치, revoke 멱등·`KeyError`, 호출마다 연결, `create_app` 의 `authenticate` 주입과 `app.state`, CLI stdout 원문만·`Settings.psycopg_dsn`, 키 길이 고정, 스킴 대소문자, constant-time 확인 방식) |
 | 개정 10 | [편집] 2026-09-11. R-11 실측 기록 — 로컬 verify 16단계 104.0초(Windows, Docker Desktop), CI `verify` job 1분 33초(도구 설치 포함). D-12 예산 10분의 1/5. 2.11 에 기록 |
 | 개정 9 | [편집] 2026-09-11. 2.11 `web-typecheck` 의 미추적 확인을 `test -z "$(…)"` 에서 `! git status --porcelain … \| grep -q .` 로 — `harness.config` 배열 원소(큰따옴표) 안에서는 큰따옴표를 못 쓰고 작은따옴표는 `$(…)` 를 확장하지 않아 단계가 항상 실패했음(P0-7 후보 검토에서 `bash -c` 실행으로 확인) |
@@ -123,7 +125,7 @@ DP-1 API-first 이므로 계약을 먼저 적습니다. 구현이 아니라 이�
 | `aether:runs:requested` | Control → Data | `run_id`, `agent_version_id` | worker 가 consumer group 을 만들고 대기만 합니다 |
 | `aether:runs:status` | Data → Control | `run_id`, `status`, `at` | 이름만 예약. Phase 1 P1-5 |
 
-이 두 이름이 AR-7 의 코드상 실체입니다. Control Plane 은 `requested` 에 쓰기만 하고, Data Plane 은 `status` 에 쓰기만 합니다. 서로의 코드를 import 하지 않습니다. **메시지는 선언이 아닙니다** — Run 의 내구적 선언은 2.8 의 `control.runs` 행이고, 메시지는 그 행이 있다는 통지입니다. Redis 가 메시지를 잃어도 Run 은 남습니다.
+이 두 이름이 AR-7 의 코드상 실체입니다. Control Plane 은 `requested` 에 쓰고, Data Plane 은 `status` 에 씁니다(Phase 1 부터 Control 은 `status` 와 Run 이벤트 스트림을 읽습니다 — spec 0002 2.18, 개정 13). 서로의 코드를 import 하지 않습니다. **메시지는 선언이 아닙니다** — Run 의 내구적 선언은 2.8 의 `control.runs` 행이고, 메시지는 그 행이 있다는 통지입니다. Redis 가 메시지를 잃어도 Run 은 남습니다.
 
 **설정** — 환경변수만. 접두사 `AETHER_`. `.env.example` 이 전체 키를 개발용 기본값과 함께 나열합니다. 비밀값 자리에는 동작하는 값이 아니라 `<generate>` 를 둡니다.
 
@@ -302,7 +304,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 | C-3 | **R-1 과 R-4 는 같은 명령으로 동시에 만족되지 않습니다.** "명령 하나로 뜬다" 는 첫 실행에서 이미지 pull 을 전제하고, "인터넷 없이" 는 pull 이 이미 끝났음을 전제합니다 | R-1 은 온라인 첫 실행으로, R-4 는 빌드 후 `compose.offline.yaml` 의 `probe` 로 각각 판정합니다. 두 판정을 하나로 합치려고 이미지를 저장소에 넣지 않습니다. 진짜 오프라인 배포는 Phase 11 의 Offline Release Bundle 입니다 |
 | C-4 | **인증(2.9)은 보안에 닿습니다** | 🔒 P0-9. 에이전트는 설계와 테스트 목록까지. 구현은 사람 검토 |
 | C-5 | **`api-integration` 이 Docker 에 의존합니다.** testcontainers 가 이미지를 pull 하므로 verify 자체는 오프라인이 아닙니다 | DP-4 는 "Runtime 이 오프라인" 이지 "verify 가 오프라인" 이 아닙니다. Phase 11 에서 verify 의 오프라인도 확인합니다([../docs/roadmap.md](../docs/roadmap.md) Phase 11 행) |
-| C-6 | **AR-7 은 지금 부분적으로만 표현됩니다.** 코드 경계(import)와 저장소 경계(역할)는 잡히지만, "HTTP 로 Data Plane 을 부르지 않는다" 는 정적 도구가 잡지 못합니다 | Phase 1 에서 api 의 outbound HTTP 를 sdk 경유 하나로 모으고 그 모듈을 AR-7 계약에 넣습니다. 지금은 리뷰 항목 |
+| C-6 | **AR-7 은 지금 부분적으로만 표현됩니다.** 코드 경계(import)와 저장소 경계(역할)는 잡히지만, "HTTP 로 Data Plane 을 부르지 않는다" 는 정적 도구가 잡지 못합니다 | Phase 1 에서 api 의 outbound HTTP 를 sdk 경유 하나로 모으고 그 모듈을 AR-7 계약에 넣습니다. 지금은 리뷰 항목. **닫힘(개정 13)**: Phase 1 의 api 는 outbound HTTP 가 0 이고 `httpx` 자체가 AR-5 로 금지됩니다(spec 0002 2.12) |
 | C-7 | **`packages/evaluation` 과 루트 `evaluation/` 의 이름 충돌** | Python 패키지 이름을 `aether_evaluation` 으로 두고, 루트 `evaluation/` 은 하네스 것임을 [../docs/domain.md](../docs/domain.md) 5절이 소유합니다. 새로 적지 않습니다 |
 | C-8 | **cross-schema FK(`data.run_executions.run_id` → `control.runs.id`)는 한 DB 일 때만 성립합니다.** On-Prem 에서 두 Plane 이 다른 DB 에 놓이면 깨집니다 | Modular Monolith(DP-5) 인 지금은 FK 로 두고, Plane 분리 배포가 실제로 오는 Phase 에서 soft reference 로 바꿉니다. 그 전환이 필요하다는 사실을 `docs/data-model.md` 에 적어 둡니다. D-11 덕에 바꿀 곳이 FK 하나뿐입니다 |
 | C-9 | **AD-1 3.2 의 네 번째 기준이 polyglot 루트에서 부분 충족입니다**(2.14). 번들의 감지가 첫 스택만 채택하는 설계이기 때문입니다 | 번들을 고치지 않습니다([../PROVENANCE.md](../PROVENANCE.md) 1절). 상류 개선 후보로 `improvement-log/` 에 남길 수 있으나 AD-1 단계에서는 log 를 만들지 않으므로(3.3) Phase 4 전후로 미룹니다 |
@@ -319,7 +321,7 @@ intent 의 근거는 [../harness/references/harness-adoption.md](../harness/refe
 | D-4 | 저장소를 **`control` / `data` 스키마와 두 역할로** 가릅니다. `aether_data` 만 `control.agent_versions` 와 `control.runs` 를 읽습니다. 스키마·테이블·GRANT 는 마이그레이션이, 역할은 초기화가 소유합니다 | — | 2.8. AR-7 을 Phase 0 에서 저장소 수준으로 고정 |
 | D-5 | 마이그레이션은 **`apps/api` 소유, Alembic**, compose 의 일회성 `migrate` 서비스로 실행 | — | 2.8 |
 | D-6 | 버전은 **파일로 고정**(`.python-version`, `.nvmrc`, `engines`). Python 3.12+, Node 현재 LTS | — | 2.2 |
-| D-7 | **제품 검증 단계는 정확히 10개, 총 16개.** 상한의 출처는 harness-adoption.md 3.3 "검증 단계를 열 개 넘게 늘리지 않습니다" 이며 두 해석이 가능합니다 — (i) **10개까지 추가**(채택. self-check 6 + 제품 10 = 16), (ii) **총 10개 이하**. 출처의 문맥(AD-1, 0 에서 시작)은 (ii) 쪽에 가깝습니다. **이 spec 의 승인이 (i) 를 확정합니다.** (ii) 라면 제품 단계는 4개로 줄여야 하고 그것은 이 spec 의 재작성입니다. `format-check` 는 `api-lint` 안에 넣고, `smoke`·`e2e`·`load` 는 Phase 1 이후 | — | 2.11, V-4 |
+| D-7 | **제품 검증 단계는 정확히 10개, 총 16개.** 상한의 출처는 harness-adoption.md 3.3 "검증 단계를 열 개 넘게 늘리지 않습니다" 이며 두 해석이 가능합니다 — (i) **10개까지 추가**(채택. self-check 6 + 제품 10 = 16), (ii) **총 10개 이하**. 출처의 문맥(AD-1, 0 에서 시작)은 (ii) 쪽에 가깝습니다. **이 spec 의 승인이 (i) 를 확정합니다.** (ii) 라면 제품 단계는 4개로 줄여야 하고 그것은 이 spec 의 재작성입니다. `format-check` 는 `api-lint` 안에 넣고, `smoke`·`e2e`·`load` 는 Phase 1 이후. **개정 12**: Phase 1 부터 상한 11개(총 17) — `smoke` 가 11번째(spec 0002 D-15) | — | 2.11, V-4 |
 | D-8 | 오프라인은 **`compose.offline.yaml` 오버라이드 + 네트워크 안의 `probe`** 로 판정하고, R-1 과 R-4 를 다른 명령으로 둡니다 | — | C-3, F-2 |
 | D-9 | Python 패키지는 **`aether_<이름>`, `src` 레이아웃** | — | 2.1 |
 | D-10 | 큐는 **Redis Streams**. consumer group 과 ack 가 필요하고 List 에는 둘 다 없습니다 | — | 2.3, F-4 |
