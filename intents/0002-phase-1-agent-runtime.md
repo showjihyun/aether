@@ -5,9 +5,9 @@
 | 번호 | 0002 |
 | 작성일 | 2026-09-12 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 1 (Week 3~5) — 원본 로드맵 6장 |
-| 상태 | 초안 |
-| 승인 | (비어 있음 — 사람이 채우기 전에는 spec 단계로 넘어가지 않습니다) |
-| 후속 spec | (승인 뒤 `specs/0002-phase-1-agent-runtime.md`) |
+| 상태 | 승인됨 |
+| 승인 | showjihyun, 2026-09-12 |
+| 후속 spec | `specs/0002-phase-1-agent-runtime.md` — 다음 단계, 작성 예정 |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 P1-1 ~ P1-9 가 소유합니다. 이 문서는 그 아홉 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
 
@@ -87,7 +87,7 @@ Phase 1 이 끝났을 때 다음이 관측 가능합니다. 각 항목은 backlo
 
 | # | 질문 | 누가 답하는가 | 언제까지 |
 | --- | --- | --- | --- |
-| 1 | **Q6** 로컬 LLM 서버의 기본 후보. OpenAI-호환 API 를 내면 어댑터는 같으므로 후보(Ollama, vLLM, llama.cpp server 등)만 여기 두고 채택은 spec 에서 | 사람 | spec 0002 승인 |
+| 1 | **Q6** 로컬 LLM 서버의 기본 후보. OpenAI-호환 API 를 내면 어댑터는 같으므로 후보(Ollama, vLLM, llama.cpp server 등)만 여기 두고 채택은 spec 에서. **모델은 답함(2026-09-12, showjihyun): 로컬 LLM 경로의 기본 테스트 모델은 Qwen3.8 27B 양자화.** 단위 테스트·CI 는 fake 어댑터(네트워크 0) 그대로. 남은 것: 그 모델을 내는 서버, 정확한 모델 태그와 양자화 형식, 필요한 자원(VRAM) | 사람(모델, 답함) · spec(서버·태그) | spec 0002 승인 |
 | 2 | `control.runs` 의 투영 열(`status`, `finished_at`, spec 0001 2.8·D-11)을 **누가** `aether:runs:status` 에서 갱신하는가 — api 프로세스 안의 소비자인가 별도 프로세스인가, 소비 실패·중복 전달 시 재처리는 어떻게 하는가 | spec 작성자 → 사람 승인 | spec 0002 |
 | 3 | `agent_versions.definition` 의 내용과 `schema_version` 규칙 — 시스템 프롬프트, 모델 id, 도구 목록, 재시도·타임아웃 정책이 여기 들어가는가 | spec 작성자 → 사람 승인 | spec 0002 |
 | 4 | SSE 이벤트 스키마와 이벤트 id 의 의미(P1-6 은 재접속 이어보기를 범위 밖으로 두되 id 는 남깁니다) | spec 작성자 | spec 0002 |

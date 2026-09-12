@@ -166,7 +166,7 @@ Intent: [0001](0001-phase-0-foundation.md) (승인됨 2026-09-08 · **완료 202
 
 ## Phase 1 — Agent Runtime
 
-Intent: [0002](0002-phase-1-agent-runtime.md) (초안 2026-09-12, 승인 대기). 기간: Week 3~5.
+Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). 기간: Week 3~5.
 
 **Phase 완료 판정** — `POST /agents` 로 만든 Agent 를 `POST /agents/{id}/run` 으로 실행하면 worker 가 Model → Tool → Observation → Model 루프를 돌아 `GET /runs/{id}` 가 최종 상태를 답하고, 이벤트가 스트리밍되며, 취소·타임아웃·재시도가 상태에 반영되고, 모든 과정이 트레이스로 남습니다. 인터넷 없이 됩니다.
 
@@ -209,7 +209,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (초안 2026-09-12, 승인 대기)
 | 범위 밖 | Model Registry(Phase 6), 벤더별 SDK 다수, 프롬프트 캐싱·비용 집계 |
 | 완료 판정 | 저장소 전체에서 LLM SDK/HTTP 호출이 이 모듈 밖에 없음(P0-6 의 AR-5 규칙 통과). fake 어댑터로 전체 테스트가 네트워크 없이 통과 |
 | 걸리는 규칙 | **AR-5, DP-3.** Model-agnostic 이 여기서 성립합니다 |
-| 게이트 | **Q6** (신규) 로컬 LLM 서버의 기본 후보. 후보 목록만 여기 두고 채택은 spec 에서 — OpenAI-호환 API 를 내는 것이면 어댑터는 같습니다 |
+| 게이트 | **Q6** (신규) 로컬 LLM 서버의 기본 후보. 후보 목록만 여기 두고 채택은 spec 에서 — OpenAI-호환 API 를 내는 것이면 어댑터는 같습니다. **모델은 결정됨(2026-09-12, showjihyun): 로컬 LLM 경로의 기본 테스트 모델은 Qwen3.8 27B 양자화.** 단위 테스트·CI 는 fake 어댑터 그대로. 정확한 모델 태그·양자화 형식·서버는 spec 0002 |
 
 ### P1-4 Planner/Executor 루프
 
