@@ -1,26 +1,26 @@
-"""`serve()` 통합 테스트 — 실제 Redis(testcontainers). Docker 가 필요합니다.
+"""`serve()` 통합 테스트 — 실제 Redis(testcontainers). spec 0002 2.4, 2.14, R-13 (P1-5a).
 
-spec 2.3·2.6 의 Phase 0 계약을 검증합니다: (a) Redis 가 있으면 `ready` 로그 후
-consumer group 이 실재, (b) `stop` 이 set 되면 5초 안에 스레드가 끝나고 반환값 0,
-(c) 스트림에 메시지가 와도 처리하지 않고 ack 하지 않습니다.
-
-(c) 에 대한 참고: `XREADGROUP` 으로 읽힌 메시지는 (NOACK 를 쓰지 않는 한) ack 여부와
-무관하게 consumer group 의 pending entries list(PEL) 에 들어갑니다 — 이것이 Redis
-Streams 가 List 와 달리 at-least-once 를 보장하는 방법입니다(spec 2.3). 그래서
-"ack 하지 않았다" 의 관측 가능한 증거는 pending 이 **0 이 아니라 1** 로 남는
-것입니다: 메시지가 소비는 됐지만(로그) 아직 확인응답되지 않았다는 뜻입니다.
+`handler` 를 주입해 PostgreSQL·모델 게이트웨이 없이 소비 경로만 검증합니다 —
+ready 로그 → consumer group 생성 → 메시지가 handler 에 도달 → `ack=True` 면 pending
+0 → heartbeat 키 존재 → `stop` 뒤 5초 안에 종료. 프로덕션 조립(PostgreSQL·model
+gateway·Redis 이벤트/상태 어댑터)이 실제로 맞물리는지는 `main.py` 단위 테스트가
+아니라 compose 의 수동 확인(plan 0002 P1-5a 순서 5)이 담당합니다 — 여기서
+PostgreSQL 컨테이너까지 띄우면 이 파일의 책임(연결·소비·heartbeat)을 넘어섭니다.
 """
 
 from __future__ import annotations
 
 import threading
-from collections.abc import Iterator
+from uuid import uuid4
 
 import pytest
+from aether_worker.application.ports.inbound.handle_run_requested import (
+    HandleOutcome,
+    RequestedMessage,
+)
 from aether_worker.main import serve
 from aether_worker.settings import Settings
 from redis import Redis
-from testcontainers.community.redis import RedisContainer
 
 from tests.support.waiting import wait_until
 
@@ -29,42 +29,37 @@ pytestmark = pytest.mark.integration
 _STOP_JOIN_TIMEOUT = 5.0
 
 
-@pytest.fixture
-def redis_container() -> Iterator[RedisContainer]:
-    with RedisContainer("redis:7-alpine") as container:
-        yield container
-
-
-def _settings_for(container: RedisContainer) -> Settings:
-    host = container.get_container_host_ip()
-    port = container.get_exposed_port(6379)
+def _settings_for(redis_url: str) -> Settings:
     return Settings(
-        redis_url=f"redis://{host}:{port}/0",
+        redis_url=redis_url,
         worker_connect_max_attempts=5,
         worker_connect_base_delay=0.1,
         worker_connect_max_delay=0.5,
+        worker_consumer=f"test-consumer-{uuid4()}",
+        worker_heartbeat_seconds=1,
     )
 
 
-def test_serve_becomes_ready_and_creates_the_consumer_group(
-    redis_container: RedisContainer,
-) -> None:
-    """준비 완료는 `on_ready` 콜백이 건 `threading.Event` 로 직접 기다립니다.
+class _NeverCalledHandler:
+    """이 테스트가 메시지를 보내지 않으므로 호출되면 안 됩니다."""
 
-    이전에는 `caplog.text` 에 "worker.ready" 가 나타날 때까지 고정 5초를 폴링했는데,
-    integration 스위트 전체를 돌리면(다른 컨테이너들과 자원을 다투며) `serve()` 가
-    5초 안에 그 지점에 도달하지 못해 재현성 있게 실패했습니다(단독 실행은 통과) —
-    캡처된 stdout 에는 "ready" 출력이 있어 실제로는 준비가 됐지만 폴링 데드라인을
-    넘긴 뒤였습니다. `on_ready` 콜백은 폴링이 아니라 준비된 순간 즉시 이벤트를
-    set 하므로 이 경합이 없습니다.
-    """
-    settings = _settings_for(redis_container)
+    def __call__(self, message: RequestedMessage) -> HandleOutcome:
+        raise AssertionError(f"handler should not be called, got {message}")
+
+
+def test_serve_becomes_ready_creates_the_group_and_beats_the_heartbeat(
+    redis_url: str,
+) -> None:
+    """준비 완료는 `on_ready` 콜백이 건 `threading.Event` 로 직접 기다립니다(경합 없음)."""
+    settings = _settings_for(redis_url)
     stop = threading.Event()
     ready = threading.Event()
     outcome: dict[str, int] = {}
 
     def _run() -> None:
-        outcome["code"] = serve(settings, stop=stop, on_ready=ready.set)
+        outcome["code"] = serve(
+            settings, stop=stop, on_ready=ready.set, handler=_NeverCalledHandler()
+        )
 
     thread = threading.Thread(target=_run, name="aether-worker-test")
     thread.start()
@@ -75,6 +70,10 @@ def test_serve_becomes_ready_and_creates_the_consumer_group(
         probe: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
         groups = probe.xinfo_groups(settings.worker_stream)
         assert any(g["name"] == settings.worker_group for g in groups)
+
+        heartbeat_key = f"aether:worker:{settings.worker_consumer}:heartbeat"
+        beat_seen = wait_until(lambda: probe.exists(heartbeat_key) == 1, timeout=5.0)
+        assert beat_seen, "heartbeat 키가 5초 안에 나타나지 않았습니다(spec 2.14, R-13)"
     finally:
         stop.set()
         thread.join(_STOP_JOIN_TIMEOUT)
@@ -83,38 +82,47 @@ def test_serve_becomes_ready_and_creates_the_consumer_group(
     assert outcome["code"] == 0
 
 
-def test_serve_consumes_but_does_not_ack_a_queued_message(
-    redis_container: RedisContainer,
+def test_serve_delivers_a_message_to_the_handler_and_acks_on_success(
+    redis_url: str,
 ) -> None:
-    settings = _settings_for(redis_container)
+    settings = _settings_for(redis_url)
     stop = threading.Event()
+    ready = threading.Event()
+    received: list[RequestedMessage] = []
 
-    probe: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
+    def handler(message: RequestedMessage) -> HandleOutcome:
+        received.append(message)
+        stop.set()
+        return HandleOutcome(ack=True, status=None)
 
     thread = threading.Thread(
-        target=lambda: serve(settings, stop=stop),
+        target=lambda: serve(settings, stop=stop, on_ready=ready.set, handler=handler),
         name="aether-worker-test",
     )
     thread.start()
     try:
-        group_ready = wait_until(
-            lambda: bool(probe.exists(settings.worker_stream)), timeout=_STOP_JOIN_TIMEOUT
-        )
-        assert group_ready, "worker 가 5초 안에 스트림/group 을 만들지 않았습니다"
+        assert ready.wait(timeout=10.0), "ready 콜백이 10초 안에 불리지 않았습니다"
 
-        probe.xadd(settings.worker_stream, {"run_id": "r1", "agent_version_id": "a1"})
-
-        # block_ms=1000 짜리 XREADGROUP 이 최소 한 번은 이 메시지를 읽을 시간을 줍니다.
-        delivered = wait_until(
-            lambda: probe.xpending(settings.worker_stream, settings.worker_group)["pending"] > 0,
-            timeout=3.0,
+        probe: Redis = Redis.from_url(settings.redis_url, decode_responses=True)
+        run_id = uuid4()
+        agent_version_id = uuid4()
+        probe.xadd(
+            settings.worker_stream,
+            {"run_id": str(run_id), "agent_version_id": str(agent_version_id)},
         )
-        assert delivered, "메시지가 3초 안에 소비되지 않았습니다(pending 에 나타나지 않음)"
+
+        delivered = wait_until(lambda: len(received) == 1, timeout=5.0)
+        assert delivered, "메시지가 5초 안에 handler 에 도달하지 않았습니다"
+        assert received[0].run_id == run_id
+        assert received[0].agent_version_id == agent_version_id
+
+        acked = wait_until(
+            lambda: probe.xpending(settings.worker_stream, settings.worker_group)["pending"] == 0,
+            timeout=5.0,
+        )
+        assert acked, "handler 가 ack=True 를 돌려줬는데도 pending 이 남았습니다"
     finally:
         stop.set()
         thread.join(_STOP_JOIN_TIMEOUT)
 
-    assert not thread.is_alive()
-
-    summary = probe.xpending(settings.worker_stream, settings.worker_group)
-    assert summary["pending"] == 1, "읽힌 메시지는 ack 되지 않아 pending 에 1건 남아야 합니다"
+    assert not thread.is_alive(), "stop 이벤트 뒤 5초 안에 스레드가 끝나지 않았습니다"

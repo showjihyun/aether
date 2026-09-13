@@ -9,7 +9,7 @@
 | 작성일 | 2026-09-12 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (리뷰 F-1 ~ F-19 반영본. 순서 5 wave·11 단위, 사람 손 두 순간 네 접촉 + Q6 확인에 동의. spec 0002 개정 1 [실질] 도 이 승인으로 확정) |
-| 개정 | — (실행 중 갱신: P1-2a 순서 2·P1-2b 순서 1 의 conftest 배치를 실제대로, P1-2b 에 PG lease 만료 테스트 — 개정으로 세지 않음) |
+| 개정 | — (실행 중 갱신: P1-2a 순서 2·P1-2b 순서 1 의 conftest 배치를 실제대로, P1-2b 에 PG lease 만료 테스트, P1-5a 의 `test_worker_settings.py`(basename 유일, spec 개정 4)·`NoopTracer` 계약 테스트·`FakeModelGateway.echo()`·`tests/support/redis.py` — 개정으로 세지 않음) |
 
 spec 이 정한 요구사항(R-1 ~ R-16)·결정(D-1 ~ D-19)·계약은 반복하지 않습니다. 이 문서는 열한 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`, Sonnet 5), **M** 주 세션(`docs/`·backlog·spec·plan — implementer 는 `docs/` 를 고칠 수 없습니다), **H** 사람(보호 파일, spec 0001 C-1), **W** 가드가 경고만 내는 파일.
 

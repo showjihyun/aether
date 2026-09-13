@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import pytest
 
-pytest_plugins = ["tests.support.pg"]
+pytest_plugins = ["tests.support.pg", "tests.support.redis"]
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:

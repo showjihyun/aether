@@ -88,6 +88,47 @@ def test_stream_yields_deltas_for_tool_call_response() -> None:
     assert deltas[-1].done is True
 
 
+def test_complete_returns_default_when_scenario_is_empty() -> None:
+    """spec 0002 2.5 (P1-5a): `default` 가 있으면 시나리오 소진 뒤 `ModelError` 대신
+    그 응답을 계속 돌려줍니다 — compose 의 `AETHER_MODEL_ADAPTER=fake` 가 매 호출마다
+    `ModelError` 로 죽지 않게 합니다."""
+    default = ModelResponse(text="default answer", finish_reason="stop")
+    gateway = FakeModelGateway(default=default)
+
+    first = gateway.complete(_request())
+    second = gateway.complete(_request())
+
+    assert first == default
+    assert second == default
+
+
+def test_default_is_used_only_after_scenario_is_exhausted() -> None:
+    """spec 0002 2.5: 시나리오가 있으면 먼저 소비하고, 소진된 뒤에만 `default` 로 넘어갑니다."""
+    default = ModelResponse(text="fallback", finish_reason="stop")
+    gateway = FakeModelGateway(
+        [ModelResponse(text="scripted", finish_reason="stop")], default=default
+    )
+
+    first = gateway.complete(_request())
+    second = gateway.complete(_request())
+
+    assert first.text == "scripted"
+    assert second == default
+
+
+def test_echo_returns_the_last_user_message_with_no_tool_calls() -> None:
+    """spec 0002 2.5 (P1-5a): `FakeModelGateway.echo()` — 마지막 `user` 메시지를 그대로
+    돌려주는 기본 응답. compose 의 `AETHER_MODEL_ADAPTER=fake` 가 무한히 `succeeded`
+    를 만들 수 있게 합니다."""
+    gateway = FakeModelGateway.echo()
+
+    response = gateway.complete(_request("hello there"))
+
+    assert response.text == "hello there"
+    assert response.tool_calls == []
+    assert response.finish_reason == "stop"
+
+
 def test_embed_is_deterministic_and_has_eight_dimensions() -> None:
     """spec 0002 2.5: `embed` 는 결정적 벡터(길이 8, 문자열 해시 기반)를 냅니다."""
     gateway = FakeModelGateway([])

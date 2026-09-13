@@ -82,9 +82,29 @@ services:
         AETHER_VERSION: ${AETHER_VERSION:-dev}
     environment:
       AETHER_REDIS_URL: redis://redis:6379/0
+      # aether_data 역할 URL — api 의 AETHER_DATABASE_URL(aether_control)과 역할이
+      # 다릅니다(spec 0002 2.15). worker 가 이 단위에서 처음 DB 를 씁니다.
+      AETHER_DATABASE_URL: postgresql+psycopg://aether_data:${AETHER_DATA_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      AETHER_MODEL_ADAPTER: ${AETHER_MODEL_ADAPTER:-fake}
+      AETHER_MODEL_BASE_URL: ${AETHER_MODEL_BASE_URL:-http://llm:11434/v1}
+      AETHER_MODEL_ID: ${AETHER_MODEL_ID:-qwen3.8:27b}
+      AETHER_MODEL_API_KEY: ${AETHER_MODEL_API_KEY:-}
+      AETHER_MODEL_THINKING: ${AETHER_MODEL_THINKING:-false}
     depends_on:
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      # redis-cli 가 이미지에 없어 python -c 로 heartbeat 키를 직접 확인합니다(spec
+      # 2.14). consumer 이름 계산은 Settings.worker_consumer 의 기본값(hostname)과
+      # 같아야 합니다 — AETHER_WORKER_CONSUMER 를 명시하지 않는 한 컨테이너
+      # hostname 이 곧 이 healthcheck 의 hostname 과 같습니다(같은 컨테이너 안).
+      test: ["CMD", "python", "-c", "import os,sys,redis; c=redis.Redis.from_url(os.environ['AETHER_REDIS_URL']); sys.exit(0 if c.exists(f\"aether:worker:{os.environ.get('AETHER_WORKER_CONSUMER', __import__('socket').gethostname())}:heartbeat\") else 1)"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
 
   # spec 0002 2.5, D-1 (P1-3): 로컬 LLM 서버(Ollama, OpenAI-호환 API). `llm` 프로파일로
   # 묶어 기본 `up` 과 `probe`(spec 0001 R-4)에 영향이 없게 합니다 — `docker compose

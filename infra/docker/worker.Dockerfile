@@ -29,7 +29,8 @@ RUN groupadd --gid 1000 aether \
 
 USER aether
 
-# HTTP 포트를 열지 않습니다 — Redis Streams 소비자입니다(spec 2.6). Phase 0 에는
-# probe 가능한 엔드포인트가 없어 HEALTHCHECK 를 두지 않습니다(보고할 불일치 참고).
+# HTTP 포트를 열지 않습니다 — Redis Streams 소비자입니다(spec 2.6). HEALTHCHECK 는
+# 이미지가 아니라 compose(infra/docker/compose.yaml)가 소유합니다(spec 0002 2.14) —
+# Redis 접속 정보(AETHER_REDIS_URL)가 compose 조립 시점에만 정해지기 때문입니다.
 
 CMD ["aether-worker"]

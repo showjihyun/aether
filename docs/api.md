@@ -77,9 +77,17 @@
 | `run.finished` | `status` | 종결 시 **항상 마지막**. 재개 시 재발행되어도 같은 `seq` |
 | `model.delta` | `text` | **예약** — Phase 1 은 발생시키지 않음 |
 
-## 6. Plane 사이의 스트림 계약 (P1-5a·5b 에서 채움)
+## 6. Plane 사이의 스트림 계약
 
-`aether:runs:requested`, `aether:runs:status`, `aether:runs:{run_id}:events` — spec 0002 2.18.
+Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이고 서로의 코드를 import 하지 않습니다(AR-7). 메시지는 선언이 아니라 통지입니다 — 내구적 선언은 `control.runs` 행이고 Redis 가 메시지를 잃어도 Run 은 남습니다(spec 0002 2.18, C-2).
+
+| 스트림 | 방향 | 필드 | 소비 | ID |
+| --- | --- | --- | --- | --- |
+| `aether:runs:requested` | Control → Data | `run_id`, `agent_version_id`, `traceparent` | worker consumer group `aether-worker`, `count=1`. 시작 시 자기 PEL 먼저(`XREADGROUP … 0`), 그 뒤 `XAUTOCLAIM`(`min-idle` = `AETHER_WORKER_XAUTOCLAIM_MIN_IDLE_MS`, 기본 65분) → `XREADGROUP >`. 실행이 끝나야 `XACK`. 다른 worker 가 lease 를 쥐고 있으면 ack 하지 않음 | Redis 자동 |
+| `aether:runs:status` | Data → Control | `StatusMessage`: `run_id`, `seq`, `status`, `at`, `started_at?`, `finished_at?`, `failure_reason?`, `trace_id?` (값 없는 선택 필드는 키 없음) | api consumer group `aether-api`(P1-5b) — `seq` 단조 증가로 멱등 투영 | Redis 자동 |
+| `aether:runs:{run_id}:events` | Data → 독자 | `data` = 5절의 봉투 JSON | api SSE 리더(P1-6, 그룹 없음, `XREAD`) | **explicit `<seq>-0`**. 같은 ID 재-XADD(재개 시 재발행)는 어댑터가 성공으로 흡수. `MAXLEN ~ 10000`, `run.finished` 뒤 TTL 24시간 |
+
+`StatusMessage.seq` 는 대응하는 `run.status` 이벤트의 `seq` 와 같은 수열입니다. worker 는 `aether:worker:{consumer}:heartbeat` 키(TTL = heartbeat 주기의 3배)로 살아 있음을 알리고 compose 의 healthcheck 가 그것을 봅니다(spec 0002 2.14).
 
 ## 관련 문서
 
