@@ -174,7 +174,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| P1-1 | Agent Registry API | P0-8, P0-9, P1-2b | — | 대기 |
+| P1-1 | Agent Registry API | P0-8, P0-9, P1-2b | — | 완료 |
 | P1-2a | 테스트 도구 · 마이그레이션 0002 · 의존성 | P0-8 | — | 완료 |
 | P1-2b | Run 상태 기계 · lease · `RunStateStore` · `AgentDefinition` (`packages/runtime`) | P1-2a | — | 완료 |
 | P1-3 | Model gateway 와 첫 어댑터 | P0-1 | Q6 (닫힘 — spec 0002 D-1) | 완료 |

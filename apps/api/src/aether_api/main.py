@@ -13,18 +13,31 @@ from fastapi import FastAPI
 from aether_api.adapters.inbound.cli import build_parser
 from aether_api.adapters.inbound.cli import keys_create as write_keys_create
 from aether_api.adapters.inbound.cli import openapi as write_openapi
+from aether_api.adapters.inbound.http.agents import build_agents_router
+from aether_api.adapters.inbound.http.auth import require_principal
 from aether_api.adapters.inbound.http.healthz import build_router
+from aether_api.adapters.outbound.db.agent_repository import PostgresAgentRepository
 from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
 from aether_api.adapters.outbound.telemetry import init_telemetry
 from aether_api.application.ports.inbound.authenticate import Authenticate
 from aether_api.application.usecases.authenticate import AuthenticateUseCase
+from aether_api.application.usecases.create_agent import CreateAgentUseCase
+from aether_api.application.usecases.get_agent import GetAgentUseCase
+from aether_api.application.usecases.get_agent_version import GetAgentVersionUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
+from aether_api.application.usecases.list_agents import ListAgentsUseCase
+from aether_api.application.usecases.update_agent import UpdateAgentUseCase
 from aether_api.settings import Settings
 
 
 def _postgres_api_key_store(settings: Settings) -> PostgresApiKeyStore:
     """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
     return PostgresApiKeyStore(lambda: psycopg.connect(settings.psycopg_dsn))
+
+
+def _postgres_agent_repository(settings: Settings) -> PostgresAgentRepository:
+    """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
+    return PostgresAgentRepository(lambda: psycopg.connect(settings.psycopg_dsn))
 
 
 def create_app(settings: Settings, *, authenticate: Authenticate | None = None) -> FastAPI:
@@ -44,6 +57,18 @@ def create_app(settings: Settings, *, authenticate: Authenticate | None = None) 
     app = FastAPI(title="aether-api", version=settings.version)
     app.state.authenticate = authenticate
     app.include_router(build_router(settings.version))
+
+    agent_repository = _postgres_agent_repository(settings)
+    app.include_router(
+        build_agents_router(
+            require_principal(authenticate),
+            CreateAgentUseCase(agent_repository),
+            ListAgentsUseCase(agent_repository),
+            GetAgentUseCase(agent_repository),
+            GetAgentVersionUseCase(agent_repository),
+            UpdateAgentUseCase(agent_repository),
+        )
+    )
     return app
 
 

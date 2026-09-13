@@ -21,10 +21,212 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Agents Route */
+        get: operations["list_agents_route_agents_get"];
+        put?: never;
+        /** Create Agent Route */
+        post: operations["create_agent_route_agents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Route */
+        get: operations["get_agent_route_agents__agent_id__get"];
+        /** Update Agent Route */
+        put: operations["update_agent_route_agents__agent_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/agents/{agent_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Agent Version Route */
+        get: operations["get_agent_version_route_agents__agent_id__versions__version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * AgentDefinition
+         * @description `schema_version` 을 올리는 것은 파괴적 변경 판정 대상입니다(DP-1).
+         */
+        AgentDefinition: {
+            /**
+             * Schema Version
+             * @constant
+             */
+            schema_version: 1;
+            /** System Prompt */
+            system_prompt: string;
+            model?: components["schemas"]["ModelRef"];
+            /** Tools */
+            tools?: string[];
+            policy?: components["schemas"]["Policy"];
+        };
+        /**
+         * AgentDetailResponse
+         * @description `GET /agents/{id}` 와 `PUT /agents/{id}` 의 성공 응답(같은 모양, spec 2.2).
+         */
+        AgentDetailResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Current Version */
+            current_version: number;
+            definition: components["schemas"]["AgentDefinition"];
+            /** Versions */
+            versions: components["schemas"]["AgentVersionEntry"][];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * AgentResponse
+         * @description `POST /agents` 의 성공 응답.
+         */
+        AgentResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Current Version */
+            current_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * AgentSummary
+         * @description `GET /agents` 의 `items[]` 원소 — `created_at` 은 없습니다(spec 2.2 표 그대로).
+         */
+        AgentSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Current Version */
+            current_version: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * AgentVersionEntry
+         * @description `GET /agents/{id}` 의 `versions[]` 원소 — 버전 번호와 생성 시각만.
+         */
+        AgentVersionEntry: {
+            /** Version */
+            version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
+         * AgentVersionResponse
+         * @description `GET /agents/{id}/versions/{version}` 의 성공 응답.
+         */
+        AgentVersionResponse: {
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Version */
+            version: number;
+            definition: components["schemas"]["AgentDefinition"];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** Backoff */
+        Backoff: {
+            /**
+             * Base Seconds
+             * @default 0.5
+             */
+            base_seconds: number;
+            /**
+             * Max Seconds
+             * @default 8
+             */
+            max_seconds: number;
+        };
+        /**
+         * CreateAgentRequest
+         * @description `POST /agents` 의 요청 본문.
+         */
+        CreateAgentRequest: {
+            /** Name */
+            name: string;
+            definition: components["schemas"]["AgentDefinition"];
+        };
+        /** HTTPValidationError */
+        HTTPValidationError: {
+            /** Detail */
+            detail?: components["schemas"]["ValidationError"][];
+        };
         /**
          * HealthzResponse
          * @description spec 2.3 의 계약 그대로: `{status, service, version}`.
@@ -36,6 +238,68 @@ export interface components {
             service: string;
             /** Version */
             version: string;
+        };
+        /**
+         * ListAgentsResponse
+         * @description `GET /agents` 의 성공 응답.
+         */
+        ListAgentsResponse: {
+            /** Items */
+            items: components["schemas"]["AgentSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ModelRef
+         * @description `model.id` 가 `null` 이면 배포 설정 `AETHER_MODEL_ID` 를 씁니다.
+         */
+        ModelRef: {
+            /** Id */
+            id?: string | null;
+        };
+        /** Policy */
+        Policy: {
+            /**
+             * Timeout Seconds
+             * @default 120
+             */
+            timeout_seconds: number;
+            /**
+             * Max Steps
+             * @default 8
+             */
+            max_steps: number;
+            /**
+             * Model Retries
+             * @default 2
+             */
+            model_retries: number;
+            /**
+             * Tool Retries
+             * @default 1
+             */
+            tool_retries: number;
+            backoff?: components["schemas"]["Backoff"];
+        };
+        /**
+         * UpdateAgentRequest
+         * @description `PUT /agents/{id}` 의 요청 본문 — `definition` 만. `name` 은 Phase 1 불변(D-9).
+         */
+        UpdateAgentRequest: {
+            definition: components["schemas"]["AgentDefinition"];
+        };
+        /** ValidationError */
+        ValidationError: {
+            /** Location */
+            loc: (string | number)[];
+            /** Message */
+            msg: string;
+            /** Error Type */
+            type: string;
+            /** Input */
+            input?: unknown;
+            /** Context */
+            ctx?: Record<string, never>;
         };
     };
     responses: never;
@@ -62,6 +326,204 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HealthzResponse"];
+                };
+            };
+        };
+    };
+    list_agents_route_agents_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListAgentsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_agent_route_agents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentResponse"];
+                };
+            };
+            /** @description agent_name_taken */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_route_agents__agent_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetailResponse"];
+                };
+            };
+            /** @description agent_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_agent_route_agents__agent_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgentRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentDetailResponse"];
+                };
+            };
+            /** @description agent_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description agent_version_conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_agent_version_route_agents__agent_id__versions__version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentVersionResponse"];
+                };
+            };
+            /** @description agent_not_found | agent_version_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
