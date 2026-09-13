@@ -60,9 +60,22 @@
 
 `POST /agents/{id}/run`, `GET /runs/{id}`, `POST /runs/{id}/cancel` — spec 0002 2.2. 이 절은 P1-5b 가 계약을 커밋할 때 채웁니다.
 
-## 5. 이벤트 스트림 (P1-6 에서 채움)
+## 5. 이벤트 스트림
 
-`GET /runs/{id}/events`(SSE) — spec 0002 2.7. 이벤트 스키마의 정본은 `packages/sdk/events.schema.json`.
+`GET /runs/{id}/events`(SSE) 는 P1-6 이 붙입니다. 이벤트 모델은 P1-4 가 `packages/runtime/src/aether_runtime/domain/events.py` 에 정했고, JSON Schema 파일(`packages/sdk/events.schema.json`)은 P1-6 이 커밋합니다(spec 0002 2.7, D-4).
+
+봉투: `{ "v": 1, "run_id", "seq", "at", "type", "payload" }`. `seq` 는 Run 안에서 1 부터 단조 증가하고, 선택 필드는 값이 없으면 키 자체가 빠집니다.
+
+| type | payload | 언제 |
+| --- | --- | --- |
+| `run.status` | `status`, `failure_reason?` | 상태 전이마다(`queued→running`, `running↔waiting`, 종결). 같은 `seq` 의 `StatusMessage` 가 `aether:runs:status` 로도 나감 |
+| `task.started` | `task_id`, `step` | 단계(모델 호출 1회) 시작 |
+| `task.finished` | `task_id` | 단계가 정상 종료(도구 유무 무관). 실패한 단계에서는 없음 |
+| `model.completed` | `finish_reason`, `usage?` | `complete` 응답 직후 |
+| `tool.called` | `task_id`, `tool_call_id`, `name`, `arguments` | 도구 실행 직전 |
+| `tool.result` | `task_id`, `tool_call_id`, `name`, `is_error`, `content`, `truncated` | 도구 실행 직후(잘림 반영) |
+| `run.finished` | `status` | 종결 시 **항상 마지막**. 재개 시 재발행되어도 같은 `seq` |
+| `model.delta` | `text` | **예약** — Phase 1 은 발생시키지 않음 |
 
 ## 6. Plane 사이의 스트림 계약 (P1-5a·5b 에서 채움)
 

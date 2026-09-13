@@ -6,12 +6,14 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from enum import StrEnum
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.task import Task
 
 
@@ -102,6 +104,11 @@ class RunState(BaseModel):
 
     `last_seq` 는 이 Run 이 마지막으로 발행한 이벤트의 `seq`(2.7 — Run 안에서 1 부터
     단조 증가)이고, 음수가 될 수 없습니다.
+
+    `failure_reason`·`started_at`·`finished_at` 은 종결 시의 재발행(R-16)이 이 스냅숏
+    하나만으로 `run.status`·`run.finished` 를 다시 만들 수 있도록 P1-4 의 `ExecuteRun`
+    이 여기에 함께 저장합니다 — `RunStateStore` 포트에는 이 값을 따로 읽는 문이 없으므로
+    (2.1 이 정한 `load`/`save`/`status` 뿐), 재개 가능한 `State` 자신이 정본입니다.
     """
 
     run_id: UUID
@@ -110,3 +117,6 @@ class RunState(BaseModel):
     tasks: list[Task] = Field(default_factory=list)
     last_seq: int = Field(default=0, ge=0)
     status: RunStatus
+    failure_reason: FailureReason | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None

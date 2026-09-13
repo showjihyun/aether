@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Callable
+from datetime import UTC, datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -222,6 +223,85 @@ def test_status_returns_none_for_unknown_run(
     store = _store_factory(store_kind, request)()
 
     assert store.status(uuid.uuid4()) is None
+
+
+@pytest.mark.parametrize("store_kind", _store_kinds())
+def test_set_status_records_started_at_and_finished_at(
+    store_kind: str, request: pytest.FixtureRequest
+) -> None:
+    """spec 0002 2.4, D-10 (P1-4 순서 1): `ExecuteRun` 의 루프가 재개에 필요한
+    `started_at`/`finished_at` 을 `set_status` 로 기록할 수 있어야 합니다 — P1-2b 는
+    이 두 인자를 받지 않아 채우지 못했습니다. fake 는 전용 조회 메서드로, PostgreSQL
+    은 `data.run_executions` 를 직접 읽어 검증합니다."""
+    run_id = _run_id(store_kind, request)
+    store = _store_factory(store_kind, request)()
+    store.acquire_lease(run_id, owner="worker-a", ttl_seconds=60)
+    started = datetime(2026, 1, 1, tzinfo=UTC)
+    finished = datetime(2026, 1, 1, 0, 5, tzinfo=UTC)
+
+    store.set_status(run_id, RunStatus.RUNNING, started_at=started)
+    store.set_status(run_id, RunStatus.SUCCEEDED, finished_at=finished)
+
+    if store_kind == "fake":
+        from packages.runtime.tests.fakes import FakeRunStateStore
+
+        assert isinstance(store, FakeRunStateStore)
+        assert store.started_at(run_id) == started
+        assert store.finished_at(run_id) == finished
+    else:
+        data_factory: Callable[[], psycopg.Connection] = request.getfixturevalue(
+            "data_connection_factory"
+        )
+        conn = data_factory()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT started_at, finished_at FROM data.run_executions WHERE run_id = %s",
+                    (run_id,),
+                )
+                row = cur.fetchone()
+            conn.rollback()
+        finally:
+            conn.close()
+        assert row is not None
+        assert row[0] == started
+        assert row[1] == finished
+
+
+@pytest.mark.parametrize("store_kind", _store_kinds())
+def test_set_status_does_not_clobber_started_at_when_omitted(
+    store_kind: str, request: pytest.FixtureRequest
+) -> None:
+    """spec 0002 2.4 (P1-4 순서 1): 루프는 `running -> waiting -> running` 처럼 같은
+    Run 에 `set_status` 를 여러 번 부릅니다 — `started_at` 을 주지 않은 호출이 이전에
+    기록된 값을 지우면 안 됩니다(PostgreSQL 쪽은 COALESCE, fake 도 같은 규칙)."""
+    run_id = _run_id(store_kind, request)
+    store = _store_factory(store_kind, request)()
+    store.acquire_lease(run_id, owner="worker-a", ttl_seconds=60)
+    started = datetime(2026, 1, 1, tzinfo=UTC)
+
+    store.set_status(run_id, RunStatus.RUNNING, started_at=started)
+    store.set_status(run_id, RunStatus.WAITING)
+
+    if store_kind == "fake":
+        from packages.runtime.tests.fakes import FakeRunStateStore
+
+        assert isinstance(store, FakeRunStateStore)
+        assert store.started_at(run_id) == started
+    else:
+        data_factory = request.getfixturevalue("data_connection_factory")
+        conn = data_factory()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT started_at FROM data.run_executions WHERE run_id = %s", (run_id,)
+                )
+                row = cur.fetchone()
+            conn.rollback()
+        finally:
+            conn.close()
+        assert row is not None
+        assert row[0] == started
 
 
 @pytest.mark.integration

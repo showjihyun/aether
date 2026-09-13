@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
@@ -38,4 +39,10 @@ class RunStateStore(Protocol):
         *,
         failure_reason: FailureReason | None = None,
         trace_id: str | None = None,
-    ) -> None: ...
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+    ) -> None:
+        """`started_at`/`finished_at` 을 준 경우에만 채웁니다(COALESCE) — 주지 않은
+        호출이 이전에 기록된 값을 지우지 않습니다(P1-4, `ExecuteRun` 이 단계마다
+        여러 번 부릅니다)."""
+        ...
