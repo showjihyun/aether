@@ -4,12 +4,14 @@ version = "0.0.0"
 description = ""
 requires-python = ">=3.12"
 dependencies = [
+    "aether-runtime",
     "alembic>=1.19.2",
     "fastapi>=0.141.1",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "opentelemetry-sdk>=1.44.0",
     "psycopg[binary]>=3.3.5",
     "pydantic-settings>=2.15.0",
+    "redis>=8.1.0",
     "sqlalchemy>=2.0.52",
     "uvicorn>=0.52.4",
 ]
@@ -23,3 +25,6 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aether_api"]
+
+[tool.uv.sources]
+aether-runtime = { workspace = true }

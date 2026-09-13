@@ -54,24 +54,28 @@ name = "aether-api"
 version = "0.0.0"
 source = { editable = "apps/api" }
 dependencies = [
+    { name = "aether-runtime" },
     { name = "alembic" },
     { name = "fastapi" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic-settings" },
+    { name = "redis" },
     { name = "sqlalchemy" },
     { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aether-runtime", editable = "packages/runtime" },
     { name = "alembic", specifier = ">=1.19.2" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.44.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.44.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.5" },
     { name = "pydantic-settings", specifier = ">=2.15.0" },
+    { name = "redis", specifier = ">=8.1.0" },
     { name = "sqlalchemy", specifier = ">=2.0.52" },
     { name = "uvicorn", specifier = ">=0.52.4" },
 ]
