@@ -144,6 +144,8 @@ INSERT 성공)과 상충하지 않으려면 `NOT NULL` 로 두고 삽입 시 기
 | `tasks` | `[{task_id, step, tool_calls: [{id, name, arguments}]}]` | 단계마다 하나(spec 0002 D-5) |
 | `last_seq` | int ≥ 0 | 마지막으로 발행한 이벤트 `seq`(spec 0002 2.7). 재개 시 그 다음부터 발행 |
 | `status` | `RunStatus` 값 | 스냅숏 안의 상태 표시 — 정본은 `data.run_executions.status` |
+| `failure_reason` | `FailureReason` 값 또는 null | 종결 시 함께 저장(P1-4). 재개 시 재발행이 스냅숏만으로 `run.status` 를 다시 만들 수 있게 |
+| `started_at`, `finished_at` | ISO 8601 또는 null | 같은 이유로 스냅숏에도 둠. `data.run_executions` 의 같은 열이 정본 |
 
 마이그레이션 0002(P1-2a)가 만들었습니다. worker 가 단계마다 저장하고, 죽었다 살아난 worker 가 여기서
 이어갑니다(spec 0002 2.4 재개). lease(`data.run_executions.lease_owner`·`lease_until`)의 판정은 어댑터의

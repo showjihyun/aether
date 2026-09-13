@@ -12,6 +12,7 @@ worker 프로세스의 시계가 서로 달라도 경합은 항상 DB 가 판정
 from __future__ import annotations
 
 from collections.abc import Callable
+from datetime import datetime
 from uuid import UUID
 
 import psycopg
@@ -114,23 +115,34 @@ class PostgresRunStateStore:
         *,
         failure_reason: FailureReason | None = None,
         trace_id: str | None = None,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
     ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO data.run_executions (run_id, status, failure_reason, trace_id)
-                VALUES (%s, %s, %s, %s)
+                INSERT INTO data.run_executions
+                    (run_id, status, failure_reason, trace_id, started_at, finished_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
                 ON CONFLICT (run_id) DO UPDATE
                 SET status = EXCLUDED.status,
                     failure_reason = COALESCE(
                         EXCLUDED.failure_reason, data.run_executions.failure_reason
                     ),
-                    trace_id = COALESCE(EXCLUDED.trace_id, data.run_executions.trace_id)
+                    trace_id = COALESCE(EXCLUDED.trace_id, data.run_executions.trace_id),
+                    started_at = COALESCE(
+                        EXCLUDED.started_at, data.run_executions.started_at
+                    ),
+                    finished_at = COALESCE(
+                        EXCLUDED.finished_at, data.run_executions.finished_at
+                    )
                 """,
                 (
                     run_id,
                     status.value,
                     failure_reason.value if failure_reason is not None else None,
                     trace_id,
+                    started_at,
+                    finished_at,
                 ),
             )
