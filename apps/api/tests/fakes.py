@@ -8,6 +8,10 @@
 `datetime.now()` 와 실제 시간 경과 대신 주입한 시계를 전진시켜 "두 번째 revoke 가 첫
 `revoked_at` 을 유지한다" 를 `sleep` 없이 결정적으로 증명할 수 있게 합니다
 (`test_api_key_store_contract.py`).
+
+`FakeRunDeclarationStore`·`FakeRunNotifier` 는 P1-5b(`RequestRun`·`GetRun`·`CancelRun`·
+`ApplyRunStatus`)의 outbound 포트 fake 입니다(AR-9 — 유스케이스 테스트는 컨테이너
+없이 돕니다, spec 0002 2.1, 2.2, 2.4, D-2, D-11).
 """
 
 from __future__ import annotations
@@ -29,7 +33,10 @@ from aether_api.domain.agent import (
     AgentVersionSummary,
 )
 from aether_api.domain.api_key import ApiKey
+from aether_api.domain.run import RunNotFound, RunView
 from aether_runtime.domain.agent import AgentDefinition
+from aether_runtime.domain.failure import FailureReason
+from aether_runtime.domain.run import RunStatus
 
 
 def _default_clock() -> datetime:
@@ -104,7 +111,9 @@ class FakeAgentRepository:
         self._agents[agent_id] = agent
         self._id_by_name[name] = agent_id
         self._versions[agent_id] = {
-            1: AgentVersion(agent_id=agent_id, version=1, definition=definition, created_at=now)
+            1: AgentVersion(
+                id=uuid4(), agent_id=agent_id, version=1, definition=definition, created_at=now
+            )
         }
         return agent
 
@@ -144,7 +153,11 @@ class FakeAgentRepository:
         new_version_number = agent.current_version + 1
         now = self._clock()
         new_version = AgentVersion(
-            agent_id=agent_id, version=new_version_number, definition=definition, created_at=now
+            id=uuid4(),
+            agent_id=agent_id,
+            version=new_version_number,
+            definition=definition,
+            created_at=now,
         )
         self._versions[agent_id][new_version_number] = new_version
         updated_agent = replace(agent, current_version=new_version_number, updated_at=now)
@@ -157,3 +170,100 @@ class FakeAgentRepository:
                 AgentVersionSummary(version=v.version, created_at=v.created_at) for v in versions
             ],
         )
+
+
+class FakeRunDeclarationStore:
+    """`RunDeclarationStore` 포트 계약(spec 0002 2.1, 2.2, 2.4, D-2, D-11)의 인메모리 구현.
+
+    `status_seq` 는 `RunView` 밖의 내부 부기입니다 — HTTP 응답에는 없는 값이지만
+    `apply_status` 의 멱등 규칙(D-2)을 재현하려면 저장소가 마지막으로 적용한 `seq`
+    를 기억해야 합니다.
+    """
+
+    def __init__(self, clock: Callable[[], datetime] = _default_clock) -> None:
+        self._runs: dict[UUID, RunView] = {}
+        self._status_seq: dict[UUID, int | None] = {}
+        self._clock = clock
+
+    def create(
+        self,
+        agent_id: UUID,
+        agent_version_id: UUID,
+        agent_version: int,
+        input: str,
+        requested_by: UUID,
+    ) -> RunView:
+        del agent_version_id  # 이 fake 는 HTTP 응답에 없는 FK 를 보관하지 않습니다.
+        del input  # 저장하지 않습니다 — 이 fake 의 관찰 대상은 투영 열뿐입니다.
+        run_id = uuid4()
+        view = RunView(
+            run_id=run_id,
+            agent_id=agent_id,
+            agent_version=agent_version,
+            status=RunStatus.QUEUED,
+            requested_at=self._clock(),
+            requested_by=requested_by,
+            started_at=None,
+            finished_at=None,
+            failure_reason=None,
+            trace_id=None,
+            cancel_requested_at=None,
+        )
+        self._runs[run_id] = view
+        self._status_seq[run_id] = None
+        return view
+
+    def get(self, run_id: UUID) -> RunView | None:
+        return self._runs.get(run_id)
+
+    def request_cancel(self, run_id: UUID, at: datetime) -> RunView:
+        view = self._runs.get(run_id)
+        if view is None:
+            raise RunNotFound(run_id)
+        if view.cancel_requested_at is None:
+            view = replace(view, cancel_requested_at=at)
+            self._runs[run_id] = view
+        return view
+
+    def apply_status(
+        self,
+        run_id: UUID,
+        *,
+        seq: int,
+        status: RunStatus,
+        started_at: datetime | None,
+        finished_at: datetime | None,
+        failure_reason: FailureReason | None,
+        trace_id: str | None,
+    ) -> bool:
+        view = self._runs.get(run_id)
+        if view is None:
+            return False
+        current_seq = self._status_seq.get(run_id)
+        if current_seq is not None and current_seq >= seq:
+            return False
+        self._status_seq[run_id] = seq
+        self._runs[run_id] = replace(
+            view,
+            status=status,
+            started_at=started_at if started_at is not None else view.started_at,
+            finished_at=finished_at if finished_at is not None else view.finished_at,
+            failure_reason=failure_reason if failure_reason is not None else view.failure_reason,
+            trace_id=trace_id if trace_id is not None else view.trace_id,
+        )
+        return True
+
+
+class FakeRunNotifier:
+    """`RunNotifier` 포트의 인메모리 구현(spec 0002 2.2, 2.18). `should_fail` 이면
+    `requested` 가 예외를 던집니다 — `RequestRunUseCase` 가 그 실패를 삼키고
+    WARNING 을 남긴 뒤 정상 반환하는지(spec 2.2) 테스트가 증명합니다."""
+
+    def __init__(self, *, should_fail: bool = False) -> None:
+        self.calls: list[tuple[UUID, UUID, str | None]] = []
+        self._should_fail = should_fail
+
+    def requested(self, run_id: UUID, agent_version_id: UUID, traceparent: str | None) -> None:
+        self.calls.append((run_id, agent_version_id, traceparent))
+        if self._should_fail:
+            raise RuntimeError("FakeRunNotifier: injected requested failure")

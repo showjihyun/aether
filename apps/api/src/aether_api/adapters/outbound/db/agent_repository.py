@@ -40,7 +40,7 @@ from aether_api.domain.agent import (
 )
 
 _AgentRow = tuple[UUID, str, int, datetime, datetime]
-_AgentVersionRow = tuple[UUID, int, dict[str, object], datetime]
+_AgentVersionRow = tuple[UUID, UUID, int, dict[str, object], datetime]
 
 
 def _row_to_agent(row: _AgentRow) -> Agent:
@@ -55,8 +55,9 @@ def _row_to_agent(row: _AgentRow) -> Agent:
 
 
 def _row_to_agent_version(row: _AgentVersionRow) -> AgentVersion:
-    agent_id, version, definition_raw, created_at = row
+    version_id, agent_id, version, definition_raw, created_at = row
     return AgentVersion(
+        id=version_id,
         agent_id=agent_id,
         version=version,
         definition=AgentDefinition.model_validate(definition_raw),
@@ -158,7 +159,7 @@ class PostgresAgentRepository:
                 raise AgentNotFound(agent_id)
             cur.execute(
                 """
-                SELECT agent_id, version, definition, created_at
+                SELECT id, agent_id, version, definition, created_at
                 FROM control.agent_versions
                 WHERE agent_id = %s AND version = %s
                 """,

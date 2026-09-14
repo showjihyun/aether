@@ -280,3 +280,136 @@ describe("createClient().updateAgent()", () => {
     ).rejects.toThrow(/409/);
   });
 });
+
+// spec 0002 2.2, D-9, D-17: runAgent / getRun / cancelRun.
+
+describe("createClient().runAgent()", () => {
+  it("POSTs the input to /agents/{id}/run with Authorization and Content-Type", async () => {
+    const fetchMock = fakeFetch({
+      ok: true,
+      status: 202,
+      json: {
+        run_id: "11111111-1111-1111-1111-111111111111",
+        agent_id: "id-1",
+        agent_version: 1,
+        status: "queued",
+        requested_at: "2026-01-01T00:00:00Z",
+        requested_by: "22222222-2222-2222-2222-222222222222",
+      },
+    });
+    const client = createClient({
+      baseUrl: "http://localhost:8000",
+      apiKey: "aeth_secret",
+      fetch: fetchMock,
+    });
+
+    const result = await client.runAgent("id-1", { input: "do it" });
+
+    expect(callUrl(fetchMock)).toBe("http://localhost:8000/agents/id-1/run");
+    const init = callInit(fetchMock);
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer aeth_secret");
+    expect(headers["Content-Type"]).toBe("application/json");
+    expect(JSON.parse(init.body as string)).toEqual({ input: "do it" });
+    expect(result.status).toBe("queued");
+  });
+
+  it("includes agent_version in the body when given", async () => {
+    const fetchMock = fakeFetch({
+      ok: true,
+      status: 202,
+      json: {
+        run_id: "id",
+        agent_id: "id-1",
+        agent_version: 2,
+        status: "queued",
+        requested_at: "2026-01-01T00:00:00Z",
+        requested_by: "id-key",
+      },
+    });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.runAgent("id-1", { input: "do it", agent_version: 2 });
+
+    const init = callInit(fetchMock);
+    expect(JSON.parse(init.body as string)).toEqual({ input: "do it", agent_version: 2 });
+  });
+
+  it("throws a clear error on 404 agent_not_found", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.runAgent("missing", { input: "x" })).rejects.toThrow(/404/);
+  });
+});
+
+describe("createClient().getRun()", () => {
+  it("GETs /runs/{id}", async () => {
+    const fetchMock = fakeFetch({
+      ok: true,
+      json: {
+        run_id: "run-1",
+        agent_id: "id-1",
+        agent_version: 1,
+        status: "queued",
+        requested_at: "2026-01-01T00:00:00Z",
+        requested_by: "key-1",
+        started_at: null,
+        finished_at: null,
+        failure_reason: null,
+        trace_id: null,
+        cancel_requested_at: null,
+      },
+    });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    const result = await client.getRun("run-1");
+
+    expect(callUrl(fetchMock)).toBe("http://localhost:8000/runs/run-1");
+    expect(callInit(fetchMock).method).toBe("GET");
+    expect(result.status).toBe("queued");
+  });
+
+  it("throws a clear error on 404 run_not_found", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.getRun("missing")).rejects.toThrow(/404/);
+  });
+});
+
+describe("createClient().cancelRun()", () => {
+  it("POSTs /runs/{id}/cancel with Authorization", async () => {
+    const fetchMock = fakeFetch({
+      ok: true,
+      status: 202,
+      json: {
+        run_id: "run-1",
+        status: "queued",
+        cancel_requested_at: "2026-01-01T00:00:00Z",
+      },
+    });
+    const client = createClient({
+      baseUrl: "http://localhost:8000",
+      apiKey: "aeth_secret",
+      fetch: fetchMock,
+    });
+
+    const result = await client.cancelRun("run-1");
+
+    expect(callUrl(fetchMock)).toBe("http://localhost:8000/runs/run-1/cancel");
+    const init = callInit(fetchMock);
+    expect(init.method).toBe("POST");
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer aeth_secret");
+    expect(result.cancel_requested_at).toBe("2026-01-01T00:00:00Z");
+  });
+
+  it("throws a clear error on 404 run_not_found", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.cancelRun("missing")).rejects.toThrow(/404/);
+  });
+});

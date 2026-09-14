@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     (`ALEMBIC_URL` 환경변수가 있으면 그것이 우선). 관리자 역할로 접속합니다 —
     런타임 역할(`aether_control`)과는 다릅니다."""
 
+    redis_url: str = "redis://localhost:6379/0"
+    """spec 0002 2.15. api 가 처음으로 Redis 를 씁니다(P1-5b) — `RunNotifier` 의
+    통지(`aether:runs:requested`)와 `StatusConsumer` 의 투영 소비(`aether:runs:status`)."""
+
     @property
     def psycopg_dsn(self) -> str:
         """`database_url` 에서 `+psycopg` 드라이버 표기(SQLAlchemy 형식)만 벗깁니다.

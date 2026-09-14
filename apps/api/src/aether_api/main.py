@@ -3,12 +3,23 @@
 양쪽(inbound·outbound)을 다 아는 유일한 파일입니다(AR-10). 어댑터가 이 모듈을 import 하면
 순환이 생기므로, CLI 실행 진입점은 여기의 `cli()` 이고 `adapters/inbound/cli.py` 는 함수만
 가집니다(리뷰 F-6). 유스케이스(`application.usecases`) import 는 이 파일에만 있습니다.
+
+P1-5b 가 더한 것: `aether:runs:status` 투영 소비자를 FastAPI **lifespan** 에서 백그라운드
+스레드로 돌립니다(spec 2.4, C-5) — api 가 Redis 를 처음 쓰는 자리라 연결이 지연되거나
+실패해도 HTTP 는 그대로 뜹니다. `status_consumer` 를 주입할 수 있게 한 것은 테스트가
+실제 연결 없이 lifespan 의 스레드 수명(시작·종료)만 검증할 수 있게 하기 위해서입니다.
 """
 
 from __future__ import annotations
 
+import logging
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from threading import Event, Thread
+
 import psycopg
 from fastapi import FastAPI
+from redis import Redis
 
 from aether_api.adapters.inbound.cli import build_parser
 from aether_api.adapters.inbound.cli import keys_create as write_keys_create
@@ -16,18 +27,35 @@ from aether_api.adapters.inbound.cli import openapi as write_openapi
 from aether_api.adapters.inbound.http.agents import build_agents_router
 from aether_api.adapters.inbound.http.auth import require_principal
 from aether_api.adapters.inbound.http.healthz import build_router
+from aether_api.adapters.inbound.http.runs import build_runs_router
+from aether_api.adapters.inbound.stream.status_consumer import StatusConsumer, ensure_group
 from aether_api.adapters.outbound.db.agent_repository import PostgresAgentRepository
 from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
+from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
+from aether_api.adapters.outbound.redis.run_notifier import RedisRunNotifier
 from aether_api.adapters.outbound.telemetry import init_telemetry
 from aether_api.application.ports.inbound.authenticate import Authenticate
+from aether_api.application.usecases.apply_run_status import ApplyRunStatusUseCase
 from aether_api.application.usecases.authenticate import AuthenticateUseCase
+from aether_api.application.usecases.cancel_run import CancelRunUseCase
 from aether_api.application.usecases.create_agent import CreateAgentUseCase
 from aether_api.application.usecases.get_agent import GetAgentUseCase
 from aether_api.application.usecases.get_agent_version import GetAgentVersionUseCase
+from aether_api.application.usecases.get_run import GetRunUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
+from aether_api.application.usecases.request_run import RequestRunUseCase
 from aether_api.application.usecases.update_agent import UpdateAgentUseCase
 from aether_api.settings import Settings
+
+logger = logging.getLogger(__name__)
+
+_STATUS_STREAM = "aether:runs:status"
+_STATUS_GROUP = "aether-api"
+_STATUS_CONSUMER_CONNECT_MAX_ATTEMPTS = 10
+_STATUS_CONSUMER_CONNECT_BASE_DELAY = 0.5
+_STATUS_CONSUMER_CONNECT_MAX_DELAY = 8.0
+_STATUS_CONSUMER_STOP_JOIN_TIMEOUT = 5.0
 
 
 def _postgres_api_key_store(settings: Settings) -> PostgresApiKeyStore:
@@ -40,22 +68,113 @@ def _postgres_agent_repository(settings: Settings) -> PostgresAgentRepository:
     return PostgresAgentRepository(lambda: psycopg.connect(settings.psycopg_dsn))
 
 
-def create_app(settings: Settings, *, authenticate: Authenticate | None = None) -> FastAPI:
+def _postgres_run_declaration_store(settings: Settings) -> PostgresRunDeclarationStore:
+    """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
+    return PostgresRunDeclarationStore(lambda: psycopg.connect(settings.psycopg_dsn))
+
+
+def _connect_redis_with_backoff(redis_url: str, stop: Event) -> Redis | None:
+    """`stop` 이 set 되거나 시도를 다 쓸 때까지 지수 백오프로 Redis 연결을 시도합니다.
+
+    연결에 최종 실패해도 `None` 을 돌려줄 뿐 예외를 내지 않습니다 — api 의 HTTP 는
+    이미 떠 있고, 투영 소비자가 못 붙는 것은 로그로만 남깁니다(C-5).
+    """
+    delay = _STATUS_CONSUMER_CONNECT_BASE_DELAY
+    for attempt in range(1, _STATUS_CONSUMER_CONNECT_MAX_ATTEMPTS + 1):
+        if stop.is_set():
+            return None
+        try:
+            client: Redis = Redis.from_url(redis_url, decode_responses=True)
+            client.ping()
+            return client
+        except Exception as exc:  # noqa: BLE001 -- 연결 실패는 재시도 대상입니다(C-5)
+            logger.warning(
+                "api.status_consumer.connect_failed",
+                extra={
+                    "attempt": attempt,
+                    "max_attempts": _STATUS_CONSUMER_CONNECT_MAX_ATTEMPTS,
+                    "error": str(exc),
+                },
+            )
+            if attempt < _STATUS_CONSUMER_CONNECT_MAX_ATTEMPTS:
+                stop.wait(min(delay, _STATUS_CONSUMER_CONNECT_MAX_DELAY))
+                delay = min(delay * 2, _STATUS_CONSUMER_CONNECT_MAX_DELAY)
+    logger.error(
+        "api.status_consumer.connect_exhausted",
+        extra={"attempts": _STATUS_CONSUMER_CONNECT_MAX_ATTEMPTS},
+    )
+    return None
+
+
+def _build_production_status_consumer(settings: Settings) -> Callable[[Event], None]:
+    """lifespan 이 백그라운드 스레드에서 부를 함수 — 연결(백오프) → group → 소비 대기.
+
+    연결에 최종 실패하면(또는 연결 시도 중 `stop` 이 set 되면) HTTP 는 그대로 두고
+    아무 일도 하지 않습니다(C-5) — 그 증상은 `GET /runs/{id}` 가 낡은 투영을 답하는 것.
+    """
+
+    def run(stop: Event) -> None:
+        client = _connect_redis_with_backoff(settings.redis_url, stop)
+        if client is None or stop.is_set():
+            return
+        apply_status = ApplyRunStatusUseCase(_postgres_run_declaration_store(settings))
+        ensure_group(client, _STATUS_STREAM, _STATUS_GROUP)
+        consumer = StatusConsumer(client, apply_status, stream=_STATUS_STREAM, group=_STATUS_GROUP)
+        consumer.run_until(stop)
+
+    return run
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """`aether:runs:status` 투영 소비자를 백그라운드 스레드로 돌립니다(spec 2.4, C-5).
+
+    `create_app` 이 조립한(또는 테스트가 주입한) `app.state.status_consumer_runner` 를
+    그대로 부릅니다. `aether-api openapi` 와 DB/Redis 없는 단위 테스트는
+    `TestClient(app)` 를 `with` 없이 쓰므로 이 lifespan 자체가 돌지 않습니다.
+    """
+    stop = Event()
+    runner: Callable[[Event], None] = app.state.status_consumer_runner
+    thread = Thread(target=runner, args=(stop,), name="aether-api-status-consumer", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
+
+
+def create_app(
+    settings: Settings,
+    *,
+    authenticate: Authenticate | None = None,
+    status_consumer: Callable[[Event], None] | None = None,
+) -> FastAPI:
     """설정을 읽어 telemetry 를 초기화하고 라우터를 등록한 `FastAPI` 앱을 조립합니다.
 
     `authenticate` 를 생략하면 PostgreSQL 어댑터로 지연 조립해 `app.state.authenticate`
-    에 둡니다. 조립 시점에는 연결을 열지 않습니다 — 이 함수는 모듈 import 시(아래 `app`)
-    실행되므로, DB 가 없는 단위 테스트와 `aether-api openapi` 가 이 경로를 그대로
-    지나갑니다. 보호 경로는 Phase 1 의 라우터부터 `require_principal(app.state.authenticate)`
-    를 의존성으로 받습니다 — P0-9 에는 보호할 제품 경로가 없습니다.
+    에 둡니다. `status_consumer` 를 생략하면 Redis 로 지연 조립합니다 — 둘 다 조립
+    시점에는 연결을 열지 않습니다. 이 함수는 모듈 import 시(아래 `app`) 실행되므로,
+    DB/Redis 가 없는 단위 테스트와 `aether-api openapi` 가 이 경로를 그대로 지나갑니다.
+
+    투영 소비자는 FastAPI **lifespan** 에서만 스레드로 실행됩니다 — `TestClient(app)`
+    를 `with` 없이 쓰면(기존 단위 테스트 관례) lifespan 이 돌지 않으므로 DB/Redis 없는
+    단위 테스트는 소비자를 시작하지 않습니다. 실제로 시작되는 곳은 uvicorn 서버 기동과
+    `with TestClient(app) as client:` 뿐입니다(`aether-api openapi` 도 lifespan 을
+    돌리지 않습니다 — 조립된 `app` 의 `openapi()` 만 부릅니다).
     """
     init_telemetry("api")
 
     if authenticate is None:
         authenticate = AuthenticateUseCase(_postgres_api_key_store(settings))
 
-    app = FastAPI(title="aether-api", version=settings.version)
+    app = FastAPI(title="aether-api", version=settings.version, lifespan=_lifespan)
     app.state.authenticate = authenticate
+    app.state.status_consumer_runner = (
+        status_consumer
+        if status_consumer is not None
+        else _build_production_status_consumer(settings)
+    )
     app.include_router(build_router(settings.version))
 
     agent_repository = _postgres_agent_repository(settings)
@@ -67,6 +186,17 @@ def create_app(settings: Settings, *, authenticate: Authenticate | None = None) 
             GetAgentUseCase(agent_repository),
             GetAgentVersionUseCase(agent_repository),
             UpdateAgentUseCase(agent_repository),
+        )
+    )
+
+    run_declaration_store = _postgres_run_declaration_store(settings)
+    run_notifier = RedisRunNotifier(Redis.from_url(settings.redis_url, decode_responses=True))
+    app.include_router(
+        build_runs_router(
+            require_principal(authenticate),
+            RequestRunUseCase(agent_repository, run_declaration_store, run_notifier),
+            GetRunUseCase(run_declaration_store),
+            CancelRunUseCase(run_declaration_store),
         )
     )
     return app

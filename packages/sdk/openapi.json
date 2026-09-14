@@ -268,6 +268,145 @@
           }
         }
       }
+    },
+    "/agents/{agent_id}/run": {
+      "post": {
+        "summary": "Run Agent Route",
+        "operationId": "run_agent_route_agents__agent_id__run_post",
+        "parameters": [
+          {
+            "name": "agent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Agent Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunAccepted"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "agent_not_found | agent_version_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}": {
+      "get": {
+        "summary": "Get Run Route",
+        "operationId": "get_run_route_runs__run_id__get",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RunDetailResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "run_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/runs/{run_id}/cancel": {
+      "post": {
+        "summary": "Cancel Run Route",
+        "operationId": "cancel_run_route_runs__run_id__cancel_post",
+        "parameters": [
+          {
+            "name": "run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelAccepted"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "run_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -488,6 +627,31 @@
         "type": "object",
         "title": "Backoff"
       },
+      "CancelAccepted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "cancel_requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Cancel Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "status",
+          "cancel_requested_at"
+        ],
+        "title": "CancelAccepted",
+        "description": "`POST /runs/{run_id}/cancel` 의 성공 응답(202) — 멱등(spec 2.2, D-11)."
+      },
       "CreateAgentRequest": {
         "properties": {
           "name": {
@@ -505,6 +669,18 @@
         ],
         "title": "CreateAgentRequest",
         "description": "`POST /agents` 의 요청 본문."
+      },
+      "FailureReason": {
+        "type": "string",
+        "enum": [
+          "model_error",
+          "tool_error",
+          "max_steps_exceeded",
+          "unknown_tool",
+          "definition_invalid",
+          "internal"
+        ],
+        "title": "FailureReason"
       },
       "HTTPValidationError": {
         "properties": {
@@ -625,6 +801,193 @@
         },
         "type": "object",
         "title": "Policy"
+      },
+      "RunAccepted": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "agent_version": {
+            "type": "integer",
+            "title": "Agent Version"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued",
+            "title": "Status",
+            "default": "queued"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "requested_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requested By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "agent_id",
+          "agent_version",
+          "requested_at",
+          "requested_by"
+        ],
+        "title": "RunAccepted",
+        "description": "`POST /agents/{agent_id}/run` 의 성공 응답(202) — Run 은 항상 `queued` 로 시작합니다."
+      },
+      "RunDetailResponse": {
+        "properties": {
+          "run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Run Id"
+          },
+          "agent_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Agent Id"
+          },
+          "agent_version": {
+            "type": "integer",
+            "title": "Agent Version"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RunStatus"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "requested_by": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Requested By"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "trace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trace Id"
+          },
+          "cancel_requested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cancel Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "run_id",
+          "agent_id",
+          "agent_version",
+          "status",
+          "requested_at",
+          "requested_by",
+          "started_at",
+          "finished_at",
+          "failure_reason",
+          "trace_id",
+          "cancel_requested_at"
+        ],
+        "title": "RunDetailResponse",
+        "description": "`GET /runs/{run_id}` 의 성공 응답 — `control.runs` 투영만 읽습니다(spec 0001 D-11)."
+      },
+      "RunRequest": {
+        "properties": {
+          "input": {
+            "type": "string",
+            "title": "Input"
+          },
+          "agent_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "input"
+        ],
+        "title": "RunRequest",
+        "description": "`POST /agents/{agent_id}/run` 의 요청 본문."
+      },
+      "RunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "waiting",
+          "succeeded",
+          "failed",
+          "cancelled",
+          "timed_out"
+        ],
+        "title": "RunStatus",
+        "description": "`data.run_execution_status`(마이그레이션 0001)와 같은 값."
       },
       "UpdateAgentRequest": {
         "properties": {
