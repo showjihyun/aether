@@ -43,6 +43,31 @@ docker compose -f infra/docker/compose.yaml exec api aether-api keys create --la
 원문 키는 이때 **한 번만** stdout 에 출력됩니다 — 다시 조회할 방법이 없으니 그 자리에서
 저장하십시오. 환경변수나 `.env` 로 키를 주입하는 부트스트랩은 없습니다.
 
+## Run 실행해 보기
+
+`worker` 가 실행을 맡고 `api` 는 선언·조회·취소만 합니다([docs/api.md](docs/api.md) 4절,
+spec 0002 2.2, 2.4). 기본 모델 어댑터는 `fake` — 인터넷 없이 됩니다.
+
+```bash
+KEY=$(docker compose -f infra/docker/compose.yaml exec -T api aether-api keys create --label demo)
+
+AGENT_ID=$(curl -s -X POST localhost:8000/agents \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"name": "demo-agent", "definition": {"schema_version": 1, "system_prompt": "You are a helper."}}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+
+RUN_ID=$(curl -s -X POST "localhost:8000/agents/$AGENT_ID/run" \
+  -H "Authorization: Bearer $KEY" -H "Content-Type: application/json" \
+  -d '{"input": "hello"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['run_id'])")
+
+curl -s "localhost:8000/runs/$RUN_ID" -H "Authorization: Bearer $KEY"   # status 가 곧 "succeeded"
+```
+
+`GET /runs/{id}` 를 몇 번 다시 호출하면(투영은 비동기입니다, D-2) `status` 가
+`"succeeded"` 가 됩니다. 취소하려면 `POST /runs/{id}/cancel` — 진행 중인 도구·모델
+호출은 끝나기를 기다린 뒤(협력적 취소, C-3) 다음 반복에서 `"cancelled"` 로 끝납니다.
+
 ## 실제 모델로 돌리기
 
 기본은 `AETHER_MODEL_ADAPTER=fake` — 판정(verify·smoke)은 언제나 이 어댑터로, 네트워크

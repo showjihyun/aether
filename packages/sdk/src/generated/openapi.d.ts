@@ -74,6 +74,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/agents/{agent_id}/run": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Run Agent Route */
+        post: operations["run_agent_route_agents__agent_id__run_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run Route */
+        get: operations["get_run_route_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs/{run_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Run Route */
+        post: operations["cancel_run_route_runs__run_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -214,6 +265,23 @@ export interface components {
             max_seconds: number;
         };
         /**
+         * CancelAccepted
+         * @description `POST /runs/{run_id}/cancel` 의 성공 응답(202) — 멱등(spec 2.2, D-11).
+         */
+        CancelAccepted: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            status: components["schemas"]["RunStatus"];
+            /**
+             * Cancel Requested At
+             * Format: date-time
+             */
+            cancel_requested_at: string;
+        };
+        /**
          * CreateAgentRequest
          * @description `POST /agents` 의 요청 본문.
          */
@@ -222,6 +290,11 @@ export interface components {
             name: string;
             definition: components["schemas"]["AgentDefinition"];
         };
+        /**
+         * FailureReason
+         * @enum {string}
+         */
+        FailureReason: "model_error" | "tool_error" | "max_steps_exceeded" | "unknown_tool" | "definition_invalid" | "internal";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -281,6 +354,94 @@ export interface components {
             tool_retries: number;
             backoff?: components["schemas"]["Backoff"];
         };
+        /**
+         * RunAccepted
+         * @description `POST /agents/{agent_id}/run` 의 성공 응답(202) — Run 은 항상 `queued` 로 시작합니다.
+         */
+        RunAccepted: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Version */
+            agent_version: number;
+            /**
+             * Status
+             * @default queued
+             * @constant
+             */
+            status: "queued";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+        };
+        /**
+         * RunDetailResponse
+         * @description `GET /runs/{run_id}` 의 성공 응답 — `control.runs` 투영만 읽습니다(spec 0001 D-11).
+         */
+        RunDetailResponse: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Version */
+            agent_version: number;
+            status: components["schemas"]["RunStatus"];
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /**
+             * Requested By
+             * Format: uuid
+             */
+            requested_by: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            failure_reason: components["schemas"]["FailureReason"] | null;
+            /** Trace Id */
+            trace_id: string | null;
+            /** Cancel Requested At */
+            cancel_requested_at: string | null;
+        };
+        /**
+         * RunRequest
+         * @description `POST /agents/{agent_id}/run` 의 요청 본문.
+         */
+        RunRequest: {
+            /** Input */
+            input: string;
+            /** Agent Version */
+            agent_version?: number | null;
+        };
+        /**
+         * RunStatus
+         * @description `data.run_execution_status`(마이그레이션 0001)와 같은 값.
+         * @enum {string}
+         */
+        RunStatus: "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled" | "timed_out";
         /**
          * UpdateAgentRequest
          * @description `PUT /agents/{id}` 의 요청 본문 — `definition` 만. `name` 은 Phase 1 불변(D-9).
@@ -511,6 +672,124 @@ export interface operations {
                 };
             };
             /** @description agent_not_found | agent_version_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    run_agent_route_agents__agent_id__run_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                agent_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunAccepted"];
+                };
+            };
+            /** @description agent_not_found | agent_version_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_route_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunDetailResponse"];
+                };
+            };
+            /** @description run_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_run_route_runs__run_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancelAccepted"];
+                };
+            };
+            /** @description run_not_found */
             404: {
                 headers: {
                     [name: string]: unknown;

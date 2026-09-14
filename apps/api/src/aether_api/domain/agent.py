@@ -36,8 +36,14 @@ class AgentVersionSummary:
 
 @dataclass(frozen=True)
 class AgentVersion:
-    """`control.agent_versions` 한 행. 생성된 뒤에는 불변(DB 트리거가 보장, spec 0001 R-8)."""
+    """`control.agent_versions` 한 행. 생성된 뒤에는 불변(DB 트리거가 보장, spec 0001 R-8).
 
+    `id` 는 이 행의 PK — `control.runs.agent_version_id` FK 가 참조하는 값입니다
+    (spec 0002 2.2, P1-5b). P1-1 은 이 값을 쓰지 않았지만(응답에 없음), `RequestRun`
+    이 `control.runs` 에 선언을 쓰려면 필요합니다.
+    """
+
+    id: UUID
     agent_id: UUID
     version: int
     definition: AgentDefinition

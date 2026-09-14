@@ -6,6 +6,8 @@
  *
  * P1-1: Agent Registry 5경로(`createAgent`·`listAgents`·`getAgent`·`getAgentVersion`·
  * `updateAgent`)를 더합니다(spec 0002 2.2, D-17).
+ *
+ * P1-5b: Run 3경로(`runAgent`·`getRun`·`cancelRun`)를 더합니다(spec 0002 2.2, D-17).
  */
 
 import type { paths } from "./generated/openapi";
@@ -26,6 +28,15 @@ export type CreateAgentRequest =
   paths["/agents"]["post"]["requestBody"]["content"]["application/json"];
 export type UpdateAgentRequest =
   paths["/agents/{agent_id}"]["put"]["requestBody"]["content"]["application/json"];
+
+export type RunRequest =
+  paths["/agents/{agent_id}/run"]["post"]["requestBody"]["content"]["application/json"];
+export type RunAccepted =
+  paths["/agents/{agent_id}/run"]["post"]["responses"]["202"]["content"]["application/json"];
+export type RunDetailResponse =
+  paths["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"];
+export type CancelAccepted =
+  paths["/runs/{run_id}/cancel"]["post"]["responses"]["202"]["content"]["application/json"];
 
 export interface ListAgentsParams {
   limit?: number;
@@ -48,6 +59,9 @@ export interface AetherClient {
   getAgent(agentId: string): Promise<AgentDetailResponse>;
   getAgentVersion(agentId: string, version: number): Promise<AgentVersionResponse>;
   updateAgent(agentId: string, body: UpdateAgentRequest): Promise<AgentDetailResponse>;
+  runAgent(agentId: string, body: RunRequest): Promise<RunAccepted>;
+  getRun(runId: string): Promise<RunDetailResponse>;
+  cancelRun(runId: string): Promise<CancelAccepted>;
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -163,6 +177,31 @@ export function createClient(options: CreateClientOptions): AetherClient {
         "PUT",
         `/agents/${agentId}`,
         body,
+      );
+    },
+
+    async runAgent(agentId: string, body: RunRequest): Promise<RunAccepted> {
+      return requestJson<RunAccepted>(
+        doFetch,
+        baseUrl,
+        headers,
+        "POST",
+        `/agents/${agentId}/run`,
+        body,
+      );
+    },
+
+    async getRun(runId: string): Promise<RunDetailResponse> {
+      return requestJson<RunDetailResponse>(doFetch, baseUrl, headers, "GET", `/runs/${runId}`);
+    },
+
+    async cancelRun(runId: string): Promise<CancelAccepted> {
+      return requestJson<CancelAccepted>(
+        doFetch,
+        baseUrl,
+        headers,
+        "POST",
+        `/runs/${runId}/cancel`,
       );
     },
   };

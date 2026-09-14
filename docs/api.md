@@ -56,9 +56,20 @@
 | `tools` | 중복 없음, 전부 내장 도구 이름(`clock`, `calculator`) 안 — 밖이면 `422` |
 | `policy` | `timeout_seconds` 1~3600, `max_steps` 1~64, `model_retries`·`tool_retries` 0~10, `backoff.base_seconds` > 0, `max_seconds ≥ base_seconds` |
 
-## 4. Run (P1-5b 에서 채움)
+## 4. Run (P1-5b)
 
-`POST /agents/{id}/run`, `GET /runs/{id}`, `POST /runs/{id}/cancel` — spec 0002 2.2. 이 절은 P1-5b 가 계약을 커밋할 때 채웁니다.
+`Run` 은 `Agent Version` 하나를 한 번 실행한 사건입니다([domain.md](domain.md) 1절). Control Plane(api)은 **선언**만 하고 Data Plane(worker)이 실행합니다(AR-7, spec 0001 D-11) — api 는 `control.runs` 에 행을 넣고 `aether:runs:requested` 로 통지하며, 실행 상태는 worker 의 `aether:runs:status` 알림을 api 안의 소비자가 `control.runs` 의 투영 열로 복제합니다(spec 0002 2.4, D-2).
+
+| 메서드·경로 | 요청 | 성공 | 오류 |
+| --- | --- | --- | --- |
+| `POST /agents/{id}/run` | `{ input: string, agent_version?: int }` | `202 { run_id, agent_id, agent_version, status: "queued", requested_at, requested_by }` | `404 agent_not_found` · `404 agent_version_not_found` · `422` |
+| `GET /runs/{id}` | — | `200 { run_id, agent_id, agent_version, status, requested_at, requested_by, started_at, finished_at, failure_reason, trace_id, cancel_requested_at }` | `404 run_not_found` |
+| `POST /runs/{id}/cancel` | — | `202 { run_id, status, cancel_requested_at }` | `404 run_not_found` |
+
+- **선언과 통지의 순서**: `control.runs` 삽입(`input`, `agent_version_id`, `requested_by` = 호출한 API 키의 id, `status = queued`)을 **커밋한 뒤** `aether:runs:requested` 에 XADD. XADD 가 실패해도 `202` — Run 은 `queued` 로 남아 관측 가능하고 선언은 잃지 않습니다(spec 0002 C-2). 클라이언트 재시도는 새 Run 을 만듭니다(멱등키는 Non-goal).
+- **`GET /runs/{id}`** 는 `control.runs` 의 투영 열만 읽습니다. 투영이 아직 도착하지 않았으면 `queued` 입니다. `status` 값은 `queued` / `running` / `waiting` / `succeeded` / `failed` / `cancelled` / `timed_out`, `failure_reason` 은 종결이 `failed` 일 때 `model_error` / `tool_error` / `max_steps_exceeded` / `unknown_tool` / `definition_invalid` / `internal`.
+- **취소는 협력적이고 멱등**입니다. `cancel_requested_at` 이 비어 있으면 지금 시각을 적고, 이미 있으면 그대로 둡니다. 종결된 Run 에도 `202` 이고 상태는 바뀌지 않습니다. 실제 반영은 worker 가 다음 단계 시작에서 하며(spec 0002 D-11), 결과는 `GET` 이나 이벤트로 봅니다.
+- **투영의 멱등**: 상태 알림에는 Run 단위 `seq` 가 있고, api 는 `status_seq < seq` 인 알림만 적용합니다(중복·역행 무시, DB 커밋 뒤 ack).
 
 ## 5. 이벤트 스트림
 
