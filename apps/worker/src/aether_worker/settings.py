@@ -7,6 +7,7 @@ architecture.md 3.1 의 층 규칙에 묶이지 않습니다.
 from __future__ import annotations
 
 import socket
+from typing import Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -45,3 +46,50 @@ class Settings(BaseSettings):
 
     worker_connect_max_delay: float = 8.0
     """지수 백오프의 상한(초)."""
+
+    database_url: str = "postgresql+psycopg://aether:aether@localhost:5432/aether"
+    """spec 0002 2.15. worker 가 처음으로 DB 를 씁니다 — `data.run_executions`·
+    `data.run_states` 쓰기, `control.runs`·`agent_versions` 읽기. compose 에서는
+    `aether_data` 역할 URL(api 의 같은 이름 변수는 `aether_control` — 역할이
+    다릅니다)."""
+
+    @property
+    def psycopg_dsn(self) -> str:
+        """`database_url` 에서 `+psycopg` 드라이버 표기(SQLAlchemy 형식)만 벗깁니다
+        (`apps/api/src/aether_api/settings.py` 와 같은 구현)."""
+        return self.database_url.replace("postgresql+psycopg://", "postgresql://", 1)
+
+    model_adapter: Literal["fake", "openai_compatible"] = "fake"
+    """spec 0002 2.5, 2.15. `fake` 가 기본 — 판정(verify·smoke)은 항상 네트워크 없이."""
+
+    model_base_url: str | None = None
+    """`model_adapter=openai_compatible` 일 때만 씁니다. compose `llm` 프로파일 안에서는
+    `http://llm:11434/v1`."""
+
+    model_id: str = "qwen3.8:27b"
+    """`definition.model.id` 가 `null` 일 때 쓰는 기본 모델(spec 0002 D-1)."""
+
+    model_api_key: str | None = None
+    """선택. 비밀값 — 로그·코드에 남기지 않습니다."""
+
+    model_thinking: bool = False
+    """spec 0002 D-19. Qwen3.8 계열은 기본이 thinking 이라 꺼 둡니다."""
+
+    observation_max_chars: int = 16_000
+    """spec 0002 2.6, R-14. 도구 결과를 이 길이로 잘라 `truncated: true` 를 표시합니다."""
+
+    events_maxlen: int = 10_000
+    """spec 0002 2.7. Run 이벤트 스트림의 근사 `MAXLEN`."""
+
+    events_ttl_seconds: int = 86_400
+    """spec 0002 2.7. Run 종결 뒤 이벤트 스트림의 TTL(초)."""
+
+    worker_lease_seconds: float = 60.0
+    """spec 0002 2.4, D-10. 실행 권한 lease 의 TTL — 단계마다 갱신합니다."""
+
+    worker_xautoclaim_min_idle_ms: int = 3_900_000
+    """spec 0002 2.4, D-10. `timeout` 상한(3600 초) + 300 초 여유. 테스트는 0 을 주입해
+    가로채기 경로를 즉시 실행합니다."""
+
+    worker_heartbeat_seconds: float = 5.0
+    """spec 0002 2.14, R-13. 이 간격마다 heartbeat 키를 갱신합니다(TTL 은 이 값의 3배)."""

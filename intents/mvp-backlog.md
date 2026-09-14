@@ -179,7 +179,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 | P1-2b | Run 상태 기계 · lease · `RunStateStore` · `AgentDefinition` (`packages/runtime`) | P1-2a | — | 완료 |
 | P1-3 | Model gateway 와 첫 어댑터 | P0-1 | Q6 (닫힘 — spec 0002 D-1) | 완료 |
 | P1-4 | Planner/Executor 루프 (도구는 프로세스 내부) | P1-2b, P1-3 | — | 완료 |
-| P1-5a | worker 실행 경로 (`ExecuteRun` 호출 · heartbeat · Redis/DB 어댑터) | P1-4, P0-4 | — | 대기 |
+| P1-5a | worker 실행 경로 (`ExecuteRun` 호출 · heartbeat · Redis/DB 어댑터) | P1-4, P0-4 | — | 완료 |
 | P1-5b | Run API (`run` / `runs/{id}` / `cancel`) · 투영 · e2e | P1-1, P1-5a | — | 대기 |
 | P1-6 | Streaming | P1-5b | — | 대기 |
 | P1-7 | Retry / Timeout / Error Handling | P1-5b | — | 대기 |
