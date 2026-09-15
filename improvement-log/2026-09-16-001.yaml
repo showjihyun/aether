@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-16-001
+date: 2026-09-16
+status: candidate
+symptom: "verify 의 제품 단계 상한(spec 0001 D-7: 10개)을 넘어 smoke 를 11번째 단계로 더해야 한다 — 접으면(api-integration 안) 실패 원인 분리와 behavior 계층 점수가 나빠지고, 합치면(web-lint+web-arch) architecture 계층에서 AR-1 판정이 사라짐"
+evidence: "spec 0002 D-15·2.11(선택지 a/b/c 표), spec 0001 개정 12. P1-9 실측(2026-09-16, Windows 11 + Docker Desktop 27.3.1, compose v2.29.7): scripts/smoke.sh 캐시 있음 24.6초·첫 실행(no-cache 빌드 32.6초 + 실행 40.4초) 72.9초, CI 경로 모사(bake 뒤 SMOKE_NO_BUILD=1) 23.5초, verify 16단계 기존 합계 약 77~104초. 회귀 조건 smoke 단독 ≤ 240초의 1/10"
+root_cause: harness-adoption.md 3.3 의 상한 취지는 반복을 죽이지 않는 시간 예산이고, 그 예산은 spec 0001 D-12(10분)가 이미 지킨다. 단계 수 상한을 숫자 그대로 지키려면 계층 구분을 흐려야 한다
+fix: smoke|behavior|true|scripts/smoke.sh 를 11번째 제품 단계로(H-5, 사람). CI 는 bake 캐시(H-6)로 빌드 시간을 줄임
+recurrence_risk: low
+harness_element: HE-14
+proposed_harness_change: "harness.config 에 smoke 행 추가(총 17단계). 회귀 조건: smoke 단독 로컬 ≤ 240초, CI verify job ≤ 8분 — 넘으면 spec 0002 2.11 (a) 접기로 돌아가는 판정을 사람이. e2e·load 단계를 더할 때 같은 판정을 반복"
+preferred_enforcement: doc
+trust: validated
+regression_check: "대상: H-5 병합 뒤 CI verify job 과 로컬 verify. 기준: .harness/verify.json 에 smoke pass, smoke duration_ms ≤ 240000, 합계 ≤ 600000, CI job ≤ 8분"
+owner: showjihyun
+expires: 2027-03-16

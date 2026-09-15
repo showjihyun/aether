@@ -1,0 +1,21 @@
+# spec 0002 2.11, D-15: CI 캐시 경로 전용 오버라이드. `docker buildx bake -f
+# infra/docker/compose.yaml -f infra/docker/compose.ci.yaml api worker --load` 가
+# `api`·`worker` 두 target 만 이 태그로 먼저 빌드하고(GitHub Actions 캐시,
+# `harness.yml`), `scripts/smoke.sh` 는 `SMOKE_NO_BUILD=1` 일 때 이 파일을 더해
+# `--no-build` 로 그 이미지를 그대로 씁니다. `migrate` 는 `api` 와 같은 이미지를
+# 재사용합니다(compose.yaml 의 `migrate` 서비스와 같은 이유 — 같은 uv workspace 설치).
+# `pull_policy: never` 는 로컬에 없는 태그를 레지스트리에서 당겨오려다 실패하는 대신
+# 바로 오류를 내게 합니다. 이 파일이 없는 평소 `docker compose build`/`up`(compose.yaml
+# 하나만)에는 영향이 없습니다.
+services:
+  api:
+    image: aether-api:ci
+    pull_policy: never
+
+  migrate:
+    image: aether-api:ci
+    pull_policy: never
+
+  worker:
+    image: aether-worker:ci
+    pull_policy: never

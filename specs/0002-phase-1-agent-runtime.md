@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 7 | [편집] 2026-09-16. P1-9 실측 — (a) 2.11 격리에 `infra/docker/compose.smoke.yaml`(api 호스트 포트 `!reset []`, collector 출력 `./out/otel-smoke`): 개발 스택과 포트 충돌 없음을 확인. (b) 시나리오의 HTTP 호출은 호스트가 아니라 **api 컨테이너 안에서** `scripts/smoke_client.py`(stdin 으로 넘김, 표준 라이브러리만) — 호스트에 curl·jq·포트를 가정하지 않음. (c) CI 캐시: bake 는 compose 의 상대 빌드 컨텍스트를 **실행 위치** 기준으로 해석하므로 `docker/bake-action@v6` 의 `source: .` + `workdir: infra/docker`(v7 에는 `workdir` 없음, improvement-log `2026-09-16-002`). (d) 2.13 측정 위치는 api 컨테이너 안(`localhost:8000`) — 호스트·Docker 네트워크 왕복을 포함하지 않음, 결과 파일 `infra/docker/out/smoke-bench.json`. (e) C-12: 로컬 compose v2.29.7 에서 `up --wait` + 일회성 `migrate` 가 그대로 성공. D-15 근거 `2026-09-16-001` |
 | 개정 6 | [편집] 2026-09-15. P1-8 구현에서 드러난 배치 — api 에 outbound 포트 `RequestTracing`(`span`·`current_traceparent`)과 어댑터 `otel_request_tracing.py` 를 두어 `RequestRun` 이 `run.request` span 안에서 선언·통지하고 그 `traceparent` 를 실음(application 은 `opentelemetry` 를 모름, AR-9). worker 는 `adapters/outbound/otel_trace_context.py` 가 `TraceContext` 를 구현. 어댑터는 `TracerProvider` 를 주입받아 테스트가 전역을 덮지 않음. R-5 판정 경로를 2.9·2.11 과 같은 `infra/docker/out/otel-smoke/spans.jsonl` 로. collector 이미지는 `0.160.0` digest 고정 |
 | 개정 5 | [편집] 2026-09-15. P1-7 구현이 2.8 을 구체화 — (a) 타임아웃 기준 시계는 `Clock.monotonic()` 이 아니라 저장된 `started_at` 과 `Clock.now()`: monotonic 값은 재개(R-16, 프로세스 재시작)를 넘어 보존되지 않아 재개한 Run 이 예산을 새로 받는 구멍이 생김. (b) 검사 지점 셋(단계 시작·호출 직전·백오프 직전). (c) 재시도 가능한 모델 오류의 분류(timeout·protocol·5xx·429, 그 밖 4xx 는 즉시 실패). (d) 도구는 예외만 재시도, `is_error` 결과는 `Observation`. (e) 백오프 공식. (f) C-13 의 갱신 스레드를 outbound 포트 `LeaseKeeper` 로 — 잃은 단계는 저장·발행·release 없이 `LeaseHeld`. R-4 의 뜻은 그대로 |
 | 개정 4 | [편집] 2026-09-13. P1-5a 실측 — (a) 2.7 의 Redis 오류 문자열: redis-py 는 `ResponseError` 의 `str()` 에서 `ERR ` 접두어를 떼므로 어댑터는 `The ID specified in XADD is equal or smaller` 로 매칭(뜻 동일). (b) 2.16: 테스트 **파일** basename 도 저장소 전체에서 유일해야 함 — pytest 기본(prepend) import 는 `__init__.py` 없는 tests 디렉터리의 테스트 모듈을 basename 으로 올리므로 `apps/worker/tests/test_settings.py` 는 `test_worker_settings.py` 로. `explicit_package_bases`/`pythonpath` 는 헬퍼 import 만 해결하고 테스트 파일 이름 충돌은 해결하지 않음 |
@@ -286,9 +287,9 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 
 | 단계 | 내용 |
 | --- | --- |
-| 격리 | compose 프로젝트 `-p aether-smoke`. `infra/docker/.env` 를 쓰지 않고 **임시 `.env`** 를 생성해 `--env-file` 로 넘깁니다 — 값은 랜덤(`openssl rand -hex 24`)이고 실행 뒤 지웁니다. 비밀값이 아니라 일회용 시험값이지만 어디에도 커밋·출력하지 않습니다. CI 에 `.env` 가 없어도 뜹니다 |
+| 격리 | compose 프로젝트 `-p aether-smoke`. `infra/docker/.env` 를 쓰지 않고 **임시 `.env`** 를 생성해 `--env-file` 로 넘깁니다 — 값은 랜덤(`openssl rand -hex 24`)이고 실행 뒤 지웁니다. 비밀값이 아니라 일회용 시험값이지만 어디에도 커밋·출력하지 않습니다. CI 에 `.env` 가 없어도 뜹니다. 오버라이드 `infra/docker/compose.smoke.yaml` 이 api 의 호스트 포트를 비우고(`ports: !reset []`) collector 출력을 `./out/otel-smoke` 로 돌려 개발 스택과 겹치지 않습니다(개정 7) |
 | 기동 | `docker compose -p aether-smoke --env-file <tmp> -f infra/docker/compose.yaml [-f infra/docker/compose.ci.yaml] up --build -d --wait postgres redis migrate otel-collector api worker` — web 은 띄우지 않습니다. `--wait` 와 일회성 `migrate`(`service_completed_successfully`)의 조합은 compose 버전에 따라 실패 사례가 있어 **P1-9 착수 전 확인 항목**입니다(C-12). 실패하면 `up -d` 뒤 `migrate` 종료 코드와 healthcheck 를 스크립트가 직접 기다립니다 |
-| 시나리오 | `docker compose exec -T api aether-api keys create --label smoke` → `POST /agents` → `POST /agents/{id}/run` → `GET /runs/{id}` 가 `succeeded` 가 될 때까지 상한 60초 폴링 → `trace_id` 가 `infra/docker/out/otel-smoke/spans.jsonl`(smoke 전용 디렉터리 — 개발 스택과 공유하지 않음) 에 나타날 때까지 상한 30초 폴링 |
+| 시나리오 | `docker compose exec -T api aether-api keys create --label smoke`(원문은 변수로만) → **api 컨테이너 안에서** `scripts/smoke_client.py scenario`(stdin 으로 넘김 — 호스트 포트·curl·jq 불필요, 개정 7): `POST /agents` → `POST /agents/{id}/run` → `GET /runs/{id}` 가 `succeeded` 가 될 때까지 상한 60초 폴링 → `trace_id` 가 `infra/docker/out/otel-smoke/spans.jsonl`(smoke 전용 디렉터리 — 개발 스택과 공유하지 않음) 에 나타날 때까지 상한 30초 폴링 |
 | 종료 | 항상 `down -v --remove-orphans`(trap). 임시 `.env` 삭제. Windows Git Bash 는 `MSYS_NO_PATHCONV=1`, `exec -T` |
 | 모델 | `AETHER_MODEL_ADAPTER=fake`(compose 기본값) |
 | `--bench` | 2.13 |
@@ -303,7 +304,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 
 **이 spec 은 (b) 를 채택합니다(D-15).** 상한의 취지는 **시간** 예산이고 그것은 D-12(10분)가 지킵니다. 시간을 지키는 장치는 셋 — `smoke` 는 web 을 띄우지 않음, 이미지 레이어 캐시, 그리고 **숫자로 된 회귀 조건**: `smoke` 단독 ≤ 4분(로컬), CI `verify` job 전체 ≤ 8분. P1-9 가 실측하고, 넘으면 (a) 로 돌아갑니다 — 그 판정도 사람이 합니다.
 
-**CI 빌드 캐시.** compose 파일의 `cache_from` 한 줄로는 되지 않습니다. CI 는 `docker/setup-buildx-action` 뒤 **`docker buildx bake -f infra/docker/compose.yaml -f infra/docker/compose.ci.yaml --set '*.cache-from=type=gha' --set '*.cache-to=type=gha,mode=max' --load`** 로 **`api`·`worker` 두 target 만** 이미지를 먼저 만들고(`docker/bake-action` 이 런타임 토큰 노출을 대신합니다. target 을 주지 않으면 `web`·`migrate` 까지 빌드해 8분 조건을 위협합니다), `smoke.sh` 는 `SMOKE_NO_BUILD=1` 이면 `-f compose.ci.yaml` 을 더해 `--no-build` 로 그 이미지를 씁니다. `compose.ci.yaml` 은 `api`·`migrate` 에 같은 `image:`, `worker` 에 `image:`, `pull_policy: never` 를 주며 로컬 `docker compose build` 에 영향이 없습니다(개정 2). 이 절차는 실재를 확인했습니다(bake 의 `type=gha`). `harness.yml` 변경은 보호 파일이라 사람(C-9).
+**CI 빌드 캐시.** compose 파일의 `cache_from` 한 줄로는 되지 않습니다. CI 는 `docker/setup-buildx-action` 뒤 **`docker buildx bake -f infra/docker/compose.yaml -f infra/docker/compose.ci.yaml --set '*.cache-from=type=gha' --set '*.cache-to=type=gha,mode=max' --load`** 로 **`api`·`worker` 두 target 만** 이미지를 먼저 만들고(`docker/bake-action@v6` 이 런타임 토큰 노출을 대신합니다. bake 는 compose 의 상대 빌드 컨텍스트를 실행 위치 기준으로 해석하므로 `source: .` + `workdir: infra/docker` + `files: compose.yaml, compose.ci.yaml` — 개정 7. target 을 주지 않으면 `web`·`migrate` 까지 빌드해 8분 조건을 위협합니다), `smoke.sh` 는 `SMOKE_NO_BUILD=1` 이면 `-f compose.ci.yaml` 을 더해 `--no-build` 로 그 이미지를 씁니다. `compose.ci.yaml` 은 `api`·`migrate` 에 같은 `image:`, `worker` 에 `image:`, `pull_policy: never` 를 주며 로컬 `docker compose build` 에 영향이 없습니다(개정 2). 이 절차는 실재를 확인했습니다(bake 의 `type=gha`). `harness.yml` 변경은 보호 파일이라 사람(C-9).
 
 `harness.config` 의 배열 원소는 큰따옴표 문자열이라 명령 안의 따옴표는 작은따옴표입니다(spec 0001 2.11). 후보 파일은 `bash -c` 로 **실제 실행**해 검증합니다(improvement-log `2026-09-11-014`).
 
@@ -324,7 +325,7 @@ Phase 2 의 MCP HTTP 전송이 `httpx` 를 쓰면 AR-5 ignore 에 `aether_mcp.ad
 | 항목 | 정의 |
 | --- | --- |
 | 지표 | `POST /agents/{id}/run` 의 응답 지연 **P95**(요청 전송 → 202 수신). Run 의 실행 시간이 아닙니다 |
-| 절차 | `scripts/smoke.sh --bench`: smoke 와 같은 격리 compose 위에서 같은 Agent 에 **순차** 200회, 처음 20회 워밍업 제외, 180회의 P50·P95·max 를 `.harness/smoke-bench.json` 에 기록 |
+| 절차 | `scripts/smoke.sh --bench`: smoke 와 같은 격리 compose 위에서 같은 Agent 에 **순차** 200회, 처음 20회 워밍업 제외, 180회의 P50·P95·max(nearest-rank)를 `infra/docker/out/smoke-bench.json` 에 기록. 요청은 api 컨테이너 안에서 `localhost:8000` 으로 보냅니다 — 호스트·Docker 네트워크 왕복은 포함하지 않습니다(개정 7) |
 | 환경 | 머신(OS, CPU, Docker), 어댑터(`fake`), 커밋 해시를 함께. 기준값에는 환경 이름이 붙습니다 |
 | 값 | **사람이** P1-9 에서 실측을 보고 `evaluation/README.md` 에 적습니다(EI-2) |
 

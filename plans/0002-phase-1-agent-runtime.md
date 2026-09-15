@@ -9,7 +9,7 @@
 | 작성일 | 2026-09-12 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (리뷰 F-1 ~ F-19 반영본. 순서 5 wave·11 단위, 사람 손 두 순간 네 접촉 + Q6 확인에 동의. spec 0002 개정 1 [실질] 도 이 승인으로 확정) |
-| 개정 | — (실행 중 갱신: P1-2a 순서 2·P1-2b 순서 1 의 conftest 배치를 실제대로, P1-2b 에 PG lease 만료 테스트, P1-5a 의 `test_worker_settings.py`(basename 유일, spec 개정 4)·`NoopTracer` 계약 테스트·`FakeModelGateway.echo()`·`tests/support/redis.py` — 개정으로 세지 않음) |
+| 개정 | — (실행 중 갱신: P1-2a 순서 2·P1-2b 순서 1 의 conftest 배치를 실제대로, P1-2b 에 PG lease 만료 테스트, P1-5a 의 `test_worker_settings.py`(basename 유일, spec 개정 4)·`NoopTracer` 계약 테스트·`FakeModelGateway.echo()`·`tests/support/redis.py`, P1-9 의 `compose.smoke.yaml`·`smoke_client.py`·부록 C 의 bake `workdir` — 개정으로 세지 않음) |
 
 spec 이 정한 요구사항(R-1 ~ R-16)·결정(D-1 ~ D-19)·계약은 반복하지 않습니다. 이 문서는 열한 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`, Sonnet 5), **M** 주 세션(`docs/`·backlog·spec·plan — implementer 는 `docs/` 를 고칠 수 없습니다), **H** 사람(보호 파일, spec 0001 C-1), **W** 가드가 경고만 내는 파일.
 
@@ -162,6 +162,7 @@ P1-3 병합 뒤, P1-1 착수 전. 부록 A. 에이전트는 현재 트리(어댑
 | 순서 | 무엇 | 누가 |
 | --- | --- | --- |
 | 1 | `infra/docker/compose.ci.yaml` — `api`·`migrate` 에 **같은** `image: aether-api:ci`, `worker` 에 `image: aether-worker:ci`, `pull_policy: never`. bake 의 target 과 `up --no-build` 가 이 이름을 씁니다. 로컬 compose 에 영향 없음 | A (W) |
+| 1b | `infra/docker/compose.smoke.yaml`(api 호스트 포트 `!reset []`, collector 출력 `./out/otel-smoke`), `scripts/smoke_client.py`(api 컨테이너 안에서 도는 표준 라이브러리 HTTP 클라이언트 — `scenario`·`bench`, nearest-rank 백분위), `tests/scripts/test_smoke_client.py`(테스트 먼저, mutation 1건) — 실행 중 추가(spec 개정 7) | A |
 | 2 | `scripts/smoke.sh`(spec 2.11): `-p aether-smoke`, 임시 `.env`(랜덤, 실행 뒤 삭제), `AETHER_OTEL_DIR=./out/otel-smoke` 를 **`mkdir -p && chmod 0777`** 한 뒤(Linux CI 에서 Docker 가 root 소유로 만들면 uid 10001 collector 가 쓰지 못합니다) `up -d --wait postgres redis migrate otel-collector api worker`(web 제외). `SMOKE_NO_BUILD=1` 이면 `-f compose.ci.yaml` 을 더하고 `--no-build`, 아니면 `--build`. `keys create` → `POST /agents` → `POST run` → `succeeded` 폴링 60초 → `trace_id` 를 `out/otel-smoke/spans.jsonl` 에서 폴링 30초 → trap `down -v --remove-orphans`. `MSYS_NO_PATHCONV=1`, `exec -T`. `--bench` 는 spec 2.13(결과 `infra/docker/out/smoke-bench.json`). `git update-index --chmod=+x`. **C-12 확인**: `up --wait` 와 일회성 `migrate` 의 조합을 로컬(compose v2.29)에서 먼저 실행 — 실패하면 `migrate` 종료 코드와 healthcheck 를 직접 기다리는 경로 | A |
 | 3 | 로컬 실측: `smoke.sh` 단독 시간, `--bench` 의 P50·P95·max. `harness.config` 후보(부록 B)를 **`bash -c` 로 실제 실행**해 exit 0(improvement-log 014). 기록을 사람에게 | A |
 | 4 | `./harness/scripts/improvement-log.sh new` 1건: D-15(단계 상한 10 → 11)의 근거와 회귀 조건 — H-5 의 준비물 | A |
@@ -314,12 +315,16 @@ forbidden_modules =
       # 캐시를 씁니다(리뷰 F-11·F-13). web·migrate 는 target 에서 제외 — smoke 가 web 을 띄우지
       # 않고 migrate 는 api 와 같은 이미지(compose.ci.yaml 이 같은 image: 를 줌). smoke.sh 는
       # SMOKE_NO_BUILD=1 로 이 이미지를 그대로 씁니다.
-      - uses: docker/setup-buildx-action@v4   # 확인: 2026-09-12 존재
-      - uses: docker/bake-action@v6            # 확인: 2026-09-12 존재. ACTIONS_RUNTIME_TOKEN 노출을 대신합니다
+      # bake 는 compose 의 상대 빌드 컨텍스트(context: ../..)를 실행 위치 기준으로 해석합니다(P1-9 실측,
+      # improvement-log 2026-09-16-002) — workdir 를 infra/docker 로. workdir 는 bake-action v6 에만 있습니다.
+      - uses: docker/setup-buildx-action@v4   # 확인: 2026-09-16 refs/tags 존재
+      - uses: docker/bake-action@v6            # 확인: 2026-09-16 refs/tags 존재. ACTIONS_RUNTIME_TOKEN 노출을 대신합니다
         with:
+          source: .
+          workdir: infra/docker
           files: |
-            infra/docker/compose.yaml
-            infra/docker/compose.ci.yaml
+            compose.yaml
+            compose.ci.yaml
           targets: api,worker
           load: true
           set: |

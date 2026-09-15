@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-16-002
+date: 2026-09-16
+status: candidate
+symptom: "docker buildx bake 는 compose 파일의 상대 빌드 컨텍스트(context: ../..)를 compose 파일 위치가 아니라 bake 를 실행한 작업 디렉터리 기준으로 해석한다 — plan 0002 부록 C 초안(저장소 루트에서 -f infra/docker/compose.yaml)대로면 CI 에서 실패"
+evidence: "P1-9 implementer 실측: 저장소 루트에서 docker buildx bake -f infra/docker/compose.yaml -f infra/docker/compose.ci.yaml api worker --load → ERROR: resolve : CreateFile ..\..\infra. infra/docker 안에서 같은 명령 → 성공. docker compose 는 compose 파일 위치 기준이라 문제 없음. docker/bake-action v6 에 workdir 입력(기본 .) 이 있고 v7 에서 제거됨(action.yml 확인)"
+root_cause: 같은 compose 파일을 두 도구(compose, bake)가 다른 기준으로 해석. 후보 검증이 YAML 파싱과 태그 실재까지만 보고 bake 명령을 CI 와 같은 작업 디렉터리에서 실행하지 않았음(015 와 같은 부류)
+fix: "H-6 후보를 bake-action@v6 의 source: . + workdir: infra/docker + files: compose.yaml, compose.ci.yaml 로. v7 은 workdir 가 없어 Dependabot 제안 시 재설계 필요 주석"
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: CI 후보 파일(harness.yml)을 바꾸는 단위의 판정에 "액션이 실행할 명령을 CI 와 같은 작업 디렉터리에서 로컬로 한 번 실행" 을 포함. 015 의 제안(refs/tags 확인)과 합쳐 H-2b·H-6 류 준비물 체크리스트로
+preferred_enforcement: doc
+trust: untrusted
+regression_check: "대상: H-6 PR 의 CI 첫 실행, 이후 harness.yml 변경 PR. 기준: bake 스텝이 첫 실행에 성공, 'resolve … CreateFile' 류 경로 오류 0건"
+owner: unassigned
+expires: 2026-12-16
