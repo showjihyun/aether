@@ -18,7 +18,12 @@ from aether_api.domain.agent import AgentNotFound, AgentVersionNotFound
 from aether_runtime.domain.agent import AgentDefinition
 from aether_runtime.domain.run import RunStatus
 
-from apps.api.tests.fakes import FakeAgentRepository, FakeRunDeclarationStore, FakeRunNotifier
+from apps.api.tests.fakes import (
+    FakeAgentRepository,
+    FakeRequestTracing,
+    FakeRunDeclarationStore,
+    FakeRunNotifier,
+)
 
 
 def _definition(**overrides: Any) -> AgentDefinition:
@@ -114,3 +119,45 @@ def test_request_run_returns_normally_when_notifier_fails(
     assert view.status == RunStatus.QUEUED
     assert store.get(view.run_id) is not None
     assert any(record.levelname == "WARNING" for record in caplog.records)
+
+
+def test_request_run_without_tracing_sends_none_traceparent() -> None:
+    """spec 0002 2.18: `tracing` 을 생략하면(기존 호출) 내부 no-op 을 써서
+    `traceparent=None` 그대로 통지합니다 — 기존 호출부(어댑터 조립)를 바꾸지 않아도
+    이 유스케이스는 그대로 동작합니다."""
+    repo = FakeAgentRepository()
+    agent = _make_agent(repo)
+    store = FakeRunDeclarationStore()
+    notifier = FakeRunNotifier()
+    request_run = RequestRunUseCase(repo, store, notifier)
+
+    request_run(agent.id, "do the thing", None, uuid4())
+
+    _run_id, _agent_version_id, traceparent = notifier.calls[0]
+    assert traceparent is None
+
+
+def test_request_run_opens_run_request_span_and_forwards_its_traceparent() -> None:
+    """spec 0002 2.9, 2.18: `tracing` 이 있으면 `run.request` span 안에서 선언·통지가
+    이루어지고, 통지에는 그 span 이 낸 `traceparent` 가 실립니다."""
+    repo = FakeAgentRepository()
+    agent = _make_agent(repo)
+    version = repo.get_version(agent.id, 1)
+    store = FakeRunDeclarationStore()
+    notifier = FakeRunNotifier()
+    fixed_traceparent = "00-" + "1" * 32 + "-" + "2" * 16 + "-01"
+    tracing = FakeRequestTracing(traceparent=fixed_traceparent)
+    request_run = RequestRunUseCase(repo, store, notifier, tracing=tracing)
+
+    view = request_run(agent.id, "do the thing", None, uuid4())
+
+    assert tracing.opened == [
+        (
+            "run.request",
+            {"aether.agent_id": str(agent.id), "aether.agent_version_id": str(version.id)},
+        )
+    ]
+    notified_run_id, notified_version_id, notified_traceparent = notifier.calls[0]
+    assert notified_run_id == view.run_id
+    assert notified_version_id == version.id
+    assert notified_traceparent == fixed_traceparent

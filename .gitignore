@@ -51,3 +51,6 @@ venv/
 
 # 로컬 인프라 상태
 .docker-data/
+
+# spec 0002 2.9, D-7 (P1-8): otel-collector 의 file exporter bind mount 출력.
+infra/docker/out/
