@@ -37,6 +37,16 @@ services:
       retries: 10
       start_period: 5s
 
+  # spec 0002 2.9, D-7 (P1-8): OTLP/HTTP 수신 → debug + file exporter. 기본 서비스로
+  # 뜨지만 api·worker 의 `depends_on` 에는 넣지 않습니다(부팅을 막지 않음, DP-4) — 이
+  # collector 가 늦거나 죽어도 실행은 계속되고, span 만 못 남깁니다. `file` exporter
+  # 의 출력은 호스트 bind mount 로 봅니다(이미지에 셸이 없어 `exec cat` 이 불가).
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.160.0@sha256:799dc6cf12c96192af37b5bdba804da8c10b3bc563b43cb90c3f3c58d9572ad6
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ${AETHER_OTEL_DIR:-./out/otel}:/out
+
   # 일회성: `alembic upgrade head` 를 관리자 역할로 실행하고 끝나면 종료합니다(spec 2.7·2.8).
   # api 이미지를 재사용합니다 — 같은 uv workspace 설치가 필요하기 때문입니다.
   migrate:
@@ -64,6 +74,9 @@ services:
       AETHER_DATABASE_URL: postgresql+psycopg://aether_control:${AETHER_CONTROL_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # api 가 처음으로 Redis 를 씁니다(spec 0002 2.15, P1-5b) — 통지·투영 소비자.
       AETHER_REDIS_URL: redis://redis:6379/0
+      # spec 0002 2.9, 2.15, D-7 (P1-8). `depends_on` 에 collector 를 넣지 않으므로
+      # 없어도(또는 아직 안 떠도) api 부팅은 막히지 않습니다(DP-4).
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     ports:
       - "8000:8000"
     depends_on:
@@ -94,6 +107,9 @@ services:
       AETHER_MODEL_ID: ${AETHER_MODEL_ID:-qwen3.8:27b}
       AETHER_MODEL_API_KEY: ${AETHER_MODEL_API_KEY:-}
       AETHER_MODEL_THINKING: ${AETHER_MODEL_THINKING:-false}
+      # spec 0002 2.9, 2.15, D-7 (P1-8). `depends_on` 에 collector 를 넣지 않으므로
+      # 없어도(또는 아직 안 떠도) worker 부팅은 막히지 않습니다(DP-4).
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
     depends_on:
       redis:
         condition: service_healthy

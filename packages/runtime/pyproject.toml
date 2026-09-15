@@ -8,6 +8,7 @@ dependencies = [
     "psycopg[binary]",
     "redis",
     "httpx",
+    "opentelemetry-sdk>=1.44.0",
 ]
 
 [build-system]

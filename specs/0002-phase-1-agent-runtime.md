@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 6 | [편집] 2026-09-15. P1-8 구현에서 드러난 배치 — api 에 outbound 포트 `RequestTracing`(`span`·`current_traceparent`)과 어댑터 `otel_request_tracing.py` 를 두어 `RequestRun` 이 `run.request` span 안에서 선언·통지하고 그 `traceparent` 를 실음(application 은 `opentelemetry` 를 모름, AR-9). worker 는 `adapters/outbound/otel_trace_context.py` 가 `TraceContext` 를 구현. 어댑터는 `TracerProvider` 를 주입받아 테스트가 전역을 덮지 않음. R-5 판정 경로를 2.9·2.11 과 같은 `infra/docker/out/otel-smoke/spans.jsonl` 로. collector 이미지는 `0.160.0` digest 고정 |
 | 개정 5 | [편집] 2026-09-15. P1-7 구현이 2.8 을 구체화 — (a) 타임아웃 기준 시계는 `Clock.monotonic()` 이 아니라 저장된 `started_at` 과 `Clock.now()`: monotonic 값은 재개(R-16, 프로세스 재시작)를 넘어 보존되지 않아 재개한 Run 이 예산을 새로 받는 구멍이 생김. (b) 검사 지점 셋(단계 시작·호출 직전·백오프 직전). (c) 재시도 가능한 모델 오류의 분류(timeout·protocol·5xx·429, 그 밖 4xx 는 즉시 실패). (d) 도구는 예외만 재시도, `is_error` 결과는 `Observation`. (e) 백오프 공식. (f) C-13 의 갱신 스레드를 outbound 포트 `LeaseKeeper` 로 — 잃은 단계는 저장·발행·release 없이 `LeaseHeld`. R-4 의 뜻은 그대로 |
 | 개정 4 | [편집] 2026-09-13. P1-5a 실측 — (a) 2.7 의 Redis 오류 문자열: redis-py 는 `ResponseError` 의 `str()` 에서 `ERR ` 접두어를 떼므로 어댑터는 `The ID specified in XADD is equal or smaller` 로 매칭(뜻 동일). (b) 2.16: 테스트 **파일** basename 도 저장소 전체에서 유일해야 함 — pytest 기본(prepend) import 는 `__init__.py` 없는 tests 디렉터리의 테스트 모듈을 basename 으로 올리므로 `apps/worker/tests/test_settings.py` 는 `test_worker_settings.py` 로. `explicit_package_bases`/`pythonpath` 는 헬퍼 import 만 해결하고 테스트 파일 이름 충돌은 해결하지 않음 |
 | 개정 3 | [편집] 2026-09-12. P1-2a 실행에서 드러난 사실 — pytest 9 는 `pytest_plugins` 를 **rootdir 의 conftest 에서만** 허용합니다(`Failed: Defining 'pytest_plugins' in a non-top-level conftest is no longer supported`, 실측). 2.16 의 "api conftest 가 `pytest_plugins` 로 재사용" 을 "루트 `conftest.py` 가 한 번 등록, `apps/api/tests/conftest.py` 는 삭제" 로. fixture 이름·동작은 그대로 |
@@ -26,7 +27,7 @@ intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문�
 | R-2 | `POST /agents/{id}/run` 이 `queued` Run 을 즉시 돌려주고, worker 가 루프를 돌아 `GET /runs/{id}` 가 종결 상태(`succeeded` / `failed` / `cancelled` / `timed_out`)에 이릅니다. `POST /runs/{id}/cancel` 뒤에는 `cancelled` 입니다 | Outcome 2 | `api-integration`: testcontainers PostgreSQL + Redis 위에서 api 와 worker 를 같은 프로세스의 스레드로 띄워 fake 모델로 `succeeded` 까지. cancel 은 fake 모델을 단계 사이에서 멈춰 세운 뒤 요청해 `cancelled` 확인. `smoke`: 빌드된 이미지로 같은 흐름(2.11) |
 | R-3 | Run 이벤트가 SSE 로 흘러나오고 순서가 상태 전이 순서와 같으며, 클라이언트가 끊겨도 Run 은 계속됩니다 | Outcome 3 | `api-integration`: 스트림에서 받은 `run.status` 의 `status` 열 == 상태 기계의 전이 열. 소비자를 중간에 닫은 뒤 `GET /runs/{id}` 가 `succeeded` — 비동기 투영은 `wait_until(predicate, timeout)` 헬퍼(조건 폴링, 2.16) 하나로만 기다립니다 |
 | R-4 | Run 타임아웃은 `timed_out`, 재시도 한도 초과는 사유 있는 `failed` 로 끝나고, 그 테스트는 **주입된 시계**로 결정적입니다 | Outcome 4 | `api-unit`(`packages/runtime/tests`): `FakeClock` 을 전진시켜 `timed_out`, 실패하는 fake 모델로 `failed` + `failure_reason == "model_error"` |
-| R-5 | 한 Run 의 span 트리(Run → Task → 모델 호출 / 도구 호출)가 collector 에서 보이고 `GET /runs/{id}` 에 `trace_id` 가 있습니다 | Outcome 5 | `api-unit`: `Tracer` 포트의 인메모리 구현으로 부모–자식 단언. `smoke`: `GET /runs/{id}` 의 `trace_id` 가 collector 의 file exporter 출력(`.harness/otel/spans.jsonl`)에 상한 30초 폴링 안에 나타남 |
+| R-5 | 한 Run 의 span 트리(Run → Task → 모델 호출 / 도구 호출)가 collector 에서 보이고 `GET /runs/{id}` 에 `trace_id` 가 있습니다 | Outcome 5 | `api-unit`: `Tracer` 포트의 인메모리 구현으로 부모–자식 단언. `smoke`: `GET /runs/{id}` 의 `trace_id` 가 collector 의 file exporter 출력(`infra/docker/out/otel-smoke/spans.jsonl`, 개정 2·6)에 상한 30초 폴링 안에 나타남 |
 | R-6 | 전부가 **fake 모델 어댑터로 네트워크 없이** 통과하고, OpenAI-호환 어댑터는 같은 포트 계약 테스트를 통과합니다 | Outcome 6, DP-4 | `api-unit` 은 `pytest-socket` 으로 **loopback 외 소켓을 차단**한 채 돕니다(`addopts` 의 `--disable-socket --allow-unix-socket --allow-hosts=127.0.0.1,::1` — `TestClient` 의 이벤트 루프가 `socketpair` 를 쓰므로 단독 차단은 불가. 개정 1). `integration` 은 `enable_socket`. OpenAI-호환 어댑터의 테스트는 `httpx.MockTransport`. 실제 로컬 LLM 서버 실행은 사람의 수동 확인(2.5) |
 | R-7 | AR-5 와 AR-7 이 **실제 `.importlinter`** 로 발화합니다 | Outcome 6 | `tests/arch/test_real_importlinter_fires.py`: `apps/*/src`·`packages/*/src` 만 임시 디렉터리에 복사하고 그 경로들을 **`PYTHONPATH` 앞**에 넣어(editable 설치의 `.pth` 보다 앞 — 아니면 복사본이 아니라 실제 src 를 검사합니다) 실제 `.importlinter` 그대로 `aether_api/_bad.py`(`import httpx`, `import aether_runtime.application`)를 주입해 `lint-imports --no-cache` exit ≠ 0(개정 2). 더해 실제 파일의 contract 본문(`httpx` ∈ AR-5 forbidden, `aether_runtime.application` ∈ AR-7 forbidden)을 단언 |
 | R-8 | 새 경로는 전부 인증 뒤에 있습니다. 인증 없는 요청은 401 | Outcome 8, DP-6 | `api-unit`: `app.routes` 를 순회해 예외 목록(`/healthz`, 문서 경로) 밖의 모든 `APIRoute` 에 헤더 없는 요청 → 401 |
@@ -71,7 +72,7 @@ intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문�
 | `adapters/outbound/tools` | `clock_tool.py`, `calculator.py`, `registry.py` | 프로세스 내부 도구 둘과 인메모리 레지스트리 |
 | `adapters/outbound/db` | `run_state_store.py`, `run_declaration_reader.py` | PostgreSQL 구현. `aether_data` 역할 |
 | `adapters/outbound/redis` | `event_sink.py`, `status_notifier.py` | Redis Streams 구현 |
-| `adapters/outbound/telemetry` | `otel_tracer.py` | `Tracer` 의 OpenTelemetry 구현 |
+| `adapters/outbound/telemetry` | `otel_tracer.py` | `Tracer` 의 OpenTelemetry 구현. `TracerProvider` 를 주입받음(없으면 전역) — 개정 6 |
 
 **`apps/worker`** — `aether_runtime` 을 조립합니다(`main.py`, AR-10).
 
@@ -81,12 +82,14 @@ intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문�
 | `application/usecases` | `handle_run_requested.py` | `traceparent` 복원 → runtime `ExecuteRun` 호출 → ack 여부 결정 |
 | `adapters/inbound/stream` | `requested_consumer.py` | 기존 `stream.py` 의 후속. `count=1`, 재시작 시 **자기 PEL 먼저**(`XREADGROUP … 0`), 그 뒤 `XAUTOCLAIM`(2.4) |
 | `adapters/outbound/redis` | `heartbeat.py` | 2.14 |
+| `adapters/outbound` | `otel_trace_context.py` | `TraceContext` 의 OTel 구현 — `requested` 메시지의 `traceparent` 를 부모 컨텍스트로 복원(없거나 잘못되면 새 root). 개정 6 |
 
 **`apps/api`** — 선언·조회·투영만. `aether_runtime.domain` **만** import 합니다(AR-7 확장, 2.12).
 
 | 층 | 모듈 | 내용 |
 | --- | --- | --- |
 | `application/ports/inbound` | `agents.py`, `runs.py`, `apply_run_status.py`, `read_run_events.py` | 유스케이스 인터페이스: `CreateAgent`, `ListAgents`, `GetAgent`, `GetAgentVersion`, `UpdateAgent`, `RequestRun`, `GetRun`, `CancelRun`, `ApplyRunStatus`, `ReadRunEvents` |
+| `application/ports/outbound` | `request_tracing.py` | `RequestTracing.span(name, attributes)`, `current_traceparent()` — `RequestRun` 이 `run.request` span 안에서 선언·통지. 구현은 `adapters/outbound/otel_request_tracing.py`(개정 6) |
 | `application/ports/outbound` | `agent_repository.py`, `run_declaration_store.py`, `run_notifier.py`, `run_event_reader.py` | `AgentRepository`(`control.agents`·`agent_versions`, `FOR UPDATE` 포함), `RunDeclarationStore`(`control.runs` 삽입·투영 갱신·`cancel_requested_at`), `RunNotifier`(`aether:runs:requested` XADD), `RunEventReader`(Run 이벤트 스트림 읽기, 비동기) |
 | `application/usecases` | 위 인터페이스마다 하나 | `ApplyRunStatus` 는 2.4 의 `seq` 멱등 규칙을 가집니다 |
 | `adapters/inbound/http` | `agents.py`, `runs.py`, `events.py` | 라우터. 전부 `require_principal(app.state.authenticate)` 뒤. `events.py` 는 SSE(2.7) |

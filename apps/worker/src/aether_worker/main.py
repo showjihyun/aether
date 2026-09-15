@@ -33,7 +33,7 @@ from aether_runtime.adapters.outbound.model_gateway.openai_compatible import (
 from aether_runtime.adapters.outbound.redis.event_sink import RedisEventSink
 from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNotifier
 from aether_runtime.adapters.outbound.system_clock import SystemClock
-from aether_runtime.adapters.outbound.telemetry.noop_tracer import NoopTracer
+from aether_runtime.adapters.outbound.telemetry.otel_tracer import OtelTracer
 from aether_runtime.adapters.outbound.threaded_lease_keeper import ThreadedLeaseKeeper
 from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
 from aether_runtime.application.ports.outbound.model_gateway import ModelGateway
@@ -44,7 +44,7 @@ from aether_worker.adapters.inbound.stream.requested_consumer import (
     RequestedConsumer,
     ensure_group,
 )
-from aether_worker.adapters.outbound.noop_trace_context import NoopTraceContext
+from aether_worker.adapters.outbound.otel_trace_context import OtelTraceContext
 from aether_worker.adapters.outbound.redis.heartbeat import Heartbeat
 from aether_worker.adapters.outbound.telemetry import init_telemetry
 from aether_worker.application.ports.inbound.handle_run_requested import HandleRunRequested
@@ -134,14 +134,14 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
             client, maxlen=settings.events_maxlen, ttl_seconds=settings.events_ttl_seconds
         ),
         RedisStatusNotifier(client),
-        NoopTracer(),
+        OtelTracer(),
         SystemClock(),
         owner=settings.worker_consumer,
         lease_ttl_seconds=settings.worker_lease_seconds,
         observation_max_chars=settings.observation_max_chars,
         lease_keeper=ThreadedLeaseKeeper(PostgresRunStateStore(connect)),
     )
-    return HandleRunRequestedUseCase(execute_run, NoopTraceContext())
+    return HandleRunRequestedUseCase(execute_run, OtelTraceContext())
 
 
 def _heartbeat_loop(heartbeat: Heartbeat, interval_seconds: float, stop: Event) -> None:

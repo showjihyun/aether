@@ -111,6 +111,7 @@ version = "0.0.0"
 source = { editable = "packages/runtime" }
 dependencies = [
     { name = "httpx" },
+    { name = "opentelemetry-sdk" },
     { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
     { name = "redis" },
@@ -119,6 +120,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "httpx" },
+    { name = "opentelemetry-sdk", specifier = ">=1.44.0" },
     { name = "psycopg", extras = ["binary"] },
     { name = "pydantic" },
     { name = "redis" },
