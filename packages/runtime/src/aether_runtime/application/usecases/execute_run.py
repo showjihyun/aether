@@ -1,8 +1,31 @@
-"""spec 0002 2.4, 2.6, D-5, D-6, D-10, D-11, R-14, R-15, R-16: `ExecuteRunUseCase` —
+"""spec 0002 2.4, 2.6, 2.8, D-5, D-6, D-10, D-11, C-13, R-14, R-15, R-16: `ExecuteRunUseCase` —
 Planner/Executor 루프. `ExecuteRun`(inbound 포트) 의 유일한 구현입니다.
 
-이 유스케이스는 이 단위(P1-4)에서 재시도·타임아웃을 하지 않습니다(P1-7 이 더합니다) —
-모델 오류는 즉시 `failed(model_error)`, 도구 예외는 즉시 `failed(tool_error)`.
+**재시도·백오프·타임아웃(2.8, P1-7).** 타임아웃 기준 시계는 `Clock.now()` 와 저장된
+`RunState.started_at` 입니다 — spec 2.8 원문의 `Clock.monotonic()` 은 프로세스 재시작
+(재개, R-16)을 넘어 보존되지 않으므로 이 unit 이 spec 을 [편집] 합니다(주 세션이
+반영). `deadline = started_at + timeout_seconds`, 잔여 = `deadline - clock.now()`.
+검사 지점은 (a) 매 단계 시작(취소 확인 직후, `_execute` 의 `while` 최상단),
+(b) 모델·도구 호출 직전, (c) 재시도 백오프 직전(잔여이 지연보다 작으면 기다리지
+않고 `timed_out`)입니다. 잔여 ≤ 0 이면 `failure_reason` 없이 `timed_out`.
+
+재시도 가능한 모델 오류는 `is_retryable`(이 파일의 순수 함수)이 정합니다 —
+`timeout`·`protocol` 은 항상, `http` 는 5xx 또는 429 만. 그 밖의 `http` 4xx 는
+재시도 없이 즉시 `failed(model_error)`. 총 시도 = `model_retries + 1`. 도구는
+`Tool.run` 이 **예외**를 던질 때만 재시도(총 `tool_retries + 1`) — `ToolResult
+(is_error=True)` 는 재시도 대상이 아니라 정상 `Observation` 으로 모델에 돌아갑니다.
+백오프는 `n` 번째 재시도(1부터) 전 `min(base_seconds * 2**(n-1), max_seconds)` 를
+`Clock.sleep` 으로(지터 없음, `FakeClock` 은 즉시 전진).
+
+**lease 유지(C-13).** 모델·도구 호출은 `LeaseKeeper.keep(...)` 로 감쌉니다 — 별도
+스레드(프로덕션은 `ThreadedLeaseKeeper`)가 그 호출 동안 lease 를 주기적으로
+갱신하고, 갱신에 실패하면 `LeaseStatus.lost` 가 참이 됩니다. 그 호출이 끝난 뒤
+`lost` 가 참이면 결과를 버리고(저장·발행·release 없이) `LeaseHeld` 를 던집니다 —
+다른 worker 가 이미 이 Run 을 가져갔을 수 있으므로 쓰지 않고, 새 소유자가 마지막
+저장 스냅숏에서 이어받습니다(같은 `seq` 재발행은 `EventSink` 가 흡수, R-16). 단계
+끝의 평범한 `renew_lease` 가 `False` 를 돌려줄 때도 같은 처리(저장 전 `LeaseHeld`).
+`lease_keeper` 를 넘기지 않으면(대부분의 P1-4 테스트) 내부 no-op 을 씁니다 — lease
+는 갱신되지 않지만 `lost` 도 결코 참이 되지 않아 기존 동작과 같습니다.
 
 **전이와 종결(2.4).** 상태 기계는 `domain.run.transition` 이 소유합니다 — `queued` 에서
 집었을 때 `cancel_requested_at` 이 이미 있으면 `running` 을 거치지 않고 **직접**
@@ -25,17 +48,22 @@ Planner/Executor 루프. `ExecuteRun`(inbound 포트) 의 유일한 구현입니
 
 from __future__ import annotations
 
-from datetime import datetime
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from pydantic import BaseModel, ValidationError
 
 from aether_runtime.application.ports.outbound.clock import Clock
 from aether_runtime.application.ports.outbound.event_sink import EventSink
+from aether_runtime.application.ports.outbound.lease_keeper import LeaseKeeper
 from aether_runtime.application.ports.outbound.model_gateway import (
     ModelError,
     ModelGateway,
     ModelRequest,
+    ModelResponse,
     ToolSchema,
 )
 from aether_runtime.application.ports.outbound.run_declaration_reader import (
@@ -49,7 +77,7 @@ from aether_runtime.application.ports.outbound.status_notifier import (
 )
 from aether_runtime.application.ports.outbound.tools import ToolRegistry
 from aether_runtime.application.ports.outbound.tracer import Tracer
-from aether_runtime.domain.agent import AgentDefinition
+from aether_runtime.domain.agent import AgentDefinition, Backoff, Policy
 from aether_runtime.domain.events import (
     EventType,
     ModelCompletedPayload,
@@ -77,6 +105,57 @@ from aether_runtime.domain.tools import ToolCall
 _DEFAULT_LEASE_TTL_SECONDS = 60.0
 _DEFAULT_OBSERVATION_MAX_CHARS = 16_000
 
+# spec 0002 2.8 [편집 예정], P1-7: `http` 4xx 는 이 경계 이상이거나 429 일 때만
+# 재시도 대상입니다. 5xx 는 전부 포함(501/505 등 드문 코드까지) 되므로 고정된
+# 목록이 아니라 하한값 + 예외 하나로 표현합니다.
+_RETRYABLE_HTTP_STATUS_MIN = 500
+_RETRYABLE_HTTP_STATUS_EXTRA = frozenset({429})
+
+
+def is_retryable(error: ModelError) -> bool:
+    """spec 0002 2.8 [편집 예정] (P1-7): 재시도 가능한 모델 오류 분류.
+
+    `ModelError` 는 outbound 포트(`model_gateway.py`)의 타입이라 `domain` 은 이것을
+    모릅니다 — 그래서 이 판정 함수는 domain 이 아니라 application(이 유스케이스
+    파일) 쪽 순수 함수입니다. `timeout`·`protocol` 은 항상 재시도 대상이고, `http`
+    는 5xx 또는 429 만 대상입니다 — 그 밖의 4xx(예: 400, 404)는 클라이언트 쪽
+    영구적 오류로 보고 재시도하지 않습니다."""
+    if error.kind in ("timeout", "protocol"):
+        return True
+    if error.kind == "http":
+        if error.status is None:
+            return False
+        return (
+            error.status >= _RETRYABLE_HTTP_STATUS_MIN
+            or error.status in _RETRYABLE_HTTP_STATUS_EXTRA
+        )
+    return False
+
+
+def _backoff_delay(backoff: Backoff, attempt: int) -> float:
+    """spec 0002 2.3, 2.8: `attempt` 번째 재시도(1부터) 전의 지수 백오프 지연 —
+    지터 없음, 결정적입니다."""
+    return float(min(backoff.base_seconds * (2 ** (attempt - 1)), backoff.max_seconds))
+
+
+@dataclass
+class _NoOpLeaseStatus:
+    """`LeaseStatus` 포트 값 — 절대 잃지 않습니다."""
+
+    lost: bool = False
+
+
+class _NoOpLeaseKeeper:
+    """`LeaseKeeper` 포트의 내부 기본 구현(spec 0002 C-13) — lease 를 갱신하지 않고
+    `lost=False` 로 고정합니다. `ExecuteRunUseCase` 생성자에 `lease_keeper` 를 넘기지
+    않으면(P1-4 의 기존 테스트 대부분) 이 no-op 이 쓰여 기존 동작과 같습니다.
+    프로덕션 조립(worker `main.py`)은 항상 `ThreadedLeaseKeeper` 를 넘깁니다."""
+
+    @contextmanager
+    def keep(self, run_id: UUID, owner: str, ttl_seconds: float) -> Iterator[_NoOpLeaseStatus]:
+        del run_id, owner, ttl_seconds
+        yield _NoOpLeaseStatus()
+
 
 class ExecuteRunUseCase:
     """`ExecuteRun` 의 구현(spec 0002 2.1, 2.4, 2.6). worker 가 부르는 유일한 문입니다."""
@@ -95,6 +174,7 @@ class ExecuteRunUseCase:
         owner: str,
         lease_ttl_seconds: float = _DEFAULT_LEASE_TTL_SECONDS,
         observation_max_chars: int = _DEFAULT_OBSERVATION_MAX_CHARS,
+        lease_keeper: LeaseKeeper | None = None,
     ) -> None:
         self._store = store
         self._declarations = declarations
@@ -107,6 +187,9 @@ class ExecuteRunUseCase:
         self._owner = owner
         self._lease_ttl_seconds = lease_ttl_seconds
         self._observation_max_chars = observation_max_chars
+        self._lease_keeper: LeaseKeeper = (
+            lease_keeper if lease_keeper is not None else _NoOpLeaseKeeper()
+        )
 
     def __call__(self, run_id: UUID) -> RunStatus:
         current_status = self._store.status(run_id)
@@ -229,6 +312,23 @@ class ExecuteRunUseCase:
                     started_at,
                 )
 
+            # 검사 지점 (a), spec 0002 2.8 [편집 예정]: 매 단계 시작, 취소 확인
+            # 직후. 재개(R-16) 뒤에도 예산은 저장된 `started_at` 기준으로
+            # 그대로 유지됩니다 — 프로세스 재시작을 넘어 보존되지 않는
+            # `Clock.monotonic()` 대신 `Clock.now()` 를 씁니다(이 unit 의 설계
+            # 결정 1).
+            if self._remaining_seconds(started_at, definition.policy.timeout_seconds) <= 0:
+                return self._finalize(
+                    run_id,
+                    local_status,
+                    RunStatus.TIMED_OUT,
+                    seq,
+                    messages,
+                    step,
+                    tasks,
+                    started_at,
+                )
+
             if step >= definition.policy.max_steps:
                 return self._finalize(
                     run_id,
@@ -248,6 +348,7 @@ class ExecuteRunUseCase:
                 model_id=definition.model.id,
                 tool_schemas=tool_schemas,
                 allowed_tools=frozenset(definition.tools),
+                policy=definition.policy,
                 local_status=local_status,
                 messages=messages,
                 step=step,
@@ -270,6 +371,7 @@ class ExecuteRunUseCase:
         model_id: str | None,
         tool_schemas: list[ToolSchema],
         allowed_tools: frozenset[str],
+        policy: Policy,
         local_status: RunStatus,
         messages: list[Message],
         step: int,
@@ -294,24 +396,93 @@ class ExecuteRunUseCase:
             with self._tracer.span(
                 "model.complete", {**base_attrs, "aether.model.id": model_id or "default"}
             ):
-                try:
-                    response = self._gateway.complete(
-                        ModelRequest(messages=messages, tools=tool_schemas, model_id=model_id)
-                    )
-                except ModelError:
-                    return _StepOutcome(
-                        finished=self._finalize(
-                            run_id,
-                            local_status,
-                            RunStatus.FAILED,
-                            seq,
-                            messages,
-                            step,
-                            tasks,
-                            started_at,
-                            failure_reason=FailureReason.MODEL_ERROR,
+                response = None
+                attempts = policy.model_retries + 1
+                for attempt in range(1, attempts + 1):
+                    # 검사 지점 (b), spec 0002 2.8 [편집 예정]: 모델 호출 직전.
+                    remaining = self._remaining_seconds(started_at, policy.timeout_seconds)
+                    if remaining <= 0:
+                        return _StepOutcome(
+                            finished=self._finalize(
+                                run_id,
+                                local_status,
+                                RunStatus.TIMED_OUT,
+                                seq,
+                                messages,
+                                step,
+                                tasks,
+                                started_at,
+                            )
                         )
+                    request = ModelRequest(
+                        messages=messages,
+                        tools=tool_schemas,
+                        model_id=model_id,
+                        timeout_seconds=remaining,
                     )
+
+                    def _complete(request: ModelRequest = request) -> ModelResponse:
+                        return self._gateway.complete(request)
+
+                    try:
+                        response = self._guarded_call(run_id, _complete)
+                    except ModelError as error:
+                        # `kind == "timeout"` 인데 그 호출 자체로 예산을 다 썼다면
+                        # (설계 결정 3) 재시도하지 않고 바로 `timed_out` 입니다.
+                        remaining_after = self._remaining_seconds(
+                            started_at, policy.timeout_seconds
+                        )
+                        if error.kind == "timeout" and remaining_after <= 0:
+                            return _StepOutcome(
+                                finished=self._finalize(
+                                    run_id,
+                                    local_status,
+                                    RunStatus.TIMED_OUT,
+                                    seq,
+                                    messages,
+                                    step,
+                                    tasks,
+                                    started_at,
+                                )
+                            )
+                        if not is_retryable(error) or attempt == attempts:
+                            return _StepOutcome(
+                                finished=self._finalize(
+                                    run_id,
+                                    local_status,
+                                    RunStatus.FAILED,
+                                    seq,
+                                    messages,
+                                    step,
+                                    tasks,
+                                    started_at,
+                                    failure_reason=FailureReason.MODEL_ERROR,
+                                )
+                            )
+                        # 검사 지점 (c): 재시도 백오프 직전. 잔여가 지연보다 작으면
+                        # 기다리지 않고 `timed_out` 입니다.
+                        delay = _backoff_delay(policy.backoff, attempt)
+                        remaining_before_sleep = self._remaining_seconds(
+                            started_at, policy.timeout_seconds
+                        )
+                        if remaining_before_sleep <= delay:
+                            return _StepOutcome(
+                                finished=self._finalize(
+                                    run_id,
+                                    local_status,
+                                    RunStatus.TIMED_OUT,
+                                    seq,
+                                    messages,
+                                    step,
+                                    tasks,
+                                    started_at,
+                                )
+                            )
+                        self._clock.sleep(delay)
+                        continue
+                    else:
+                        break
+                assert response is not None
 
             messages.append(Message(role="assistant", content=response.text))
             seq += 1
@@ -369,6 +540,7 @@ class ExecuteRunUseCase:
                     task_id=task_id,
                     call=call,
                     base_attrs=base_attrs,
+                    policy=policy,
                     local_status=local_status,
                     messages=messages,
                     step=step,
@@ -385,6 +557,13 @@ class ExecuteRunUseCase:
             self._publish(run_id, seq, "task.finished", TaskFinishedPayload(task_id=task_id))
             local_status, seq = self._announce(run_id, local_status, RunStatus.RUNNING, seq)
 
+        # spec 0002 C-13, D-10 (설계 결정 7): 단계 끝의 평범한 `renew_lease` 를
+        # **저장 전** 부릅니다 — `False` 를 돌려주면(다른 worker 가 이미 이
+        # Run 을 가져갔을 수 있음) 이 단계의 `RunState` 를 저장하지 않고
+        # `LeaseHeld` 로 물러납니다.
+        if not self._store.renew_lease(run_id, self._owner, self._lease_ttl_seconds):
+            raise LeaseHeld(run_id)
+
         state = RunState(
             run_id=run_id,
             messages=messages,
@@ -395,7 +574,6 @@ class ExecuteRunUseCase:
             started_at=started_at,
         )
         self._store.save(state)
-        self._store.renew_lease(run_id, self._owner, self._lease_ttl_seconds)
         return _StepOutcome(local_status=local_status, seq=seq)
 
     def _run_tool_call(
@@ -405,6 +583,7 @@ class ExecuteRunUseCase:
         task_id: str,
         call: ToolCall,
         base_attrs: dict[str, str],
+        policy: Policy,
         local_status: RunStatus,
         messages: list[Message],
         step: int,
@@ -425,8 +604,7 @@ class ExecuteRunUseCase:
         with self._tracer.span("tool.run", {**base_attrs, "aether.tool.name": call.name}):
             try:
                 tool = self._tools.get(call.name)
-                result = tool.run(call.arguments)
-            except Exception:  # noqa: BLE001 -- 도구 예외는 전부 tool_error 로 흡수(2.8)
+            except KeyError:
                 return _StepOutcome(
                     finished=self._finalize(
                         run_id,
@@ -437,9 +615,72 @@ class ExecuteRunUseCase:
                         step,
                         tasks,
                         started_at,
-                        failure_reason=FailureReason.TOOL_ERROR,
+                        failure_reason=FailureReason.UNKNOWN_TOOL,
                     )
                 )
+
+            result = None
+            attempts = policy.tool_retries + 1
+            for attempt in range(1, attempts + 1):
+                # 검사 지점 (b), spec 0002 2.8 [편집 예정]: 도구 호출 직전. 도구
+                # 자체에는 타임아웃을 강제하지 않습니다(프로세스 내부 함수) —
+                # 호출 직전 잔여만 검사합니다(설계 결정 5).
+                remaining = self._remaining_seconds(started_at, policy.timeout_seconds)
+                if remaining <= 0:
+                    return _StepOutcome(
+                        finished=self._finalize(
+                            run_id,
+                            local_status,
+                            RunStatus.TIMED_OUT,
+                            seq,
+                            messages,
+                            step,
+                            tasks,
+                            started_at,
+                        )
+                    )
+                try:
+                    result = self._guarded_call(run_id, lambda: tool.run(call.arguments))
+                except Exception as error:  # noqa: BLE001 -- 도구 예외는 전부 tool_error 로 흡수(2.8)
+                    if isinstance(error, LeaseHeld):
+                        raise
+                    if attempt == attempts:
+                        return _StepOutcome(
+                            finished=self._finalize(
+                                run_id,
+                                local_status,
+                                RunStatus.FAILED,
+                                seq,
+                                messages,
+                                step,
+                                tasks,
+                                started_at,
+                                failure_reason=FailureReason.TOOL_ERROR,
+                            )
+                        )
+                    # 검사 지점 (c): 재시도 백오프 직전.
+                    delay = _backoff_delay(policy.backoff, attempt)
+                    remaining_before_sleep = self._remaining_seconds(
+                        started_at, policy.timeout_seconds
+                    )
+                    if remaining_before_sleep <= delay:
+                        return _StepOutcome(
+                            finished=self._finalize(
+                                run_id,
+                                local_status,
+                                RunStatus.TIMED_OUT,
+                                seq,
+                                messages,
+                                step,
+                                tasks,
+                                started_at,
+                            )
+                        )
+                    self._clock.sleep(delay)
+                    continue
+                else:
+                    break
+            assert result is not None
 
         content = result.content
         truncated = False
@@ -479,6 +720,38 @@ class ExecuteRunUseCase:
         return ToolSchema(
             name=tool.name, description=tool.description, input_schema=tool.input_schema
         )
+
+    # -- 시간 예산·lease 유지 ----------------------------------------------------
+
+    def _remaining_seconds(self, started_at: datetime | None, timeout_seconds: int) -> float:
+        """spec 0002 2.8 [편집 예정]: `deadline = started_at + timeout_seconds`, 잔여
+        `= deadline - clock.now()`. `started_at` 은 `running` 에 진입한 뒤로는 항상
+        채워져 있습니다(도메인 불변 — `_announce` 가 `RUNNING` 전이에만 값을 주고,
+        재개는 저장된 스냅숏에서 그 값을 이어받습니다) — 그 전(`queued` 취소 직행)에는
+        이 메서드가 불리지 않습니다."""
+        assert started_at is not None
+        deadline = started_at + timedelta(seconds=timeout_seconds)
+        return (deadline - self._clock.now()).total_seconds()
+
+    def _guarded_call[T](self, run_id: UUID, fn: Callable[[], T]) -> T:
+        """spec 0002 C-13: 모델·도구 호출 하나를 `LeaseKeeper.keep(...)` 로 감쌉니다.
+
+        호출이 끝난 뒤(성공이든 예외든) `LeaseStatus.lost` 가 참이면 그 결과나 예외를
+        버리고 `LeaseHeld` 를 던집니다 — 다른 worker 가 이미 이 Run 을 가져갔을 수
+        있으므로 이 호출의 결과를 신뢰하지 않습니다. `lost` 가 아니면 평소대로
+        결과를 돌려주거나 원래 예외를 그대로 다시 던집니다."""
+        outcome: list[T] = []
+        error: BaseException | None = None
+        with self._lease_keeper.keep(run_id, self._owner, self._lease_ttl_seconds) as lease:
+            try:
+                outcome.append(fn())
+            except BaseException as exc:  # noqa: BLE001 -- lease 상태부터 확인한 뒤 재던집니다.
+                error = exc
+        if lease.lost:
+            raise LeaseHeld(run_id) from None
+        if error is not None:
+            raise error
+        return outcome[0]
 
     # -- 전이·종결 --------------------------------------------------------------
 

@@ -15,6 +15,11 @@ DB 를 보는 것과 같은 모양으로 "새 store 인스턴스가 같은 RunSt
 `FakeTool`·`FakeToolRegistry` 는 P1-4(`ExecuteRun`)의 outbound 포트 fake 입니다(AR-9 —
 유스케이스 테스트는 컨테이너 없이 돕니다).
 
+`FakeLeaseKeeper` 는 `LeaseKeeper` 포트의 결정적 fake 입니다(spec 0002 C-13, P1-7) —
+몇 번째 `keep()` 호출에서 lease 를 잃는지를 `lost_on_keep` 으로 미리 정해 둘 수
+있습니다(실제 스레드를 띄우지 않습니다 — 프로덕션 스레드 타이밍은
+`test_threaded_lease_keeper.py` 가 따로 검증합니다).
+
 테스트 지원 코드이며 제품 코드가 아닙니다.
 """
 
@@ -36,11 +41,16 @@ from aether_runtime.domain.tools import ToolResult
 
 
 class FakeClock:
-    """`Clock` 포트의 결정적 구현(spec 0002 R-11) — `sleep` 은 시계만 전진시킵니다."""
+    """`Clock` 포트의 결정적 구현(spec 0002 R-11) — `sleep` 은 시계만 전진시킵니다.
+
+    `sleep_calls` 는 `sleep()` 으로 들어온 인자만 기록합니다(`advance()` 로 직접
+    시간을 조작하는 테스트 코드와 구분하기 위해서입니다) — P1-7 의 재시도 백오프가
+    실제로 `Clock.sleep` 을 부른 지연 값 열을 단언할 때 씁니다(spec 0002 2.8)."""
 
     def __init__(self, start: datetime | None = None) -> None:
         self._now = start if start is not None else datetime(2026, 1, 1, tzinfo=UTC)
         self._monotonic = 0.0
+        self.sleep_calls: list[float] = []
 
     def now(self) -> datetime:
         return self._now
@@ -49,6 +59,7 @@ class FakeClock:
         return self._monotonic
 
     def sleep(self, seconds: float) -> None:
+        self.sleep_calls.append(seconds)
         self.advance(seconds)
 
     def advance(self, seconds: float) -> None:
@@ -295,3 +306,29 @@ class FakeToolRegistry:
 
     def names(self) -> frozenset[str]:
         return frozenset(self._tools)
+
+
+@dataclass
+class _FakeLeaseStatus:
+    """`LeaseStatus` 포트를 만족하는 값 객체 — `keep()` 호출 시점에 결정되어 그 뒤로
+    바뀌지 않습니다(실제 스레드가 없으므로 갱신 도중 값이 바뀔 일도 없습니다)."""
+
+    lost: bool = False
+
+
+class FakeLeaseKeeper:
+    """`LeaseKeeper` 포트의 결정적 fake(spec 0002 C-13) — `lost_on_keep` 번째
+    (1부터) `keep()` 호출에서 `lost=True` 를 돌려줍니다. `None`(기본)이면 절대
+    잃지 않습니다. 실제 스레드를 띄우지 않으므로 `Clock.sleep` 처럼 결정적입니다."""
+
+    def __init__(self, *, lost_on_keep: int | None = None) -> None:
+        self._lost_on_keep = lost_on_keep
+        self._keep_count = 0
+        self.calls: list[tuple[UUID, str, float]] = []
+
+    @contextmanager
+    def keep(self, run_id: UUID, owner: str, ttl_seconds: float) -> Iterator[_FakeLeaseStatus]:
+        self._keep_count += 1
+        self.calls.append((run_id, owner, ttl_seconds))
+        lost = self._lost_on_keep is not None and self._keep_count == self._lost_on_keep
+        yield _FakeLeaseStatus(lost=lost)

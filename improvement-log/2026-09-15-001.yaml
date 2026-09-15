@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-15-001
+date: 2026-09-15
+status: candidate
+symptom: 주 세션의 위임 지시가 단위 안의 뒤 그룹(P1-7 G4 e2e)에 "정책이 없으면 red" 를 기대했으나, 같은 단위의 앞 그룹(G2)이 이미 정책을 구현해 red 가 원리상 불가능했다. implementer 가 처음부터 green 이라고 보고
+evidence: "P1-7 implementer 보고 'G4 — plan 가정과 실제가 어긋남': test_run_failure_projection.py 작성 직후 1 passed. 위임 지시 G4 문구 'red(정책이 없으면 첫 500 에서 이미 failed 로 끝나 … 재시도 횟수 단언에서 실패하도록)'. 리뷰가 mutation(is_retryable → False)으로 보완: assert 1 == 3 실패 확인"
+root_cause: red 기대를 그룹마다 적으면서 그룹 사이 의존(앞 그룹의 green 이 뒤 그룹의 red 조건을 없앰)을 고려하지 않았다. red 는 "그 동작의 구현이 아직 없는 시점" 에만 성립한다
+fix: mutation 증거로 대체(M4). 코드 변경 없음
+recurrence_risk: medium
+harness_element: HE-15
+proposed_harness_change: "plans/README 절 구성 2번(단위별 계획)에 규칙 한 줄: '같은 단위의 앞 순서가 이미 구현한 동작을 검증하는 뒤 순서의 테스트는 red 대신 mutation 증거(구현 한 줄을 깨면 그 테스트가 실패)를 요구한다. 가능하면 그런 통합 테스트를 앞 순서의 red 단계에 함께 쓴다'. 위임 지시 템플릿에도 같은 문장"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: "대상: P1-8·P1-9 와 Phase 2 의 plan·위임 지시. 기준: 그룹 간 의존이 있는 뒤 그룹 테스트에 red 대신 mutation 증거 요구가 적혀 있고, '처음부터 green' 보고 0건"
+owner: unassigned
+expires: 2026-12-15
