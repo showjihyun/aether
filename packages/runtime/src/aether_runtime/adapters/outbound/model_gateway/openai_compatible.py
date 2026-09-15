@@ -139,7 +139,7 @@ class OpenAICompatibleGateway:
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         body = self._request_body(request, stream=False)
-        data = self._post_json("/chat/completions", body)
+        data = self._post_json("/chat/completions", body, timeout=request.timeout_seconds)
         choices = data.get("choices") or []
         if not choices:
             raise ModelError(kind="protocol", message="response has no choices")
@@ -156,8 +156,11 @@ class OpenAICompatibleGateway:
     def stream(self, request: ModelRequest) -> Iterator[ModelDelta]:
         body = self._request_body(request, stream=True)
         buffers: dict[int, _ToolCallBuffer] = {}
+        stream_kwargs: dict[str, Any] = {"json": body}
+        if request.timeout_seconds is not None:
+            stream_kwargs["timeout"] = request.timeout_seconds
         try:
-            with self._client.stream("POST", "/chat/completions", json=body) as response:
+            with self._client.stream("POST", "/chat/completions", **stream_kwargs) as response:
                 if response.status_code >= 400:
                     response.read()
                     raise ModelError(
@@ -236,9 +239,14 @@ class OpenAICompatibleGateway:
         ordered = sorted(entries, key=lambda entry: entry.get("index", 0))
         return [entry["embedding"] for entry in ordered]
 
-    def _post_json(self, path: str, body: dict[str, Any]) -> dict[str, Any]:
+    def _post_json(
+        self, path: str, body: dict[str, Any], *, timeout: float | None = None
+    ) -> dict[str, Any]:
         try:
-            response = self._client.post(path, json=body)
+            if timeout is not None:
+                response = self._client.post(path, json=body, timeout=timeout)
+            else:
+                response = self._client.post(path, json=body)
         except httpx.TimeoutException as exc:
             raise ModelError(kind="timeout", message=str(exc)) from exc
         except httpx.HTTPError as exc:

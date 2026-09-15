@@ -182,7 +182,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 | P1-5a | worker 실행 경로 (`ExecuteRun` 호출 · heartbeat · Redis/DB 어댑터) | P1-4, P0-4 | — | 완료 |
 | P1-5b | Run API (`run` / `runs/{id}` / `cancel`) · 투영 · e2e | P1-1, P1-5a | — | 완료 |
 | P1-6 | Streaming | P1-5b | — | 완료 |
-| P1-7 | Retry / Timeout / Error Handling | P1-5b | — | 대기 |
+| P1-7 | Retry / Timeout / Error Handling | P1-5b | — | 완료 |
 | P1-8 | Trace | P1-5b | — | 대기 |
 | P1-9 | smoke 단계와 성능 기준값 고정 | P1-6, P1-8 | — | 대기 |
 

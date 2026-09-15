@@ -34,6 +34,7 @@ from aether_runtime.adapters.outbound.redis.event_sink import RedisEventSink
 from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNotifier
 from aether_runtime.adapters.outbound.system_clock import SystemClock
 from aether_runtime.adapters.outbound.telemetry.noop_tracer import NoopTracer
+from aether_runtime.adapters.outbound.threaded_lease_keeper import ThreadedLeaseKeeper
 from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
 from aether_runtime.application.ports.outbound.model_gateway import ModelGateway
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
@@ -138,6 +139,7 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
         owner=settings.worker_consumer,
         lease_ttl_seconds=settings.worker_lease_seconds,
         observation_max_chars=settings.observation_max_chars,
+        lease_keeper=ThreadedLeaseKeeper(PostgresRunStateStore(connect)),
     )
     return HandleRunRequestedUseCase(execute_run, NoopTraceContext())
 

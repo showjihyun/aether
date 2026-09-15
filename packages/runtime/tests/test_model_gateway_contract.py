@@ -370,3 +370,40 @@ def test_embed_round_trips_length_and_dimension(kind: str) -> None:
 
     assert len(vectors) == len(texts)
     assert all(len(vector) == 8 for vector in vectors)
+
+
+@pytest.mark.parametrize("kind", _KINDS)
+def test_complete_passes_per_request_timeout_to_the_transport(kind: str) -> None:
+    """spec 0002 2.8 (P1-7): `ModelRequest.timeout_seconds` 가 잔여 시간을 모델 호출에
+    전달하는 통로입니다 — fake 는 `calls` 에 그대로 기록하고, OpenAI-호환은 `httpx`
+    `timeout=` 요청별 오버라이드로 넘겨(생성자 기본을 덮어씀) 전송합니다."""
+    request = ModelRequest(
+        messages=[Message(role="user", content="hi")],
+        timeout_seconds=2.5,
+    )
+
+    if kind == "fake":
+        gateway: ModelGateway = FakeModelGateway([ModelResponse(text="ok", finish_reason="stop")])
+        gateway.complete(request)
+        assert isinstance(gateway, FakeModelGateway)
+        assert gateway.calls[-1].timeout_seconds == 2.5
+        return
+
+    captured: dict[str, object] = {}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        captured["read_timeout"] = req.extensions["timeout"]["read"]
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}
+                ]
+            },
+        )
+
+    gateway = _openai_gateway(httpx.MockTransport(handler))
+
+    gateway.complete(request)
+
+    assert captured["read_timeout"] == 2.5

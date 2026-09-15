@@ -32,11 +32,17 @@ class ModelRequest(BaseModel):
     """`ModelGateway.complete`/`stream` 에 건네는 요청.
 
     `model_id` 가 `None` 이면 어댑터가 배포 설정(`AETHER_MODEL_ID`)의 기본값을 씁니다.
+
+    `timeout_seconds`(spec 0002 2.8, P1-7)는 호출자(`ExecuteRunUseCase`)가 계산한
+    Run 의 잔여 예산입니다 — `None` 이면 어댑터의 생성자 기본 타임아웃을 씁니다.
+    `FakeModelGateway` 는 이 값을 `calls` 에 기록만 하고, `OpenAICompatibleGateway`
+    는 요청마다 `httpx` `timeout=` 오버라이드로 넘깁니다.
     """
 
     messages: list[Message]
     tools: list[ToolSchema] = Field(default_factory=list)
     model_id: str | None = None
+    timeout_seconds: float | None = None
 
 
 class ModelResponse(BaseModel):

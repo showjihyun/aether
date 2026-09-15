@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 5 | [편집] 2026-09-15. P1-7 구현이 2.8 을 구체화 — (a) 타임아웃 기준 시계는 `Clock.monotonic()` 이 아니라 저장된 `started_at` 과 `Clock.now()`: monotonic 값은 재개(R-16, 프로세스 재시작)를 넘어 보존되지 않아 재개한 Run 이 예산을 새로 받는 구멍이 생김. (b) 검사 지점 셋(단계 시작·호출 직전·백오프 직전). (c) 재시도 가능한 모델 오류의 분류(timeout·protocol·5xx·429, 그 밖 4xx 는 즉시 실패). (d) 도구는 예외만 재시도, `is_error` 결과는 `Observation`. (e) 백오프 공식. (f) C-13 의 갱신 스레드를 outbound 포트 `LeaseKeeper` 로 — 잃은 단계는 저장·발행·release 없이 `LeaseHeld`. R-4 의 뜻은 그대로 |
 | 개정 4 | [편집] 2026-09-13. P1-5a 실측 — (a) 2.7 의 Redis 오류 문자열: redis-py 는 `ResponseError` 의 `str()` 에서 `ERR ` 접두어를 떼므로 어댑터는 `The ID specified in XADD is equal or smaller` 로 매칭(뜻 동일). (b) 2.16: 테스트 **파일** basename 도 저장소 전체에서 유일해야 함 — pytest 기본(prepend) import 는 `__init__.py` 없는 tests 디렉터리의 테스트 모듈을 basename 으로 올리므로 `apps/worker/tests/test_settings.py` 는 `test_worker_settings.py` 로. `explicit_package_bases`/`pythonpath` 는 헬퍼 import 만 해결하고 테스트 파일 이름 충돌은 해결하지 않음 |
 | 개정 3 | [편집] 2026-09-12. P1-2a 실행에서 드러난 사실 — pytest 9 는 `pytest_plugins` 를 **rootdir 의 conftest 에서만** 허용합니다(`Failed: Defining 'pytest_plugins' in a non-top-level conftest is no longer supported`, 실측). 2.16 의 "api conftest 가 `pytest_plugins` 로 재사용" 을 "루트 `conftest.py` 가 한 번 등록, `apps/api/tests/conftest.py` 는 삭제" 로. fixture 이름·동작은 그대로 |
 | 개정 2 | [편집] 2026-09-12. plan 0002 리뷰 반영 — 2.7 `EventSink` 는 같은 `seq` 재발행을 성공으로(Redis 가 top ID 이하의 explicit `XADD` 를 거부하므로 어댑터가 흡수), 2.9·2.11 collector 출력은 `.harness/`(가드 보호 패턴) 대신 `infra/docker/out/`, 2.11 smoke 는 `compose.ci.yaml` 의 `image:` + `--no-build`·bake target `api worker`·`docker/bake-action`, 2.12 R-7 은 `src` 만 복사해 `PYTHONPATH` 앞에, 2.16 `wait_until`·PG fixture 는 `tests/support/`, 2.4 `XAUTOCLAIM min-idle` 은 설정, C-9 의 `.importlinter` 시점 |
@@ -62,6 +63,7 @@ intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문�
 | `application/ports/outbound` | `event_sink.py` | `EventSink.publish(run_id, event)` |
 | `application/ports/outbound` | `status_notifier.py` | `StatusNotifier.notify(StatusMessage)`(2.18) |
 | `application/ports/outbound` | `tracer.py` | `Tracer.span(name, attributes) -> ContextManager`, `Tracer.current_trace_id()`. 유스케이스는 이 포트로만 span 을 만듭니다 — `opentelemetry` 는 어댑터에만(AR-9). 테스트용 인메모리 구현이 부모–자식을 기록 |
+| `application/ports/outbound` | `lease_keeper.py` | `LeaseKeeper.keep(run_id, owner, ttl_seconds) -> ContextManager[LeaseStatus]`(`lost: bool`) — 모델·도구 호출 동안 lease 를 갱신(C-13, 개정 5). 프로덕션은 `adapters/outbound/threaded_lease_keeper.py` |
 | `application/ports/outbound` | `clock.py` | `Clock.now()`, `Clock.monotonic()`, `Clock.sleep(seconds)`. 시간은 전부 여기를 지납니다(R-4, R-11) |
 | `application/ports/inbound` | `execute_run.py` | `ExecuteRun.__call__(run_id) -> RunStatus` — worker 가 부르는 유일한 문 |
 | `application/usecases` | `execute_run.py` | 2.4 의 lease·재개·재발행 규칙과 2.6 의 루프 |
@@ -246,8 +248,9 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 
 | 항목 | 결정 |
 | --- | --- |
-| 타임아웃 | `running` 진입의 `Clock.monotonic()` 기준 `policy.timeout_seconds`. 단계 사이마다 검사하고, 모델·도구 호출에는 잔여 시간을 자체 타임아웃으로 넘깁니다. 초과 → `timed_out` |
-| 재시도 | 모델 `model_retries`, 도구 `tool_retries`. 백오프는 `Clock.sleep` — `FakeClock` 은 즉시 전진(R-11) |
+| 타임아웃 | 기준은 **저장된 `started_at` 과 `Clock.now()`** — `deadline = started_at + policy.timeout_seconds`, 잔여 = `deadline - now`. `Clock.monotonic()` 은 재개(R-16)를 넘어 보존되지 않아 쓰지 않습니다(개정 5). 검사 지점은 셋 — 매 단계 시작(취소 확인 직후), 모델·도구 호출 직전, 재시도 백오프 직전(잔여가 지연 이하면 기다리지 않음). 잔여 ≤ 0 → `timed_out`(`failure_reason` 없음). 모델 호출에는 잔여를 `ModelRequest.timeout_seconds` 로 넘기고, 그 호출이 `timeout` 으로 끝났는데 잔여 ≤ 0 이면 재시도하지 않고 `timed_out` |
+| 재시도 | 모델: 총 시도 `model_retries + 1`. **재시도 가능한 오류**는 `kind` 가 `timeout`·`protocol` 이거나 `http` 이면서 `status ≥ 500` 또는 `429`. 그 밖의 `http` 4xx 는 재시도 없이 즉시 `failed(model_error)`. 도구: `Tool.run` 이 **예외**를 던질 때만 재시도(총 `tool_retries + 1`) — `ToolResult(is_error=True)` 는 재시도 대상이 아니라 정상 `Observation` 으로 모델에 돌아갑니다. 백오프: n 번째 재시도 전 `min(base_seconds · 2^(n-1), max_seconds)`, 지터 없음, `Clock.sleep` 으로 — `FakeClock` 은 즉시 전진(R-11) |
+| lease 유지 | 모델·도구 호출은 `LeaseKeeper.keep(...)` 로 감쌉니다. 그 동안 갱신이 실패하면(`False` 또는 예외) `lost` — 호출이 끝난 뒤 그 단계는 **저장·발행·release 없이** `LeaseHeld` 로 물러납니다. 단계 끝 `renew_lease` 는 저장 **전**에 부르고 `False` 도 같은 처리. 새 소유자는 마지막 저장 스냅숏에서 이어가며 같은 `seq` 재발행은 `EventSink` 가 흡수합니다(C-13, 개정 5) |
 | 사유 | `FailureReason`: `model_error`, `tool_error`, `max_steps_exceeded`, `unknown_tool`(정의가 레지스트리에 없는 도구를 요구 — api 검증을 지나쳐도 worker 가 막음), `definition_invalid`, `internal`. `data.run_executions.failure_reason`, `control.runs.failure_reason`(투영), `run.status` 이벤트의 `failure_reason` 에 같은 문자열 |
 | 사람 개입 | 없음. HITL 은 Phase 4 |
 
