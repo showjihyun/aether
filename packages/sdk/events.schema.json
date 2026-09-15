@@ -1,0 +1,251 @@
+{
+  "$defs": {
+    "ModelCompletedPayload": {
+      "properties": {
+        "finish_reason": {
+          "title": "Finish Reason",
+          "type": "string"
+        },
+        "usage": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Usage"
+        }
+      },
+      "required": [
+        "finish_reason"
+      ],
+      "title": "ModelCompletedPayload",
+      "type": "object"
+    },
+    "ModelDeltaPayload": {
+      "description": "예약(2.7) — Phase 1 은 발생시키지 않습니다.",
+      "properties": {
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text"
+      ],
+      "title": "ModelDeltaPayload",
+      "type": "object"
+    },
+    "RunEvent": {
+      "description": "SSE `data` 봉투(2.7). `seq` 는 Run 안에서 1 부터 단조 증가합니다.",
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "payload": {
+          "additionalProperties": true,
+          "title": "Payload",
+          "type": "object"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "seq": {
+          "minimum": 1,
+          "title": "Seq",
+          "type": "integer"
+        },
+        "type": {
+          "enum": [
+            "run.status",
+            "task.started",
+            "task.finished",
+            "model.completed",
+            "tool.called",
+            "tool.result",
+            "run.finished",
+            "model.delta"
+          ],
+          "title": "Type",
+          "type": "string"
+        },
+        "v": {
+          "const": 1,
+          "default": 1,
+          "title": "V",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "run_id",
+        "seq",
+        "at",
+        "type",
+        "payload"
+      ],
+      "title": "RunEvent",
+      "type": "object"
+    },
+    "RunFinishedPayload": {
+      "description": "`run.finished { status }` — 항상 이벤트 스트림의 마지막.",
+      "properties": {
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "RunFinishedPayload",
+      "type": "object"
+    },
+    "RunStatusPayload": {
+      "description": "`run.status { status, failure_reason? }` — 2.4 의 전이마다 하나.",
+      "properties": {
+        "failure_reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Reason"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status"
+      ],
+      "title": "RunStatusPayload",
+      "type": "object"
+    },
+    "TaskFinishedPayload": {
+      "properties": {
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id"
+      ],
+      "title": "TaskFinishedPayload",
+      "type": "object"
+    },
+    "TaskStartedPayload": {
+      "properties": {
+        "step": {
+          "title": "Step",
+          "type": "integer"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "step"
+      ],
+      "title": "TaskStartedPayload",
+      "type": "object"
+    },
+    "ToolCalledPayload": {
+      "properties": {
+        "arguments": {
+          "additionalProperties": true,
+          "title": "Arguments",
+          "type": "object"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "title": "Tool Call Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "tool_call_id",
+        "name",
+        "arguments"
+      ],
+      "title": "ToolCalledPayload",
+      "type": "object"
+    },
+    "ToolResultPayload": {
+      "properties": {
+        "content": {
+          "title": "Content",
+          "type": "string"
+        },
+        "is_error": {
+          "title": "Is Error",
+          "type": "boolean"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "task_id": {
+          "title": "Task Id",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "title": "Tool Call Id",
+          "type": "string"
+        },
+        "truncated": {
+          "title": "Truncated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "task_id",
+        "tool_call_id",
+        "name",
+        "is_error",
+        "content",
+        "truncated"
+      ],
+      "title": "ToolResultPayload",
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/RunEvent",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RunEvent",
+  "x-aether-event-types": {
+    "model.completed": "ModelCompletedPayload",
+    "model.delta": "ModelDeltaPayload",
+    "run.finished": "RunFinishedPayload",
+    "run.status": "RunStatusPayload",
+    "task.finished": "TaskFinishedPayload",
+    "task.started": "TaskStartedPayload",
+    "tool.called": "ToolCalledPayload",
+    "tool.result": "ToolResultPayload"
+  }
+}

@@ -9,6 +9,6 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test:unit": "vitest run",
-    "generate": "openapi-typescript openapi.json -o src/generated/openapi.d.ts"
+    "generate": "openapi-typescript openapi.json -o src/generated/openapi.d.ts && json2ts -i events.schema.json -o src/generated/events.d.ts --bannerComment \"\""
   }
 }

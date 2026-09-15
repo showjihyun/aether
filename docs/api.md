@@ -73,7 +73,18 @@
 
 ## 5. 이벤트 스트림
 
-`GET /runs/{id}/events`(SSE) 는 P1-6 이 붙입니다. 이벤트 모델은 P1-4 가 `packages/runtime/src/aether_runtime/domain/events.py` 에 정했고, JSON Schema 파일(`packages/sdk/events.schema.json`)은 P1-6 이 커밋합니다(spec 0002 2.7, D-4).
+`GET /runs/{id}/events` 는 SSE(`text/event-stream`)입니다(P1-6). 이벤트 모델의 정본은 `packages/runtime/src/aether_runtime/domain/events.py`(P1-4) 이고, `aether-api events-schema` 가 그것을 JSON Schema 로 내보내 [../packages/sdk/events.schema.json](../packages/sdk/events.schema.json) 에 커밋합니다. sdk 의 TS 타입은 그 파일에서 생성됩니다(spec 0002 2.7, D-4, R-12).
+
+**접속 절차**
+
+| 항목 | 규칙 |
+| --- | --- |
+| 요청 | `GET /runs/{id}/events`, `Authorization: Bearer <key>`, `Accept: text/event-stream`. 재개는 `Last-Event-ID: <seq>` 헤더 — 그 `seq` **다음**부터 받습니다(스트림 ID `<seq>-0` 다음) |
+| SSE 필드 | `id: <seq>` · `event: <type>` · `data: <봉투 JSON>`. 빈 줄로 이벤트 구분 |
+| 종료 | 서버가 `run.finished` 를 보낸 뒤 연결을 닫습니다. 클라이언트가 먼저 끊어도 Run 은 계속됩니다(worker 는 api 를 모릅니다, AR-7) |
+| 스트림이 없을 때 | Run 이 종결이면 `run.finished { status }` 하나를 **합성**해 보내고 닫습니다(TTL 뒤 늦게 온 독자). 종결이 아니면 첫 이벤트가 생길 때까지 기다립니다 |
+| 보장하지 않는 것 | `MAXLEN` 으로 잘려 나간 구간의 재생, 재접속 이어보기의 보장(spec 0002 6절). 브라우저 `EventSource` 는 `Authorization` 헤더를 붙일 수 없어 sdk 는 `fetch` 로 SSE 를 파싱합니다 — 브라우저 직접 접속용 인증은 🔒 사람 결정(C-4) |
+| 오류 | `404 run_not_found`, `401` |
 
 봉투: `{ "v": 1, "run_id", "seq", "at", "type", "payload" }`. `seq` 는 Run 안에서 1 부터 단조 증가하고, 선택 필드는 값이 없으면 키 자체가 빠집니다.
 

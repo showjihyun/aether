@@ -12,12 +12,18 @@
 `FakeRunDeclarationStore`·`FakeRunNotifier` 는 P1-5b(`RequestRun`·`GetRun`·`CancelRun`·
 `ApplyRunStatus`)의 outbound 포트 fake 입니다(AR-9 — 유스케이스 테스트는 컨테이너
 없이 돕니다, spec 0002 2.1, 2.2, 2.4, D-2, D-11).
+
+`FakeRunEventReader` 는 P1-6(`ReadRunEvents`)의 outbound 포트(`RunEventReader`)
+fake 입니다(spec 0002 2.7, D-4). `seed`로 미리 이벤트 열을 심고, `push`로 나중에
+이벤트를 더할 수 있습니다 — 비어 있으면 `sleep` 대신 `asyncio.Event` 로 "새 이벤트가
+생길 때까지" 기다립니다(R-11).
 """
 
 from __future__ import annotations
 
+import asyncio
 import builtins
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
 from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -35,6 +41,7 @@ from aether_api.domain.agent import (
 from aether_api.domain.api_key import ApiKey
 from aether_api.domain.run import RunNotFound, RunView
 from aether_runtime.domain.agent import AgentDefinition
+from aether_runtime.domain.events import RunEvent
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunStatus
 
@@ -267,3 +274,53 @@ class FakeRunNotifier:
         self.calls.append((run_id, agent_version_id, traceparent))
         if self._should_fail:
             raise RuntimeError("FakeRunNotifier: injected requested failure")
+
+
+class FakeRunEventReader:
+    """`RunEventReader` 포트의 인메모리 구현(spec 0002 2.7, D-4).
+
+    `seed(run_id, events)` 로 미리 이벤트 열을 심습니다 — 심은 즉시 `stream_exists`
+    가 `True` 를 돌려줍니다. `push(run_id, event)` 로 나중에 이벤트를 하나 더할 수
+    있습니다(스트림이 아직 없다가 생기는 시나리오). `read()` 는 `after_seq` 보다 큰
+    이벤트를 즉시 내고, 더 없으면 `sleep` 없이 `asyncio.Event` 로 다음 `push`/`seed`
+    를 기다립니다 — `block_ms` 는 이 fake 에서 쓰지 않습니다(실제로 블록하지 않고
+    이벤트로 깨어나기 때문).
+    """
+
+    def __init__(self) -> None:
+        self._streams: dict[UUID, list[RunEvent]] = {}
+        self._woken: dict[UUID, asyncio.Event] = {}
+
+    def _event_for(self, run_id: UUID) -> asyncio.Event:
+        woken = self._woken.get(run_id)
+        if woken is None:
+            woken = asyncio.Event()
+            self._woken[run_id] = woken
+        return woken
+
+    def seed(self, run_id: UUID, events: list[RunEvent]) -> None:
+        self._streams.setdefault(run_id, []).extend(events)
+        self._event_for(run_id).set()
+
+    def push(self, run_id: UUID, event: RunEvent) -> None:
+        self._streams.setdefault(run_id, []).append(event)
+        self._event_for(run_id).set()
+
+    async def stream_exists(self, run_id: UUID) -> bool:
+        return bool(self._streams.get(run_id))
+
+    async def read(
+        self, run_id: UUID, after_seq: int | None, block_ms: int
+    ) -> AsyncIterator[RunEvent]:
+        del block_ms  # 이 fake 는 실제로 블록하지 않고 Event 로 깨어납니다.
+        last_seq = after_seq if after_seq is not None else 0
+        while True:
+            pending = [e for e in self._streams.get(run_id, []) if e.seq > last_seq]
+            if pending:
+                for event in pending:
+                    yield event
+                    last_seq = event.seq
+                continue
+            woken = self._event_for(run_id)
+            woken.clear()
+            await woken.wait()

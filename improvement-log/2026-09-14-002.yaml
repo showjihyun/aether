@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-14-002
+date: 2026-09-14
+status: candidate
+symptom: redis.asyncio.Redis 의 기본 socket_timeout(5초)이 어댑터의 XREAD BLOCK 5000ms 와 겹쳐 간헐적 redis.exceptions.TimeoutError
+evidence: "P1-6 implementer 보고 불일치 6: test_run_events_sse.py (d) 에서 실측. main.py 의 이벤트 리더 클라이언트에 socket_timeout=None 을 명시해 해결"
+root_cause: 블록 읽기의 서버 측 대기 시간이 클라이언트 소켓 타임아웃 이상이면 블록이 끝나기 전에 클라이언트가 끊음
+fix: socket_timeout=None 명시
+recurrence_risk: medium
+harness_element: HE-5
+proposed_harness_change: Redis 블록 읽기(XREAD/XREADGROUP BLOCK) 어댑터의 계약 테스트에 "block_ms 가 소켓 타임아웃보다 길어도 TimeoutError 가 나지 않음" 케이스를 표준으로 둔다(worker RequestedConsumer, api StatusConsumer, RunEventReader 셋). 또는 어댑터 생성자가 block_ms >= socket_timeout 이면 즉시 ValueError
+preferred_enforcement: test
+trust: untrusted
+regression_check: "대상: P1-7 이후 Redis 블록 읽기 어댑터 전부. 기준: 계약 테스트에 위 케이스 존재, 통합 테스트 TimeoutError 0건"
+owner: unassigned
+expires: 2026-12-14

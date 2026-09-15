@@ -413,3 +413,98 @@ describe("createClient().cancelRun()", () => {
     await expect(client.cancelRun("missing")).rejects.toThrow(/404/);
   });
 });
+
+function fakeStreamFetch(chunks: string[]) {
+  const encoder = new TextEncoder();
+  let index = 0;
+  const body = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      if (index >= chunks.length) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(encoder.encode(chunks[index]));
+      index += 1;
+    },
+  });
+  return vi.fn<typeof globalThis.fetch>(() =>
+    Promise.resolve({
+      ok: true,
+      status: 200,
+      statusText: "",
+      body,
+    } as Response),
+  );
+}
+
+describe("createClient().streamRunEvents()", () => {
+  it("GETs /runs/{id}/events with Authorization and Accept: text/event-stream", async () => {
+    const fetchMock = fakeStreamFetch(['id: 1\nevent: run.status\ndata: {"v":1}\n\n']);
+    const client = createClient({
+      baseUrl: "http://localhost:8000",
+      apiKey: "aeth_secret",
+      fetch: fetchMock,
+    });
+
+    const events = [];
+    for await (const event of client.streamRunEvents("run-1")) {
+      events.push(event);
+    }
+
+    expect(callUrl(fetchMock)).toBe("http://localhost:8000/runs/run-1/events");
+    const init = callInit(fetchMock);
+    expect(init.method).toBe("GET");
+    const headers = init.headers as Record<string, string>;
+    expect(headers.Authorization).toBe("Bearer aeth_secret");
+    expect(headers.Accept).toBe("text/event-stream");
+    expect(headers["Last-Event-ID"]).toBeUndefined();
+    expect(events).toEqual([{ v: 1 }]);
+  });
+
+  it("sends the Last-Event-ID header when lastEventId is given", async () => {
+    const fetchMock = fakeStreamFetch(['id: 4\nevent: run.finished\ndata: {"v":1}\n\n']);
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    const iterator = client.streamRunEvents("run-1", { lastEventId: "3" })[Symbol.asyncIterator]();
+    await iterator.next();
+
+    const headers = callInit(fetchMock).headers as Record<string, string>;
+    expect(headers["Last-Event-ID"]).toBe("3");
+  });
+
+  it("parses each SSE data: payload as a RunEvent", async () => {
+    const fetchMock = fakeStreamFetch([
+      'id: 1\nevent: run.status\ndata: {"v":1,"run_id":"r1","seq":1,"at":"2026-01-01T00:00:00Z","type":"run.status","payload":{"status":"running"}}\n\n',
+    ]);
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    const events = [];
+    for await (const event of client.streamRunEvents("run-1")) {
+      events.push(event);
+    }
+
+    expect(events).toEqual([
+      {
+        v: 1,
+        run_id: "r1",
+        seq: 1,
+        at: "2026-01-01T00:00:00Z",
+        type: "run.status",
+        payload: { status: "running" },
+      },
+    ]);
+  });
+
+  it("forwards signal to fetch so the caller can abort the stream", async () => {
+    const fetchMock = fakeStreamFetch(['id: 1\nevent: run.status\ndata: {"v":1}\n\n']);
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+    const controller = new AbortController();
+
+    const stream = client.streamRunEvents("run-1", { signal: controller.signal });
+    const iterator = stream[Symbol.asyncIterator]();
+    await iterator.next();
+
+    const init = callInit(fetchMock);
+    expect(init.signal).toBe(controller.signal);
+  });
+});
