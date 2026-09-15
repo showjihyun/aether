@@ -1,0 +1,16 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-14-001
+date: 2026-09-14
+status: candidate
+symptom: SSE 단절 시나리오 테스트가 starlette TestClient(httpx ASGITransport)로는 성립하지 않음 — 열린 스트리밍 응답을 실시간으로 넘기지 않고 ASGI 앱이 끝날 때까지 바디를 모아 돌려줌(120초 타임아웃으로 확인)
+evidence: "P1-6 implementer 보고 불일치 7: apps/api/tests/test_run_events_sse.py 의 (d) 시나리오를 실제 uvicorn + httpx.Client 로 다시 써서 통과. (a)(b)(c)(e)는 스트림이 짧게 끝나 한계가 드러나지 않았음"
+root_cause: TestClient 는 요청-응답 완결 모델. 장기 스트리밍(SSE)의 중간 관측·단절은 실제 서버 프로세스가 필요
+fix: (d) 만 uvicorn 서버를 스레드로 띄우고 httpx.Client(stream) 로 읽다 닫음
+recurrence_risk: medium
+harness_element: HE-3
+proposed_harness_change: docs/architecture.md 3.1 또는 spec 의 테스트 배치 규칙에 "장기 스트리밍 응답의 중간 관측·단절 테스트는 실제 서버(uvicorn)로" 를 한 줄 추가. plan 의 SSE 류 단계에 명시. 후속 Phase(WebSocket, MVP-2 화면)가 같은 함정에 걸림
+preferred_enforcement: doc
+trust: untrusted
+regression_check: "대상: 이후 스트리밍 경로 단위(MVP-2, WebSocket). 기준: 단절 시나리오가 실제 서버로 작성되고 TestClient 만으로 통과한 단절 테스트 0건"
+owner: unassigned
+expires: 2026-12-14

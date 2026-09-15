@@ -13,5 +13,9 @@ export type {
   RunAccepted,
   RunDetailResponse,
   RunRequest,
+  StreamRunEventsOptions,
   UpdateAgentRequest,
 } from "./client";
+export { parseSse } from "./sse";
+export type { SseEvent } from "./sse";
+export type { RunEvent } from "./generated/events";

@@ -18,20 +18,24 @@ from contextlib import asynccontextmanager
 from threading import Event, Thread
 
 import psycopg
+import redis.asyncio as aioredis
 from fastapi import FastAPI
 from redis import Redis
 
 from aether_api.adapters.inbound.cli import build_parser
+from aether_api.adapters.inbound.cli import events_schema as write_events_schema
 from aether_api.adapters.inbound.cli import keys_create as write_keys_create
 from aether_api.adapters.inbound.cli import openapi as write_openapi
 from aether_api.adapters.inbound.http.agents import build_agents_router
 from aether_api.adapters.inbound.http.auth import require_principal
+from aether_api.adapters.inbound.http.events import build_events_router
 from aether_api.adapters.inbound.http.healthz import build_router
 from aether_api.adapters.inbound.http.runs import build_runs_router
 from aether_api.adapters.inbound.stream.status_consumer import StatusConsumer, ensure_group
 from aether_api.adapters.outbound.db.agent_repository import PostgresAgentRepository
 from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
 from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
+from aether_api.adapters.outbound.redis.run_event_reader import RedisRunEventReader
 from aether_api.adapters.outbound.redis.run_notifier import RedisRunNotifier
 from aether_api.adapters.outbound.telemetry import init_telemetry
 from aether_api.application.ports.inbound.authenticate import Authenticate
@@ -44,6 +48,7 @@ from aether_api.application.usecases.get_agent_version import GetAgentVersionUse
 from aether_api.application.usecases.get_run import GetRunUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
+from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
 from aether_api.application.usecases.request_run import RequestRunUseCase
 from aether_api.application.usecases.update_agent import UpdateAgentUseCase
 from aether_api.settings import Settings
@@ -199,6 +204,22 @@ def create_app(
             CancelRunUseCase(run_declaration_store),
         )
     )
+
+    event_reader = RedisRunEventReader(
+        # `socket_timeout=None`: `redis.asyncio.Redis` 의 기본값(5초)이 그대로면
+        # `RedisRunEventReader.read` 의 블록 `XREAD`(기본 block_ms)와 거의 같은
+        # 길이라 서버 쪽 BLOCK 응답보다 클라이언트 쪽 소켓 타임아웃이 먼저 발화해
+        # `redis.exceptions.TimeoutError` 로 깨질 수 있습니다(실측, spec 0002 2.7).
+        # 취소는 `asyncio.Task.cancel()` 이 즉시 처리하므로(확인함) 소켓 타임아웃
+        # 자체가 취소 수단일 필요가 없습니다 — `BLOCK` 인자 하나로 상한을 둡니다.
+        aioredis.Redis.from_url(settings.redis_url, decode_responses=True, socket_timeout=None)
+    )
+    app.include_router(
+        build_events_router(
+            require_principal(authenticate),
+            ReadRunEventsUseCase(event_reader, run_declaration_store),
+        )
+    )
     return app
 
 
@@ -218,6 +239,8 @@ def cli() -> None:
 
     if args.command == "openapi":
         write_openapi(app)
+    elif args.command == "events-schema":
+        write_events_schema()
     elif args.command == "keys" and args.keys_command == "create":
         settings = Settings()
         issue = IssueApiKeyUseCase(_postgres_api_key_store(settings))

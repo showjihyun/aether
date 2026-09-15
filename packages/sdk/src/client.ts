@@ -8,9 +8,15 @@
  * `updateAgent`)를 더합니다(spec 0002 2.2, D-17).
  *
  * P1-5b: Run 3경로(`runAgent`·`getRun`·`cancelRun`)를 더합니다(spec 0002 2.2, D-17).
+ *
+ * P1-6: `streamRunEvents` — `GET /runs/{id}/events` 를 `fetch` 로 열고 `./sse.ts` 의
+ * `parseSse` 로 SSE 를 직접 파싱합니다(spec 0002 2.7, 2.17, D-4, C-4). 브라우저
+ * `EventSource` 는 `Authorization` 헤더를 붙일 수 없어 쓰지 않습니다.
  */
 
 import type { paths } from "./generated/openapi";
+import type { RunEvent } from "./generated/events";
+import { parseSse } from "./sse";
 
 /** 생성된 스키마에서 유도한 반환 타입. 수기로 다시 적지 않습니다. */
 export type HealthzResponse =
@@ -52,6 +58,13 @@ export interface CreateClientOptions {
   fetch?: typeof globalThis.fetch;
 }
 
+export interface StreamRunEventsOptions {
+  /** `Last-Event-ID` 헤더로 보냅니다 — 그 값 다음 `seq` 부터 재개합니다(spec 2.7). */
+  lastEventId?: string;
+  /** `fetch` 에 그대로 전달됩니다 — 중단하면 스트림 읽기가 `AbortError` 로 끝납니다. */
+  signal?: AbortSignal;
+}
+
 export interface AetherClient {
   healthz(): Promise<HealthzResponse>;
   createAgent(body: CreateAgentRequest): Promise<AgentResponse>;
@@ -62,6 +75,7 @@ export interface AetherClient {
   runAgent(agentId: string, body: RunRequest): Promise<RunAccepted>;
   getRun(runId: string): Promise<RunDetailResponse>;
   cancelRun(runId: string): Promise<CancelAccepted>;
+  streamRunEvents(runId: string, options?: StreamRunEventsOptions): AsyncIterable<RunEvent>;
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -203,6 +217,36 @@ export function createClient(options: CreateClientOptions): AetherClient {
         "POST",
         `/runs/${runId}/cancel`,
       );
+    },
+
+    async *streamRunEvents(
+      runId: string,
+      options?: StreamRunEventsOptions,
+    ): AsyncIterable<RunEvent> {
+      const requestHeaders: Record<string, string> = { ...headers, Accept: "text/event-stream" };
+      if (options?.lastEventId !== undefined) {
+        requestHeaders["Last-Event-ID"] = options.lastEventId;
+      }
+
+      const path = `/runs/${runId}/events`;
+      const response = await doFetch(joinUrl(baseUrl, path), {
+        method: "GET",
+        headers: requestHeaders,
+        signal: options?.signal,
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `aether-sdk: GET ${path} failed with status ${response.status} ${response.statusText}`,
+        );
+      }
+      if (!response.body) {
+        throw new Error(`aether-sdk: GET ${path} response has no body to stream`);
+      }
+
+      for await (const sseEvent of parseSse(response.body, options?.signal)) {
+        yield JSON.parse(sseEvent.data) as RunEvent;
+      }
     },
   };
 }
