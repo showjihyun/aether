@@ -35,10 +35,12 @@ from aether_api.adapters.inbound.stream.status_consumer import StatusConsumer, e
 from aether_api.adapters.outbound.db.agent_repository import PostgresAgentRepository
 from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
 from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
+from aether_api.adapters.outbound.otel_request_tracing import OtelRequestTracing
 from aether_api.adapters.outbound.redis.run_event_reader import RedisRunEventReader
 from aether_api.adapters.outbound.redis.run_notifier import RedisRunNotifier
 from aether_api.adapters.outbound.telemetry import init_telemetry
 from aether_api.application.ports.inbound.authenticate import Authenticate
+from aether_api.application.ports.outbound.request_tracing import RequestTracing
 from aether_api.application.usecases.apply_run_status import ApplyRunStatusUseCase
 from aether_api.application.usecases.authenticate import AuthenticateUseCase
 from aether_api.application.usecases.cancel_run import CancelRunUseCase
@@ -154,6 +156,7 @@ def create_app(
     *,
     authenticate: Authenticate | None = None,
     status_consumer: Callable[[Event], None] | None = None,
+    request_tracing: RequestTracing | None = None,
 ) -> FastAPI:
     """설정을 읽어 telemetry 를 초기화하고 라우터를 등록한 `FastAPI` 앱을 조립합니다.
 
@@ -162,6 +165,12 @@ def create_app(
     시점에는 연결을 열지 않습니다. 이 함수는 모듈 import 시(아래 `app`) 실행되므로,
     DB/Redis 가 없는 단위 테스트와 `aether-api openapi` 가 이 경로를 그대로 지나갑니다.
 
+    `request_tracing`(P1-8, spec 0002 2.9)을 생략하면 프로덕션 기본
+    `OtelRequestTracing()`(전역 `TracerProvider`, `init_telemetry` 가 이미 등록해
+    둔 것)을 씁니다 — `RequestRunUseCase` 가 이것으로 `run.request` span 을 엽니다.
+    테스트는 독립된 `TracerProvider` 로 만든 `OtelRequestTracing(provider)` 를
+    주입해 전역 provider 를 건드리지 않습니다.
+
     투영 소비자는 FastAPI **lifespan** 에서만 스레드로 실행됩니다 — `TestClient(app)`
     를 `with` 없이 쓰면(기존 단위 테스트 관례) lifespan 이 돌지 않으므로 DB/Redis 없는
     단위 테스트는 소비자를 시작하지 않습니다. 실제로 시작되는 곳은 uvicorn 서버 기동과
@@ -169,6 +178,9 @@ def create_app(
     돌리지 않습니다 — 조립된 `app` 의 `openapi()` 만 부릅니다).
     """
     init_telemetry("api")
+
+    if request_tracing is None:
+        request_tracing = OtelRequestTracing()
 
     if authenticate is None:
         authenticate = AuthenticateUseCase(_postgres_api_key_store(settings))
@@ -199,7 +211,9 @@ def create_app(
     app.include_router(
         build_runs_router(
             require_principal(authenticate),
-            RequestRunUseCase(agent_repository, run_declaration_store, run_notifier),
+            RequestRunUseCase(
+                agent_repository, run_declaration_store, run_notifier, tracing=request_tracing
+            ),
             GetRunUseCase(run_declaration_store),
             CancelRunUseCase(run_declaration_store),
         )

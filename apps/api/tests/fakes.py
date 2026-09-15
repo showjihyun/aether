@@ -17,13 +17,19 @@
 fake 입니다(spec 0002 2.7, D-4). `seed`로 미리 이벤트 열을 심고, `push`로 나중에
 이벤트를 더할 수 있습니다 — 비어 있으면 `sleep` 대신 `asyncio.Event` 로 "새 이벤트가
 생길 때까지" 기다립니다(R-11).
+
+`FakeRequestTracing` 은 P1-8(`RequestTracing`)의 outbound 포트 fake 입니다(spec 0002
+2.9, 2.18). 열린 span 의 이름·속성을 순서대로 기록하고, span 이 열려 있는 동안에만
+고정된 `traceparent` 를 돌려줍니다(실제 OTel 어댑터가 span 밖에서 `None` 을 돌려주는
+것과 같은 모양).
 """
 
 from __future__ import annotations
 
 import asyncio
 import builtins
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Iterator, Mapping
+from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime
 from uuid import UUID, uuid4
@@ -324,3 +330,33 @@ class FakeRunEventReader:
             woken = self._event_for(run_id)
             woken.clear()
             await woken.wait()
+
+
+_FAKE_TRACEPARENT = "00-" + "a" * 32 + "-" + "b" * 16 + "-01"
+
+
+class FakeRequestTracing:
+    """`RequestTracing` 포트의 인메모리 구현(spec 0002 2.9, 2.18, P1-8).
+
+    `opened` 는 `span()` 이 열린 순서대로 `(name, attributes)` 쌍을 기록합니다.
+    `current_traceparent()` 는 span 이 열려 있는 동안에만 고정 값을 돌려줍니다 —
+    실제 OTel 어댑터가 활성 span 밖에서 `None` 을 돌려주는 것과 같은 모양입니다.
+    """
+
+    def __init__(self, *, traceparent: str = _FAKE_TRACEPARENT) -> None:
+        self._traceparent = traceparent
+        self._active = False
+        self.opened: list[tuple[str, dict[str, str]]] = []
+
+    @contextmanager
+    def span(self, name: str, attributes: Mapping[str, str]) -> Iterator[None]:
+        self.opened.append((name, dict(attributes)))
+        previous = self._active
+        self._active = True
+        try:
+            yield
+        finally:
+            self._active = previous
+
+    def current_traceparent(self) -> str | None:
+        return self._traceparent if self._active else None

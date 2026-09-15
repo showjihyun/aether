@@ -68,6 +68,10 @@ curl -s "localhost:8000/runs/$RUN_ID" -H "Authorization: Bearer $KEY"   # status
 `"succeeded"` 가 됩니다. 취소하려면 `POST /runs/{id}/cancel` — 진행 중인 도구·모델
 호출은 끝나기를 기다린 뒤(협력적 취소, C-3) 다음 반복에서 `"cancelled"` 로 끝납니다.
 
+그 Run 의 trace 는 `infra/docker/out/otel/spans.jsonl` 에서 위 응답의 `trace_id` 값을
+검색하면 보입니다(spec 0002 2.9, R-5) — collector 의 배치 처리 때문에 몇 초 지연될
+수 있습니다.
+
 ## 실제 모델로 돌리기
 
 기본은 `AETHER_MODEL_ADAPTER=fake` — 판정(verify·smoke)은 언제나 이 어댑터로, 네트워크

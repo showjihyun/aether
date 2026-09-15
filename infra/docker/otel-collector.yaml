@@ -1,0 +1,25 @@
+# spec 0002 2.9, D-7 (P1-8): 로컬 collector — OTLP/HTTP 수신, debug + file exporter.
+# 대시보드 없음(Non-goal). `file` exporter 의 출력은 호스트 bind mount(compose.yaml
+# 의 `otel-collector` 서비스, `${AETHER_OTEL_DIR:-./out/otel}:/out`)로 확인합니다.
+
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: basic
+  file:
+    path: /out/spans.jsonl
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug, file]
