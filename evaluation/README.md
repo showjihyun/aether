@@ -21,7 +21,7 @@
 | `{{진입_경로}}` | `POST /agents/{id}/run` 과 `GET /runs/{id}` |
 | `{{규약_문서}}` | [../docs/architecture.md](../docs/architecture.md) 의 AR-1 ~ AR-7, [../docs/domain.md](../docs/domain.md) |
 | `{{검증_명령}}` | `./harness/scripts/verify.sh` |
-| `{{성능_기준}}` | Run 생성 응답 P95. 실제 값은 Phase 1 에서 고정하며 그때까지 판정하지 않습니다 |
+| `{{성능_기준}}` | **Run 생성 응답 P95 ≤ 150 ms.** 측정 정의는 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) 2.13(D-8): `scripts/smoke.sh --bench` 가 api 컨테이너 안에서 `POST /agents/{id}/run` 을 순차 200회(워밍업 20 제외, n=180) 보내고 `infra/docker/out/smoke-bench.json` 에 기록합니다 — 호스트·Docker 네트워크 왕복은 포함하지 않습니다. **환경**: fake 모델 어댑터, Windows 11 + Docker Desktop 27.3.1. 이 값을 고른 근거는 2026-09-16 실측(p50 33.4 ms · p95 36.8 ms · max 40.1 ms)과 그 약 4배의 여유입니다 — 느린 러너에서 거짓 실패를 내지 않으면서 동기 DB 호출 추가 같은 진짜 회귀는 잡는 자리. 넘으면 REP-8 실패. 값은 사람이 고정했습니다(showjihyun, 2026-09-16, EI-2) |
 | `{{외부_콘텐츠}}` | GitHub Issue 본문, 로드맵 원본처럼 저장소 밖에서 들어온 텍스트 |
 | `{{데이터_계약}}` | `POST /agents/{id}/run` 의 요청·응답 스키마 |
 | `{{비동기_경로}}` | Run 실행 경로(Planner → Executor → Tool → Observation)와 스트리밍·취소 |
@@ -31,14 +31,14 @@
 
 ## 지금 이 세트의 상태
 
-**아직 한 건도 실행되지 않았습니다.** Phase 0 이 끝나(2026-09-11) `{{진입_경로}}` 는 생겼으므로 REP-1 · REP-3 · REP-5 는 이제 실행할 수 있습니다 — 첫 실행(AD-2 기준선)은 별도 활동이며 결과는 `evaluation/runs/` 와 `.harness/baseline-eval.json` 에 남깁니다.
+**아직 한 건도 실행되지 않았습니다.** Phase 0 이 끝나(2026-09-11) `{{진입_경로}}` 가 생겼고 Phase 1 이 끝나(2026-09-16) 실제로 동작하므로, REP-1 · REP-2 · REP-3 · REP-4 · REP-5 · REP-8 을 실행할 수 있습니다 — 첫 실행(AD-2 기준선)은 별도 활동이며 결과는 `evaluation/runs/` 와 `.harness/baseline-eval.json` 에 남깁니다.
 
 이 세트의 출처도 정직하게 적어 둡니다. 번들 템플릿의 실패 모드를 aether 도메인으로 옮긴 것이지, aether 에서 관측된 실패에서 나온 것이 아닙니다. 그러므로 지금은 **도입 시 기본 세트**이고, 여기에 task 를 더할 때는 [../harness/evaluation/README.md](../harness/evaluation/README.md) 7.1 을 따라 근거가 되는 improvement log id 를 먼저 요구합니다.
 
 | 시점 | 이 세트에 일어나는 일 |
 | --- | --- |
 | Phase 0 완료(2026-09-11 도달) | REP-1 · REP-3 · REP-5 를 처음 실행할 수 있게 됩니다 — 실행 자체는 아직 |
-| Phase 1 완료 | REP-2 · REP-4 · REP-8 이 실행 가능해집니다. `{{성능_기준}}` 의 실제 값을 여기서 고정합니다 |
+| Phase 1 완료(2026-09-16 도달) | REP-2 · REP-4 · REP-8 이 실행 가능해집니다 — 실행 자체는 아직. `{{성능_기준}}` 은 150 ms 로 고정했습니다(위 표) |
 | Phase 4 전후 (AD-3) | held-out 세트를 처음 1회 실행합니다 |
 
 ## 실행
