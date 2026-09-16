@@ -41,10 +41,35 @@ jobs:
       - run: uv sync --all-packages --frozen
       - run: pnpm install --frozen-lockfile
 
+      # spec 0002 2.11, D-15 (P1-9): smoke 단계가 쓰는 api·worker 이미지를 bake 로 먼저
+      # 빌드해 GitHub Actions 캐시를 씁니다. web·migrate 는 target 에서 뺍니다 — smoke 는
+      # web 을 띄우지 않고 migrate 는 api 와 같은 이미지(compose.ci.yaml)입니다.
+      # bake 는 compose 파일의 상대 빌드 컨텍스트(context: ../..)를 compose 파일 위치가
+      # 아니라 실행 위치 기준으로 해석합니다(P1-9 실측) — 그래서 workdir 를
+      # infra/docker 로 둡니다. workdir 입력은 bake-action v6 에만 있고 v7 에서 제거되었습니다.
+      # Dependabot 이 v7 을 제안하면 이 스텝을 다시 설계한 뒤에 올립니다.
+      # 태그 실재 확인(refs/tags, 2026-09-16): setup-buildx-action@v4, bake-action@v6.
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/bake-action@v6
+        with:
+          source: .
+          workdir: infra/docker
+          files: |
+            compose.yaml
+            compose.ci.yaml
+          targets: api,worker
+          load: true
+          set: |
+            *.cache-from=type=gha
+            *.cache-to=type=gha,mode=max
+
       # 깨끗한 체크아웃에서 돕니다. 로컬에만 있는 상태가 결과를 만들지 못합니다.
       # 진입점의 실행 비트는 git 인덱스에서 옵니다. Windows 에서 core.fileMode=false 로
       # 100644 가 커밋되면 여기서 exit 126 으로 드러납니다.
+      # SMOKE_NO_BUILD=1: smoke 단계가 위 bake 이미지를 --no-build 로 그대로 씁니다.
       - name: 하네스 검증
+        env:
+          SMOKE_NO_BUILD: "1"
         run: ./harness/scripts/verify.sh
 
       - name: 결과 파일
