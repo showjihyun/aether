@@ -30,7 +30,7 @@
 
 ## 아직 없는 것
 
-Phase 1 의 것 — Agent Registry API, Run API, 스트리밍, `packages/*` 의 구현(지금은 세 층의 빈 껍데기). 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
+Phase 2 이후의 것 — MCP Gateway·Firewall(`packages/mcp`), Context Engine(`packages/context`·`memory`), Workflow·HITL(`packages/workflow`), Policy(`packages/policy`), 제품 Evaluation(`packages/evaluation`), 그리고 `apps/web` 의 화면. 그 여섯 패키지는 아직 세 층의 빈 껍데기입니다. 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
 
 ## 이 파일의 규칙
 
