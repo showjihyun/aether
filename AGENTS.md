@@ -1,6 +1,6 @@
 # Repository Guide
 
-aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 AI Runtime 을 실행하는 Open Hybrid Enterprise AI OS 입니다. 현재 **Phase 0 완료**(2026-09-11)이며 `apps/{api,web,worker}`(API 키 인증 포함), `packages/*`(빈 껍데기), `infra/docker` 가 있습니다. Phase 1 은 intent 0002 승인 뒤 시작합니다. 진행 상태의 정본은 [intents/mvp-backlog.md](intents/mvp-backlog.md) 입니다. 없는 코드를 있다고 가정하고 작업하지 않습니다.
+aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 AI Runtime 을 실행하는 Open Hybrid Enterprise AI OS 입니다. 현재 **Phase 1 완료**(2026-09-16)이며 Agent 를 만들어 실행하고(`POST /agents`, `POST /agents/{id}/run`) 상태·이벤트·trace 를 볼 수 있습니다 — `apps/{api,web,worker}`, `packages/{runtime,sdk}`, `infra/docker`. `packages/{workflow,context,memory,mcp,policy,evaluation}` 은 아직 빈 껍데기입니다. Phase 2 는 intent 0003 승인 뒤 시작합니다. 진행 상태의 정본은 [intents/mvp-backlog.md](intents/mvp-backlog.md) 입니다. 없는 코드를 있다고 가정하고 작업하지 않습니다.
 
 ## Architecture
 

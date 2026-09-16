@@ -5,8 +5,9 @@
 | 번호 | 0002 |
 | 작성일 | 2026-09-12 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 1 (Week 3~5) — 원본 로드맵 6장 |
-| 상태 | 승인됨 |
+| 상태 | 완료 |
 | 승인 | showjihyun, 2026-09-12 |
+| 완료 | 2026-09-16 — P1-1 ~ P1-9 전부 병합(마지막 PR #29). R-1 ~ R-16 의 판정 단위는 plan §6, 실측은 spec 0002 2.11 |
 | 후속 spec | [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 P1-1 ~ P1-9 가 소유합니다. 이 문서는 그 아홉 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.

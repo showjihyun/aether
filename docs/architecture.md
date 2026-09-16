@@ -150,7 +150,11 @@ AR-8 은 import-linter `layers` 계약 하나(`containers` 로 전 패키지), A
 
 ## 6. 지금 없는 것
 
-Phase 0 은 끝났습니다(2026-09-11). `apps/{api,web,worker}` 와 `infra/docker` 는 있고 동작하며, `apps/api` 에는 API 키 인증(spec 0001 2.9 — inbound 포트 `Authenticate`·`IssueApiKey`, outbound 포트 `ApiKeyStore`, PostgreSQL 어댑터, `main.py` 조립)이 3.1 의 배치 그대로 들어 있습니다. `packages/*` 는 세 층(3.1)의 **빈 껍데기**입니다 — 구현은 Phase 1 부터. AR-1 ~ AR-12(AR-10 제외)는 `.importlinter`·`.dependency-cruiser.cjs` 로 verify 의 `api-arch`·`web-arch` 단계에서 판정되고 있습니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
+Phase 1 까지 끝났습니다(2026-09-16). `apps/{api,web,worker}`·`infra/docker` 와 **`packages/runtime`** 이 동작합니다 — runtime 에는 Run 상태 기계·lease·`RunStateStore`, model gateway(fake·OpenAI-호환), Planner/Executor 루프와 내장 도구, 이벤트 8종, OTel `Tracer` 가 3.1 의 배치대로 들어 있습니다. api 는 인증·Agent Registry·Run 선언과 투영·SSE 를, worker 는 소비·실행·heartbeat 를 맡습니다.
+
+아직 빈 껍데기인 것: `packages/{workflow,context,memory,mcp,policy,evaluation}` — 각각 Phase 2 이후입니다.
+
+AR-1 ~ AR-12 는 전부 기계 판정입니다 — AR-1 은 `.dependency-cruiser.cjs`, AR-2 ~ AR-9·AR-11·AR-12 는 `.importlinter`(AR-5 는 `httpx` 까지 금지하고 ignore 는 model gateway 한 곳, AR-7 은 api 가 `aether_runtime.domain` 만 보게), AR-10 은 `tests/arch/test_composition_only_in_main.py`. 실제로 발화하는지는 `tests/arch/test_real_importlinter_fires.py` 가 실제 설정에 위반을 주입해 확인합니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
 
 ## 관련 문서
 

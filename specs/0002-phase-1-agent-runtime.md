@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 8 | [편집] 2026-09-16. R-9·R-10 실측 기록 — 로컬 verify 17단계 163.4초(smoke 39.7초, api-integration 37.7초), CI `verify` job 2분 58초 ~ 3분 16초(bake 캐시 포함). D-15 회귀 조건(smoke ≤ 240초, CI ≤ 8분, 합계 ≤ 600초) 전부 충족. `{{성능_기준}}` 은 사람이 **150 ms** 로 고정(H-7, EI-2) — 실측 p50 33.4 · p95 36.8 · max 40.1 ms |
 | 개정 7 | [편집] 2026-09-16. P1-9 실측 — (a) 2.11 격리에 `infra/docker/compose.smoke.yaml`(api 호스트 포트 `!reset []`, collector 출력 `./out/otel-smoke`): 개발 스택과 포트 충돌 없음을 확인. (b) 시나리오의 HTTP 호출은 호스트가 아니라 **api 컨테이너 안에서** `scripts/smoke_client.py`(stdin 으로 넘김, 표준 라이브러리만) — 호스트에 curl·jq·포트를 가정하지 않음. (c) CI 캐시: bake 는 compose 의 상대 빌드 컨텍스트를 **실행 위치** 기준으로 해석하므로 `docker/bake-action@v6` 의 `source: .` + `workdir: infra/docker`(v7 에는 `workdir` 없음, improvement-log `2026-09-16-002`). (d) 2.13 측정 위치는 api 컨테이너 안(`localhost:8000`) — 호스트·Docker 네트워크 왕복을 포함하지 않음, 결과 파일 `infra/docker/out/smoke-bench.json`. (e) C-12: 로컬 compose v2.29.7 에서 `up --wait` + 일회성 `migrate` 가 그대로 성공. D-15 근거 `2026-09-16-001` |
 | 개정 6 | [편집] 2026-09-15. P1-8 구현에서 드러난 배치 — api 에 outbound 포트 `RequestTracing`(`span`·`current_traceparent`)과 어댑터 `otel_request_tracing.py` 를 두어 `RequestRun` 이 `run.request` span 안에서 선언·통지하고 그 `traceparent` 를 실음(application 은 `opentelemetry` 를 모름, AR-9). worker 는 `adapters/outbound/otel_trace_context.py` 가 `TraceContext` 를 구현. 어댑터는 `TracerProvider` 를 주입받아 테스트가 전역을 덮지 않음. R-5 판정 경로를 2.9·2.11 과 같은 `infra/docker/out/otel-smoke/spans.jsonl` 로. collector 이미지는 `0.160.0` digest 고정 |
 | 개정 5 | [편집] 2026-09-15. P1-7 구현이 2.8 을 구체화 — (a) 타임아웃 기준 시계는 `Clock.monotonic()` 이 아니라 저장된 `started_at` 과 `Clock.now()`: monotonic 값은 재개(R-16, 프로세스 재시작)를 넘어 보존되지 않아 재개한 Run 이 예산을 새로 받는 구멍이 생김. (b) 검사 지점 셋(단계 시작·호출 직전·백오프 직전). (c) 재시도 가능한 모델 오류의 분류(timeout·protocol·5xx·429, 그 밖 4xx 는 즉시 실패). (d) 도구는 예외만 재시도, `is_error` 결과는 `Observation`. (e) 백오프 공식. (f) C-13 의 갱신 스레드를 outbound 포트 `LeaseKeeper` 로 — 잃은 단계는 저장·발행·release 없이 `LeaseHeld`. R-4 의 뜻은 그대로 |
@@ -301,6 +302,8 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 | (a) 접기 | `smoke` 를 `api-integration` 안의 pytest 로 | `api-integration` 이 이미지 빌드까지 포함해 수 분짜리 단계가 되고, 통합 실패와 e2e 실패가 한 로그에 섞여 원인 분리가 나빠집니다. `behavior` 계층은 self-check 의 `protection` 하나만 남습니다 |
 | (b) 별도 단계 | `smoke\|behavior\|true\|scripts/smoke.sh` 를 11번째 제품 단계로. spec 0001 D-7 을 [실질] 개정 — "정확히 10개" → "11개(`smoke` 포함), 총 17" | 상한의 출처(harness-adoption.md 3.3)를 한 번 더 넘습니다. 사람의 결정이고 `improvement-log/` 에 1건 |
 | (c) 합치기 | 싼 단계 둘을 하나로(예: `web-lint` + `web-arch` → `web-static`) 하고 `smoke` 를 넣어 10 유지 | **기각.** 합친 단계는 실패 시 어느 검사가 깨졌는지 로그를 열어야 알고, `architecture` 계층 점수에서 `web-arch` 가 사라져 AR-1 의 판정이 `quality` 로 섞입니다. 상한 숫자를 지키기 위해 계층 구분을 흐리는 것은 상한의 취지(반복을 죽이지 않기)와 무관한 대가입니다 |
+
+**실측(P1-9, 2026-09-16)**: 로컬 17단계 163.4초(smoke 39.7초), CI `verify` job 약 3분. 회귀 조건 전부 충족 — (a) 로 돌아갈 이유가 없습니다(개정 8).
 
 **이 spec 은 (b) 를 채택합니다(D-15).** 상한의 취지는 **시간** 예산이고 그것은 D-12(10분)가 지킵니다. 시간을 지키는 장치는 셋 — `smoke` 는 web 을 띄우지 않음, 이미지 레이어 캐시, 그리고 **숫자로 된 회귀 조건**: `smoke` 단독 ≤ 4분(로컬), CI `verify` job 전체 ≤ 8분. P1-9 가 실측하고, 넘으면 (a) 로 돌아갑니다 — 그 판정도 사람이 합니다.
 
