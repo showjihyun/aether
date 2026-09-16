@@ -97,6 +97,8 @@ VRAM 약 18 GB 이상이 필요합니다(추정) — 없는 머신은 fake 어�
 
 결과는 `.harness/verify.json` 에 남습니다.
 
+smoke(끝에서 끝까지: 격리된 compose 프로젝트로 api·worker 를 띄워 agent → run → `succeeded` 와 trace 파일까지)만 따로 돌리려면 `scripts/smoke.sh` 입니다. 개발 스택과 포트·볼륨이 겹치지 않고 끝나면 스스로 정리합니다. `scripts/smoke.sh --bench` 는 Run 생성 응답 지연을 `infra/docker/out/smoke-bench.json` 에 기록합니다(spec 0002 2.13).
+
 ## 오프라인 판정
 
 이미지를 위 `up --build` 로 한 번 빌드해 둔 뒤:

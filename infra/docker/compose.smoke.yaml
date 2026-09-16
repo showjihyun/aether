@@ -1,0 +1,20 @@
+# spec 0002 2.11 (P1-9): smoke 전용 오버라이드. 개발자의 compose 스택(`compose.yaml`
+# 하나만으로 띄운 것)과 격리됩니다 — 이 파일은 `scripts/smoke.sh` 가
+# `-p aether-smoke` 와 함께만 얹습니다.
+#
+# - `api` 의 호스트 포트를 비웁니다(`!reset []`, compose v2.24+ 의 병합 지시자 — 로컬
+#   확인 v2.29.7). 개발 스택이 8000 을 이미 쓰고 있어도 충돌하지 않습니다. smoke 의
+#   HTTP 호출은 호스트에서가 아니라 `docker compose exec` 로 api 컨테이너 **안에서**
+#   합니다(scripts/smoke_client.py) — 호스트 공개가 애초에 필요 없습니다. `web` 은
+#   smoke 가 띄우지 않으므로 그 포트는 건드리지 않습니다.
+# - `otel-collector` 의 출력 디렉터리 기본값을 개발 스택의 `./out/otel` 과 겹치지
+#   않는 `./out/otel-smoke` 로 바꿉니다(spec 2.9) — `AETHER_OTEL_DIR` 을 명시하면
+#   여전히 그 값이 우선합니다.
+services:
+  api:
+    ports: !reset []
+
+  otel-collector:
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+      - ${AETHER_OTEL_DIR:-./out/otel-smoke}:/out
