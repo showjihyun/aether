@@ -7,6 +7,7 @@ evidence: |
   evaluation/runs/2026-09-17-REP-1.md: 입력 "GET /agents 에 목록 조회 추가" — P1-1(a096279)에서 이미 전 계층 구현. 에이전트는 변경 0건으로 불일치 보고.
   evaluation/runs/2026-09-17-REP-4.md: 입력 "POST /agents/{id}/run 의 스트리밍 응답 형식 변경" — 이 경로는 202 JSON(spec 0002 2.2), 스트리밍은 GET /runs/{run_id}/events(2.7, D-4). 에이전트는 DP-1 계약 변경 절차를 이유로 변경 0건.
   evaluation/runs/2026-09-17-REP-8.md: 입력 "GET /runs/{id} 가 Task 가 많은 Run 에서 느림" — 이 경로는 Task 를 읽지 않음(R-7 로 data 스키마 권한도 없음). 실측 Task 0개 p95 51.4 ms, 2,000개 p95 63.1 ms. 고정된 기준(evaluation/README.md {{성능_기준}})은 Run 생성 경로의 P95 ≤ 150 ms 라 이 경로에 적용할 기준이 없음.
+  적용과 회귀 확인(2026-09-17): 사람이 입력·합격 기준 개정안을 승인해 PR #33(harness-change)으로 병합. 개정 입력으로 세 task 를 하네스 3bac2e9 에서 한 번씩 실행 — REP-1 pass, REP-4 fail, REP-8 fail, not-run 0건(evaluation/runs/2026-09-17-REP-{1,4,8}-r2.md). regression_check 의 "not-run 이 아님" 은 충족. held-out 은 실행하지 않았으므로 승격 판정 전.
 root_cause: 세 task 는 제품 코드가 없던 시점(도입 시 기본 세트)에 번들 템플릿을 aether 로 옮겨 쓴 것이라, 입력이 아직 설계되지 않은 경로와 형식을 추측했다. Phase 완료 때 task 입력을 현재 계약과 대조하는 절차가 없다
 fix: 입력을 바꾸지 않고 그대로 실행해 not-run 과 사유를 기록했다(harness/evaluation/README.md 5절·7절 — 입력 변경은 근거 id 가 있는 별도 변경)
 recurrence_risk: medium

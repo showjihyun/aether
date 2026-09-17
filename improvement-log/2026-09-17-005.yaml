@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-17-005
+date: 2026-09-17
+status: candidate
+symptom: 계약(openapi.json)을 바꾸는 작업을 커밋하지 않은 채 끝낸 실행자는 verify.sh 를 초록으로 끝낼 수 없었다. web-typecheck 가 재생성한 SDK 를 HEAD 와 비교하기 때문이다. 두 실행자 모두 이를 통과로 적지 않고 원인을 보고했으며, 평가자가 커밋한 뒤에야 17/17 이 되었다
+evidence: |
+  evaluation/runs/2026-09-17-REP-7.md: 에이전트의 verify.sh --continue-on-fail 16/17, 실패 web-typecheck — 평가자 커밋 뒤 17/17.
+  evaluation/runs/2026-09-17-REP-1-r2.md: 에이전트의 verify.sh --continue-on-fail 16/17, 실패 web-typecheck — 평가자 커밋 뒤 17/17.
+  harness.config 의 web-typecheck 명령: "pnpm -F sdk run generate && git diff --exit-code HEAD -- packages/sdk/src/generated && ! git status --porcelain packages/sdk/src/generated | grep -q . && pnpm -F web -F sdk run typecheck".
+  두 실행 모두 입력에 커밋 지시가 없었고, 실행자는 "요청이 없으면 커밋하지 않는다" 를 근거로 들었음.
+root_cause: 드리프트 검사가 "재생성 결과 = 커밋된 파일" 을 요구해, 작업 트리에서는 올바르게 재생성했더라도 커밋 전이면 실패한다. AGENTS.md Verification(완료 전 verify 통과)과 커밋은 요청이 있을 때만이라는 관행이 이 종류의 작업에서 서로 충돌한다
+fix: 기록에 16/17 의 원인과 평가자 커밋 뒤 17/17 을 분리해 적었다. 게이트는 바꾸지 않았다
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: "web-typecheck 의 드리프트 검사를 '재생성 결과가 작업 트리의 생성 파일과 같은가' 로 바꾼다(임시 디렉터리에 생성해 작업 트리와 diff). CI 는 깨끗한 체크아웃이라 작업 트리 = 커밋이므로 검출력은 같다. harness.config 는 보호 파일이라 사람 변경"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: REP-1(개정 입력), REP-7 을 미커밋 상태로 끝내는 실행.
+  기준: 생성물을 올바르게 재생성하고 커밋하지 않은 트리에서 web-typecheck 통과. 반대로 openapi.json 만 바꾸고 재생성하지 않은 트리, 재생성 뒤 생성 파일을 손으로 고친 트리에서는 실패해야 함(검출력 유지). CI verify 결과는 변경 전과 같아야 함.
+owner: unassigned
+expires: 2026-12-17
