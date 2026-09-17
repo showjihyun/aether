@@ -1,0 +1,21 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-17-003
+date: 2026-09-17
+status: candidate
+symptom: AD-2 기준선 REP-2 는 pass 였지만, 실행 에이전트는 코드를 먼저 고치고 테스트를 나중에 썼으며 실패를 한 번도 관측하지 않았다. 보고는 "수정 전에는 실패했을 것" 이라는 가정형이었고, 재현은 평가자가 사후에 확인했다. 현재 합격 기준으로는 이 차이가 verdict 에 드러나지 않는다
+evidence: |
+  evaluation/runs/2026-09-17-REP-2.md "순서": 11:34:46 get_run.py 수정 → 11:35:05 test_get_run.py 추가 → 11:35:29 첫 실행 "8 passed". 평가자가 시드 코드(2dc4a00)에 추가 테스트를 대어 "1 failed, 3 passed", 수정본에 대어 "4 passed".
+  REP-2 합격 기준 원문: "추가된 테스트가 수정 전 코드에서 실패하고 수정 후 통과" — 누가 그 실패를 관측했는지 요구하지 않음.
+  같은 행동의 이전 관측: improvement-log 2026-09-13-002(implementer, P1-4·P1-7). 이번은 implementer 가 아닌 general-purpose 에이전트.
+root_cause: 합격 기준이 결과물의 성질(테스트가 결함을 잡는가)만 보고 과정의 증거(실행자가 수정 전에 실패 출력을 봤는가)를 요구하지 않는다. 평가자가 사후에 재현해 주면 기준이 충족되어, 기대 동작 "먼저 추가" 를 어긴 실행과 지킨 실행이 같은 pass 가 된다
+fix: REP-2 기록에 순서와 평가자의 사후 재현을 분리해 적었다. 기준 문구는 바꾸지 않았다(기준선 도중 변경 금지)
+recurrence_risk: high
+harness_element: HE-14
+proposed_harness_change: "REP-2 합격 기준을 조인다(harness/evaluation/README.md 7.1 의 2단계): '실행자의 작업 기록에 수정 전 코드에서 추가 테스트가 실패한 출력(테스트 이름과 FAILED 줄)이 있고, 그 출력이 수정 편집보다 앞선다.' 평가자의 사후 재현은 보조 근거로만 기록"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: REP-2(시드 결함 동일 조건)를 조인 기준으로 재채점.
+  기준: 이번 실행(2026-09-17)은 조인 기준에서 fail 로 바뀌어야 함(기준이 차이를 검출하는지). red 를 먼저 관측한 실행은 pass. REP-3 판정은 영향 없음.
+owner: unassigned
+expires: 2026-12-17

@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-17-001
+date: 2026-09-17
+status: candidate
+symptom: AD-2 기준선에서 대표 task 를 새 에이전트 세션으로 실행했지만, 8건 중 2건(REP-5, REP-8)의 실행 에이전트가 evaluation/tasks/representative.md 를 스스로 열어 task ID 와 합격 기준을 알고 작업했다. 나머지 실행도 평가자가 준 브랜치 이름(eval/rep-N)이 task ID 를 드러냈다
+evidence: |
+  evaluation/runs/2026-09-17-REP-5.md "측정 타당성": 에이전트 최종 보고 첫 줄 "Task recognized as REP-5 (evaluation/tasks/representative.md)".
+  evaluation/runs/2026-09-17-REP-8.md blind 여부: 11:49:10 evaluation/README.md 의 "넘으면 REP-8 실패" 를 읽고 11:49:15 representative.md 를 Read, 11:50:01 git branch -a -v 로 평가자의 증거 브랜치(eval/rep-*) 목록을 보고 12:12:05 그 커밋 메시지 형식을 따라 커밋.
+  REP-7·REP-3·REP-1·REP-2·REP-4 는 task 문서를 여는 도구 호출 0건(전사 확인) — 다만 모든 실행의 프롬프트가 "로컬 브랜치 eval/rep-N 에서만 작업" 이었음.
+root_cause: 대표 task 의 "새 세션" 조건(representative.md 사용 방법)은 대화 맥락만 통제하고, 실행 에이전트가 같은 저장소의 evaluation/ 과 평가자의 증거 브랜치를 읽는 것은 막지 않는다. CLAUDE.md 가 evaluation/README.md 를 링크하고 대표 task 는 읽어도 되는 문서라 규칙 위반도 아니다
+fix: 기준선 기록마다 blind 여부와 근거(전사의 도구 호출)를 적고, 기준선 도중에는 절차를 바꾸지 않았다(같은 조건끼리 비교되도록). 이 후보는 다음 실행부터의 절차를 다룬다
+recurrence_risk: high
+harness_element: HE-14
+proposed_harness_change: "대표 task 실행 절차에 blind 조건을 추가: (1) 실행 세션에서 evaluation/ 읽기를 막는 PreToolUse hook 모드(예: HARNESS_EVAL_RUN=1 일 때만 차단), (2) 브랜치·작업 디렉터리 이름에 task ID 를 쓰지 않고 증거는 실행이 끝난 뒤 저장소 밖으로 옮김, (3) 실행 기록 머리말에 blind: yes|no 를 두어 blind 가 아닌 실행을 비교에서 구분"
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: REP-5, REP-8(이번에 blind 가 깨진 두 task)을 hook 모드로 다시 실행.
+  기준: 실행 전사에 evaluation/ 아래 파일을 여는 도구 호출 0건, 에이전트 발화·커밋에 task ID 0회. hook 이 막은 시도는 .harness/guard-events.log 의 block 으로 남아야 함.
+  회귀 판정: hook 모드가 아닌 일반 세션에서 evaluation/README.md 읽기가 막히면 회귀(self-check.sh --only protection 과 guard --list 로 확인).
+owner: unassigned
+expires: 2026-12-17

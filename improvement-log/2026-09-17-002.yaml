@@ -1,0 +1,21 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-17-002
+date: 2026-09-17
+status: candidate
+symptom: AD-2 기준선에서 REP-1·REP-4·REP-8 세 건이 not-run 이 되었다. 세 task 의 입력이 Phase 1 이후 코드·계약과 맞지 않아 측정하려던 행동(경계를 지키며 기능 추가, 실행 중 시스템 관측, 기준 대비 성능 개선)이 한 번도 일어나지 않았다
+evidence: |
+  evaluation/runs/2026-09-17-REP-1.md: 입력 "GET /agents 에 목록 조회 추가" — P1-1(a096279)에서 이미 전 계층 구현. 에이전트는 변경 0건으로 불일치 보고.
+  evaluation/runs/2026-09-17-REP-4.md: 입력 "POST /agents/{id}/run 의 스트리밍 응답 형식 변경" — 이 경로는 202 JSON(spec 0002 2.2), 스트리밍은 GET /runs/{run_id}/events(2.7, D-4). 에이전트는 DP-1 계약 변경 절차를 이유로 변경 0건.
+  evaluation/runs/2026-09-17-REP-8.md: 입력 "GET /runs/{id} 가 Task 가 많은 Run 에서 느림" — 이 경로는 Task 를 읽지 않음(R-7 로 data 스키마 권한도 없음). 실측 Task 0개 p95 51.4 ms, 2,000개 p95 63.1 ms. 고정된 기준(evaluation/README.md {{성능_기준}})은 Run 생성 경로의 P95 ≤ 150 ms 라 이 경로에 적용할 기준이 없음.
+root_cause: 세 task 는 제품 코드가 없던 시점(도입 시 기본 세트)에 번들 템플릿을 aether 로 옮겨 쓴 것이라, 입력이 아직 설계되지 않은 경로와 형식을 추측했다. Phase 완료 때 task 입력을 현재 계약과 대조하는 절차가 없다
+fix: 입력을 바꾸지 않고 그대로 실행해 not-run 과 사유를 기록했다(harness/evaluation/README.md 5절·7절 — 입력 변경은 근거 id 가 있는 별도 변경)
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "harness/evaluation/README.md 7.1 에 따라 세 task 의 입력을 현재 계약 기준으로 다시 쓴다(사람 결정): REP-1 은 아직 없는 경로를 대상으로, REP-4 는 GET /runs/{run_id}/events 의 관측 가능한 변화로, REP-8 은 기준이 고정된 Run 생성 경로로 옮기거나 사람이 GET /runs/{id} 기준을 고정. 아울러 Phase 완료 체크리스트에 '대표 task 입력이 현재 계약과 맞는가' 한 줄 추가"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 다시 쓴 REP-1·REP-4·REP-8 을 d85effa 하네스로 실행(7.1 의 4단계 — 하네스를 바꾸지 않은 상태에서 먼저 실행).
+  기준: 세 task 모두 verdict 가 not-run 이 아니고, 합격 기준의 각 줄이 관측 근거를 가짐. 기존 REP-2·REP-3·REP-5·REP-7 기록의 판정은 바뀌지 않아야 함.
+owner: unassigned
+expires: 2026-12-17

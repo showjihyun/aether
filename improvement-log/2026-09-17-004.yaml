@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-17-004
+date: 2026-09-17
+status: candidate
+symptom: AD-2 기준선의 eval.sh 결과에서 performance 와 subjective 계층 점수가 null 이고 가중치가 다른 계층으로 재분배되었다. 사람이 고정한 성능 기준(Run 생성 P95 ≤ 150 ms)은 smoke --bench 결과 파일로만 존재해 계층 점수·기준선 비교에 들어가지 않는다
+evidence: |
+  .harness/latest-eval.json(2026-09-16, main d85effa, 17/17 통과, score 100):
+  performance "score": null, "notes": "단계 없음: 가중치를 다른 계층에 재분배했습니다"; subjective 도 null.
+  성능 기준 원문: evaluation/README.md {{성능_기준}} — scripts/smoke.sh --bench 가 infra/docker/out/smoke-bench.json 에 기록, 넘으면 REP-8 실패. harness.config 의 17단계 중 layer=performance 인 단계 0개.
+  .gitignore 5행 .harness/baseline-eval.json — 기준선 파일은 로컬에만 남음.
+root_cause: 성능 기준을 고정(H-7)할 때 그 값을 판정하는 verify 단계를 만들지 않아, 기준이 문서와 벤치 파일에만 있고 계층 평가 경로(HARNESS_STEPS → eval.sh)에 연결되지 않았다
+fix: 기준선 기록(evaluation/runs/README.md)에 performance·subjective 가 null 인 사실과 그 의미(성능 회귀는 계층 비교로 검출되지 않음)를 적었다
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: "smoke-bench.json 의 p95 를 150 ms 와 비교해 exit code 를 내는 판정 스크립트를 두고, harness.config 에 layer=performance 단계로 추가한다(단계 상한·실행 시간은 사람 결정, EI-2). subjective 는 단독 gate 가 될 수 없으므로 단계 추가 여부를 따로 판단"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: eval.sh 전체, REP-8(입력을 다시 쓴 뒤 — 2026-09-17-002).
+  기준: latest-eval.json 의 performance score 가 null 이 아님. 벤치 p95 를 인위로 151 ms 이상으로 만든 브랜치에서 그 단계가 실패하고 eval 이 불합격. 다른 계층 점수와 verify 총 시간 증가는 사람이 정한 상한 안.
+owner: unassigned
+expires: 2026-12-17
