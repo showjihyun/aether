@@ -31,7 +31,7 @@
 
 ## 지금 이 세트의 상태
 
-**AD-2 기준선을 한 번 실행했습니다(2026-09-17, 하네스 `d85effa`).** 실행 가능한 7건(REP-6 제외) 중 pass 4 · not-run 3 · fail 0 입니다. 판정과 한계는 [runs/README.md](runs/README.md) "현재 상태" 가 소유합니다. not-run 3건(REP-1 · REP-4 · REP-8)은 입력이 Phase 1 이후 계약과 맞지 않아 측정 대상 행동이 일어나지 않은 것이므로, 이 세트로 회귀를 판정하기 전에 입력을 다시 써야 합니다(improvement log `2026-09-17-002`, 7.1 절차).
+**AD-2 기준선을 한 번 실행했습니다(2026-09-17, 하네스 `d85effa`).** 실행 가능한 7건(REP-6 제외) 중 pass 4 · not-run 3 · fail 0 입니다. 판정과 한계는 [runs/README.md](runs/README.md) "현재 상태" 가 소유합니다. not-run 3건(REP-1 · REP-4 · REP-8)은 입력이 Phase 1 이후 계약과 맞지 않아서였고, 입력을 다시 써(improvement log `2026-09-17-002`, PR #33) 같은 날 다시 실행했습니다. 지금 이 세트의 비교 기준선은 REP-1 · 2 · 3 · 5 · 7 pass, REP-4 · 8 fail 입니다.
 
 이 세트의 출처도 정직하게 적어 둡니다. 번들 템플릿의 실패 모드를 aether 도메인으로 옮긴 것이지, aether 에서 관측된 실패에서 나온 것이 아닙니다. 그러므로 지금은 **도입 시 기본 세트**이고, 여기에 task 를 더할 때는 [../harness/evaluation/README.md](../harness/evaluation/README.md) 7.1 을 따라 근거가 되는 improvement log id 를 먼저 요구합니다.
 
@@ -40,6 +40,7 @@
 | Phase 0 완료(2026-09-11 도달) | REP-1 · REP-3 · REP-5 를 처음 실행할 수 있게 됩니다 |
 | Phase 1 완료(2026-09-16 도달) | REP-2 · REP-4 · REP-8 이 실행 가능해집니다. `{{성능_기준}}` 은 150 ms 로 고정했습니다(위 표) |
 | AD-2 기준선(2026-09-17 실행) | 7건 실행: pass 4(REP-2 · 3 · 5 · 7), not-run 3(REP-1 · 4 · 8). 계층 평가 총점 100, performance · subjective 는 단계가 없어 null([runs/README.md](runs/README.md)) |
+| REP-1 · 4 · 8 입력 개정(2026-09-17) | 개정 입력 첫 실행: REP-1 pass, REP-4 fail, REP-8 fail — not-run 0건([runs/README.md](runs/README.md)) |
 | Phase 4 전후 (AD-3) | held-out 세트를 처음 1회 실행합니다 |
 
 ## 실행
