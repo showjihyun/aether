@@ -12,7 +12,7 @@ FROM ghcr.io/astral-sh/uv:0.12.16@sha256:adc68cd785ca65ea25c0611043b0a00b4ea3a22
 
 # 확인: Python 버전은 .python-version(3.12)과 맞춥니다. Debian slim — psycopg[binary]
 # 는 자체 libpq 를 번들하므로 추가 시스템 패키지가 필요 없습니다.
-FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
+FROM python:3.13-slim@sha256:9d2e5553305c7c7b0097999bb17187c69b921ccd6bc9d40e4bb5ebe652c00285 AS runtime
 
 COPY --from=uv /uv /uvx /usr/local/bin/
 
