@@ -8,8 +8,10 @@ evidence: |
   performance "score": null, "notes": "단계 없음: 가중치를 다른 계층에 재분배했습니다"; subjective 도 null.
   성능 기준 원문: evaluation/README.md {{성능_기준}} — scripts/smoke.sh --bench 가 infra/docker/out/smoke-bench.json 에 기록, 넘으면 REP-8 실패. harness.config 의 17단계 중 layer=performance 인 단계 0개.
   .gitignore 5행 .harness/baseline-eval.json — 기준선 파일은 로컬에만 남음.
+  적용 결과(2026-09-18, main ce9d08b): 단계 18개. verify 로컬 18/18 통과, bench 단계 634 ms 소요, p95=42.5 ms 기준=150 ms. CI verify 통과, 같은 단계 p95=68.8 ms. eval.sh 재실행: performance weight 0.105 score 100(이전 null), 총점 100.
+  게이트 동작 확인: 같은 실측(p95 40.5 ms)에 기준만 10 ms 로 바꾼 임시 설정에서 exit 1 '초과'. 측정값은 조작하지 않음.
 root_cause: 성능 기준을 고정(H-7)할 때 그 값을 판정하는 verify 단계를 만들지 않아, 기준이 문서와 벤치 파일에만 있고 계층 평가 경로(HARNESS_STEPS → eval.sh)에 연결되지 않았다
-fix: 기준선 기록(evaluation/runs/README.md)에 performance·subjective 가 null 인 사실과 그 의미(성능 회귀는 계층 비교로 검출되지 않음)를 적었다
+fix: 기준선 기록에 performance·subjective 가 null 인 사실을 적고, 2026-09-18 에 판정 경로를 만들었다 — scripts/check-bench.sh(임계값은 harness.config 의 HARNESS_BENCH_P95_MAX_MS 만 읽고 기본값 없음, 30분 넘은 측정은 실패) + 사람이 harness.config 에 bench 단계와 150 ms 등록(PR #47)
 recurrence_risk: medium
 harness_element: HE-11
 proposed_harness_change: "smoke-bench.json 의 p95 를 150 ms 와 비교해 exit code 를 내는 판정 스크립트를 두고, harness.config 에 layer=performance 단계로 추가한다(단계 상한·실행 시간은 사람 결정, EI-2). subjective 는 단독 gate 가 될 수 없으므로 단계 추가 여부를 따로 판단"
