@@ -6,10 +6,12 @@ symptom: AD-2 기준선에서 대표 task 를 새 에이전트 세션으로 실�
 evidence: |
   evaluation/runs/2026-09-17-REP-5.md "측정 타당성": 에이전트 최종 보고 첫 줄 "Task recognized as REP-5 (evaluation/tasks/representative.md)".
   evaluation/runs/2026-09-17-REP-8.md blind 여부: 11:49:10 evaluation/README.md 의 "넘으면 REP-8 실패" 를 읽고 11:49:15 representative.md 를 Read, 11:50:01 git branch -a -v 로 평가자의 증거 브랜치(eval/rep-*) 목록을 보고 12:12:05 그 커밋 메시지 형식을 따라 커밋.
+  적용·회귀 확인(2026-09-19, 하네스 8ef40bf): 마커를 켠 채 REP-5 를 같은 입력으로 재실행 — task 문서 참조 0회, 차단 0건(막을 시도 자체가 없었음), 에이전트 발화에 task ID 0회(evaluation/runs/2026-09-19-REP-5-blind.md). 장치가 켜진 상태에서 정상 작업은 한 건도 막히지 않음. 등록 직후 평가자 세션에서 차단 동작 자체는 별도로 확인(로그 2줄).
+  부수 발견: blind 조건에서는 같은 입력이 변경을 만들어내지 못하고 not-run 이 되었다 — 2026-09-19-001 로 분리.
   REP-7·REP-3·REP-1·REP-2·REP-4 는 task 문서를 여는 도구 호출 0건(전사 확인) — 다만 모든 실행의 프롬프트가 "로컬 브랜치 eval/rep-N 에서만 작업" 이었음.
   추가 관측(2026-09-17 개정 입력 실행, 하네스 3bac2e9): 평가자가 브랜치 이름에서 task ID 를 빼고 증거 브랜치를 저장소 밖 번들로 옮긴 뒤에도, REP-8 실행 에이전트는 기준값을 찾으려 읽은 evaluation/README.md 의 성능 기준 행("넘으면 REP-8 실패")에서 task ID 를 알고 코드 주석·테스트 docstring 에 "REP-8 회귀 수정" 이라고 적음(evaluation/runs/2026-09-17-REP-8-r2.md). task 문서 밖의 평가 문서도 누출 경로.
 root_cause: 대표 task 의 "새 세션" 조건(representative.md 사용 방법)은 대화 맥락만 통제하고, 실행 에이전트가 같은 저장소의 evaluation/ 과 평가자의 증거 브랜치를 읽는 것은 막지 않는다. CLAUDE.md 가 evaluation/README.md 를 링크하고 대표 task 는 읽어도 되는 문서라 규칙 위반도 아니다
-fix: 기준선 기록마다 blind 여부와 근거(전사의 도구 호출)를 적고, 기준선 도중에는 절차를 바꾸지 않았다(같은 조건끼리 비교되도록). 이 후보는 다음 실행부터의 절차를 다룬다
+fix: 기준선 기록마다 blind 여부와 근거를 적었고, 2026-09-19 에 차단 장치를 만들었다 — scripts/guard-eval-blind.sh(루트 .eval-blind 마커가 있는 동안 evaluation/tasks·evaluation/runs 참조를 exit 2 로 차단하고 .eval-blind.log 에 기록), .claude/settings.json 등록, 실행 기록 머리말에 blind 키(evaluation/runs/README.md). 증거 브랜치는 저장소 밖 번들로 옮기고 브랜치 이름에서 task ID 를 뺐다
 recurrence_risk: high
 harness_element: HE-14
 proposed_harness_change: "대표 task 실행 절차에 blind 조건을 추가: (1) 실행 세션에서 evaluation/ 읽기를 막는 PreToolUse hook 모드(예: HARNESS_EVAL_RUN=1 일 때만 차단), (2) 브랜치·작업 디렉터리 이름에 task ID 를 쓰지 않고 증거는 실행이 끝난 뒤 저장소 밖으로 옮김, (3) 실행 기록 머리말에 blind: yes|no 를 두어 blind 가 아닌 실행을 비교에서 구분"
