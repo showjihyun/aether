@@ -50,7 +50,7 @@ jobs:
       # Dependabot 이 v7 을 제안하면 이 스텝을 다시 설계한 뒤에 올립니다.
       # 태그 실재 확인(refs/tags, 2026-09-16): setup-buildx-action@v4, bake-action@v6.
       - uses: docker/setup-buildx-action@v4
-      - uses: docker/bake-action@v6
+      - uses: docker/bake-action@v7
         with:
           source: .
           workdir: infra/docker
