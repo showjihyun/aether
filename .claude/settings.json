@@ -22,6 +22,17 @@
             "statusMessage": "평가 무결성 검사 중 (셸)"
           }
         ]
+      },
+      {
+        "matcher": "Read|Grep|Glob|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/guard-eval-blind.sh\"",
+            "timeout": 10,
+            "statusMessage": "평가 blind 조건 확인 중"
+          }
+        ]
       }
     ],
     "PostToolUse": [

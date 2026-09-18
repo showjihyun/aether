@@ -4,7 +4,22 @@
 
 `harness/scripts/eval.sh` 는 이 과제들을 실행하지 않습니다. 그 스크립트는 `harness.config` 의 `HARNESS_STEPS` 만 집계하며, `.harness/latest-eval.json` 은 "하네스 자신이 성립하는가" 에만 답합니다. 과제 합격 기준의 판정은 이 디렉터리가 소유합니다. 두 근거는 서로를 대체하지 않습니다.
 
-형식은 [../../harness/evaluation/runs/_template.md](../../harness/evaluation/runs/_template.md) 를 따릅니다. 승격 판정에서 이 파일들이 하는 역할은 [../../harness/rules/promotion-gate.rule.md](../../harness/rules/promotion-gate.rule.md) 의 PG-3, PG-6 입니다.
+형식은 [../../harness/evaluation/runs/_template.md](../../harness/evaluation/runs/_template.md) 를 따릅니다. 번들 템플릿의 머리말 다섯 키에 더해 이 프로젝트는 `blind` 한 줄을 씁니다.
+
+| 키 | 값 | 뜻 |
+| --- | --- | --- |
+| `blind` | `yes` | 실행 에이전트가 task 정의(`../tasks/`)와 지난 판정(이 디렉터리)을 읽지 않았습니다 |
+| `blind` | `no` | 읽었습니다. 그 실행의 판정은 "합격 기준을 아는 에이전트가 기준을 지켰다" 까지만 증명합니다 |
+| `blind` | `partial` | task 문서는 열지 않았지만 다른 문서에서 task ID 나 기준을 알았습니다 |
+
+blind 를 지키는 장치는 `scripts/guard-eval-blind.sh`(PreToolUse hook, improvement log `2026-09-17-001`)입니다. 저장소 루트에 `.eval-blind` 마커가 있는 동안 두 경로의 읽기를 차단하고, 차단할 때마다 `.eval-blind.log` 에 시각·도구·경로를 남깁니다. 실행 절차는 이렇습니다.
+
+1. 실행 직전에 마커를 만듭니다: `touch .eval-blind`
+2. task 를 실행합니다. 브랜치 이름에 task ID 를 쓰지 않습니다.
+3. 실행이 끝나면 `.eval-blind.log` 를 기록의 근거로 옮기고 마커와 로그를 지웁니다.
+4. 채점은 마커가 없는 상태에서 합니다 — 채점자는 합격 기준을 읽어야 합니다.
+
+마커가 막지 못하는 경로가 남아 있습니다. 경로를 직접 적지 않는 전체 검색(`grep -r`)이나 다른 문서에 실린 task ID 는 걸리지 않습니다. 그래서 `blind: yes` 는 "차단 장치가 켜져 있었고 우회 흔적이 없다" 는 뜻이며, 기록 본문에 근거를 함께 적습니다. 승격 판정에서 이 파일들이 하는 역할은 [../../harness/rules/promotion-gate.rule.md](../../harness/rules/promotion-gate.rule.md) 의 PG-3, PG-6 입니다.
 
 기록이 없다면 그것은 "회귀가 없다" 는 뜻이 아니라 **판정하지 않았다** 는 뜻입니다. 그 상태에서는 candidate 를 `promoted` 로 올리지 않습니다.
 
