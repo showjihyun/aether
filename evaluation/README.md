@@ -21,7 +21,7 @@
 | `{{진입_경로}}` | `POST /agents/{id}/run` 과 `GET /runs/{id}` |
 | `{{규약_문서}}` | [../docs/architecture.md](../docs/architecture.md) 의 AR-1 ~ AR-7, [../docs/domain.md](../docs/domain.md) |
 | `{{검증_명령}}` | `./harness/scripts/verify.sh` |
-| `{{성능_기준}}` | **Run 생성 응답 P95 ≤ 150 ms.** 측정 정의는 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) 2.13(D-8): `scripts/smoke.sh --bench` 가 api 컨테이너 안에서 `POST /agents/{id}/run` 을 순차 200회(워밍업 20 제외, n=180) 보내고 `infra/docker/out/smoke-bench.json` 에 기록합니다 — 호스트·Docker 네트워크 왕복은 포함하지 않습니다. **환경**: fake 모델 어댑터, Windows 11 + Docker Desktop 27.3.1. 이 값을 고른 근거는 2026-09-16 실측(p50 33.4 ms · p95 36.8 ms · max 40.1 ms)과 그 약 4배의 여유입니다 — 느린 러너에서 거짓 실패를 내지 않으면서 동기 DB 호출 추가 같은 진짜 회귀는 잡는 자리. 넘으면 REP-8 실패. 값은 사람이 고정했습니다(showjihyun, 2026-09-16, EI-2) |
+| `{{성능_기준}}` | **Run 생성 응답 P95 ≤ 150 ms.** 측정 정의는 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) 2.13(D-8): `scripts/smoke.sh --bench` 가 api 컨테이너 안에서 `POST /agents/{id}/run` 을 순차 200회(워밍업 20 제외, n=180) 보내고 `infra/docker/out/smoke-bench.json` 에 기록합니다 — 호스트·Docker 네트워크 왕복은 포함하지 않습니다. **환경**: fake 모델 어댑터, Windows 11 + Docker Desktop 27.3.1. 이 값을 고른 근거는 2026-09-16 실측(p50 33.4 ms · p95 36.8 ms · max 40.1 ms)과 그 약 4배의 여유입니다 — 느린 러너에서 거짓 실패를 내지 않으면서 동기 DB 호출 추가 같은 진짜 회귀는 잡는 자리. 넘으면 `verify.sh` 의 `bench` 단계(`scripts/check-bench.sh`)가 실패합니다 — 2026-09-18 에 `harness.config` 의 `HARNESS_BENCH_P95_MAX_MS` 로 등록했습니다(improvement log `2026-09-17-004`). 성능을 다루는 대표 task 도 같은 값을 씁니다. 값은 사람이 고정했습니다(showjihyun, 2026-09-16, EI-2) |
 | `{{외부_콘텐츠}}` | GitHub Issue 본문, 로드맵 원본처럼 저장소 밖에서 들어온 텍스트 |
 | `{{데이터_계약}}` | `POST /agents/{id}/run` 의 요청·응답 스키마 |
 | `{{비동기_경로}}` | Run 실행 경로(Planner → Executor → Tool → Observation)와 스트리밍·취소 |
@@ -41,6 +41,7 @@
 | Phase 1 완료(2026-09-16 도달) | REP-2 · REP-4 · REP-8 이 실행 가능해집니다. `{{성능_기준}}` 은 150 ms 로 고정했습니다(위 표) |
 | AD-2 기준선(2026-09-17 실행) | 7건 실행: pass 4(REP-2 · 3 · 5 · 7), not-run 3(REP-1 · 4 · 8). 계층 평가 총점 100, performance · subjective 는 단계가 없어 null([runs/README.md](runs/README.md)) |
 | REP-1 · 4 · 8 입력 개정(2026-09-17) | 개정 입력 첫 실행: REP-1 pass, REP-4 fail, REP-8 fail — not-run 0건([runs/README.md](runs/README.md)) |
+| 성능 게이트(2026-09-18) | `bench` 단계 등록으로 단계 18개. `performance` 계층 점수가 null 에서 100 으로 채워지고 기준선을 다시 고정했습니다 |
 | Phase 4 전후 (AD-3) | held-out 세트를 처음 1회 실행합니다 |
 
 ## 실행
