@@ -5,7 +5,7 @@ description = ""
 requires-python = ">=3.12"
 dependencies = [
     "aether-runtime",
-    "alembic>=1.19.2",
+    "alembic>=1.20.0",
     "fastapi>=0.141.1",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "opentelemetry-sdk>=1.44.0",
