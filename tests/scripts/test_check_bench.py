@@ -1,20 +1,30 @@
 """AD-2 후보 2026-09-17-004: `scripts/check-bench.sh` 가 smoke bench 결과의 p95 를
 `harness.config` 의 `HARNESS_BENCH_P95_MAX_MS` 임계값과 비교해 게이트하는지 검증합니다.
 
+AD-2 후보 2026-09-19-002: 신선도 판정이 벽시계 현재 시각 대신 `.harness/logs/smoke.log`
+의 수정 시각(같은 verify 실행에서 나온 측정인지)과 비교하는지 검증합니다 — 같은 실행 안에서
+smoke 가 벤치를 기록했는데 프로세스가 느려져 판정이 47분 뒤에 돌아도 측정값이 기준 안이면
+통과해야 합니다(2026-09-19 거짓 실패). smoke.log 가 없으면(단독 실행) 기존 벽시계 30분
+규칙으로 폴백합니다.
+
 `scripts/smoke.sh --bench` 가 남기는 실제 스키마(`{p50_ms, p95_ms, max_ms, n, warmup,
 measured_at, commit, adapter, docker, os}`)의 부분집합만 있으면 충분하므로, 이 테스트는
 `p95_ms`·`measured_at` 만 채운 최소 fixture 로 subprocess 실행 결과(종료 코드·마지막
 출력 줄)를 검증합니다. 실제 `harness.config`(보호 파일)는 건드리지 않고 임시
-`harness.config` 를 만들어 `--config` 로 넘깁니다. 이 테스트는 subprocess 로 bash
-스크립트를 실행할 뿐 자체적으로 소켓을 열지 않으므로 `pytest-socket` 의 기본
-`--disable-socket` 아래에서도(그리고 `integration` 마크 없이) 돕니다.
+`harness.config` 를 만들어 `--config` 로 넘깁니다. smoke.log 도 마찬가지로 임시 파일을
+만들어 `--smoke-log` 로 넘겨, 실제 저장소의 `.harness/logs/smoke.log`(하네스 보호 경로)를
+읽거나 쓰지 않습니다. 이 테스트는 subprocess 로 bash 스크립트를 실행할 뿐 자체적으로
+소켓을 열지 않으므로 `pytest-socket` 의 기본 `--disable-socket` 아래에서도(그리고
+`integration` 마크 없이) 돕니다.
 """
 
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import time
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -34,6 +44,10 @@ def _now_iso() -> str:
 
 def _iso_minutes_ago(minutes: int) -> str:
     return (datetime.now(UTC) - timedelta(minutes=minutes)).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _iso_seconds_ago(seconds: int) -> str:
+    return (datetime.now(UTC) - timedelta(seconds=seconds)).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def _write_bench(path: Path, *, p95_ms: float, measured_at: str) -> None:
@@ -65,10 +79,29 @@ def _write_config(path: Path, *, threshold: int | None) -> None:
     path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
-def _run(bench_path: Path, config_path: Path) -> subprocess.CompletedProcess[str]:
+def _touch_smoke_log(path: Path, *, seconds_ago: float) -> None:
+    """smoke.log 를 만들고 수정 시각을 `seconds_ago` 만큼 과거로 맞춥니다.
+
+    `os.utime` 으로 mtime 을 직접 지정합니다 — verify 를 실제로 실행하지 않고도
+    "같은 실행에서 나온 smoke 로그" 의 수정 시각을 재현할 수 있어야 합니다.
+    """
+    path.write_text("smoke: pass (test fixture)\n", encoding="utf-8")
+    mtime = time.time() - seconds_ago
+    os.utime(path, (mtime, mtime))
+
+
+def _run(
+    bench_path: Path,
+    config_path: Path,
+    *,
+    smoke_log_path: Path | None,
+) -> subprocess.CompletedProcess[str]:
     # bash 로 명시적으로 실행합니다 — Windows 는 shebang 을 직접 해석하지 않습니다.
+    args = [_BASH, str(SCRIPT_PATH), "--bench", str(bench_path), "--config", str(config_path)]
+    if smoke_log_path is not None:
+        args.extend(["--smoke-log", str(smoke_log_path)])
     return subprocess.run(
-        [_BASH, str(SCRIPT_PATH), "--bench", str(bench_path), "--config", str(config_path)],
+        args,
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -86,10 +119,12 @@ def test_p95_within_threshold_exits_zero(tmp_path: Path) -> None:
     """p95 가 기준 이하면 exit 0 이고 마지막 줄에 실측값과 기준을 함께 출력합니다."""
     bench_path = tmp_path / "smoke-bench.json"
     config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"
     _write_bench(bench_path, p95_ms=100, measured_at=_now_iso())
     _write_config(config_path, threshold=150)
+    _touch_smoke_log(smoke_log_path, seconds_ago=0)
 
-    result = _run(bench_path, config_path)
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert _last_line(result.stdout) == "p95=100 ms, 기준=150 ms — 통과"
@@ -103,26 +138,82 @@ def test_p95_over_threshold_exits_one(tmp_path: Path) -> None:
     """
     bench_path = tmp_path / "smoke-bench.json"
     config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"
     _write_bench(bench_path, p95_ms=200, measured_at=_now_iso())
     _write_config(config_path, threshold=150)
+    _touch_smoke_log(smoke_log_path, seconds_ago=0)
 
-    result = _run(bench_path, config_path)
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert _last_line(result.stdout) == "p95=200 ms, 기준=150 ms — 초과"
 
 
-def test_stale_measured_at_exits_one(tmp_path: Path) -> None:
-    """`measured_at` 이 30분보다 오래되면 기준을 만족해도 exit 1 이고, 마지막 줄에
-    "측정이 오래됨" 이 드러나 초과 실패와 구분됩니다(리뷰 지적 — age 는 실행 시점에
-    따라 달라지므로 접두사만 고정해 비교합니다).
+def test_same_run_slow_execution_exits_zero(tmp_path: Path) -> None:
+    """AD-2 2026-09-19-002: smoke 와 bench 가 둘 다 2시간 전이지만 서로 가까우면(60초
+    차) 실행 전체가 느렸을 뿐 같은 verify 실행이므로 exit 0 이어야 합니다. 벽시계
+    현재 시각과 비교했다면(구 규칙) age=7200s > 1800s 로 거짓 실패했을 사례입니다.
     """
     bench_path = tmp_path / "smoke-bench.json"
     config_path = tmp_path / "harness.config"
-    _write_bench(bench_path, p95_ms=100, measured_at=_iso_minutes_ago(31))
+    smoke_log_path = tmp_path / "smoke.log"
+    _touch_smoke_log(smoke_log_path, seconds_ago=7200)
+    _write_bench(bench_path, p95_ms=62.2, measured_at=_iso_seconds_ago(7260))
     _write_config(config_path, threshold=150)
 
-    result = _run(bench_path, config_path)
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _last_line(result.stdout) == "p95=62.2 ms, 기준=150 ms — 통과"
+
+
+def test_bench_from_previous_run_exits_one(tmp_path: Path) -> None:
+    """벤치 결과가 smoke 로그보다 `SAME_RUN_MAX_LAG_SECONDS`(600s) 이상 이전이면
+    같은 실행에서 나온 측정이 아니므로 exit 1 이고, 마지막 줄에 사유가 드러납니다.
+    2820초 차는 2026-09-19-002 사고에서 실측된 지연(smoke 종료 후 47분 뒤 bench 실행)
+    입니다.
+    """
+    bench_path = tmp_path / "smoke-bench.json"
+    config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"
+    _touch_smoke_log(smoke_log_path, seconds_ago=0)
+    _write_bench(bench_path, p95_ms=62.2, measured_at=_iso_seconds_ago(2820))
+    _write_config(config_path, threshold=150)
+
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    last_line = _last_line(result.stdout)
+    expected = "p95=62.2 ms, 기준=150 ms — 측정이 이전 실행 것(bench 가 smoke 로그보다 2820s 이전)"
+    assert last_line == expected, last_line
+
+
+def test_missing_smoke_log_and_fresh_bench_exits_zero(tmp_path: Path) -> None:
+    """`--smoke-log` 경로가 없으면(깨끗한 체크아웃, check-bench.sh 단독 실행) 벽시계
+    현재 시각과 비교하는 기존 규칙으로 폴백합니다 — 방금 측정이면 exit 0."""
+    bench_path = tmp_path / "smoke-bench.json"
+    config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"  # 일부러 만들지 않음
+    _write_bench(bench_path, p95_ms=100, measured_at=_now_iso())
+    _write_config(config_path, threshold=150)
+
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _last_line(result.stdout) == "p95=100 ms, 기준=150 ms — 통과"
+
+
+def test_missing_smoke_log_and_stale_bench_exits_one(tmp_path: Path) -> None:
+    """`--smoke-log` 경로가 없고 측정이 30분보다 오래되면(벽시계 폴백) exit 1 이고
+    마지막 줄에 "측정이 오래됨" 이 드러나 초과 실패와 구분됩니다(age 는 실행 시점에
+    따라 달라지므로 접두사만 고정해 비교합니다)."""
+    bench_path = tmp_path / "smoke-bench.json"
+    config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"  # 일부러 만들지 않음
+    _write_bench(bench_path, p95_ms=100, measured_at=_iso_minutes_ago(120))
+    _write_config(config_path, threshold=150)
+
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
 
     assert result.returncode == 1, result.stdout + result.stderr
     last_line = _last_line(result.stdout)
@@ -134,10 +225,12 @@ def test_missing_threshold_variable_exits_one(tmp_path: Path) -> None:
     """`harness.config` 에 `HARNESS_BENCH_P95_MAX_MS` 가 없으면 exit 1 이고 이유를 밝힙니다."""
     bench_path = tmp_path / "smoke-bench.json"
     config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"
     _write_bench(bench_path, p95_ms=100, measured_at=_now_iso())
     _write_config(config_path, threshold=None)
+    _touch_smoke_log(smoke_log_path, seconds_ago=0)
 
-    result = _run(bench_path, config_path)
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert "HARNESS_BENCH_P95_MAX_MS" in result.stderr
@@ -147,9 +240,11 @@ def test_missing_bench_file_exits_one(tmp_path: Path) -> None:
     """벤치 결과 파일이 없으면 exit 1 이고 이유를 밝힙니다."""
     bench_path = tmp_path / "smoke-bench.json"  # 일부러 만들지 않음
     config_path = tmp_path / "harness.config"
+    smoke_log_path = tmp_path / "smoke.log"
     _write_config(config_path, threshold=150)
+    _touch_smoke_log(smoke_log_path, seconds_ago=0)
 
-    result = _run(bench_path, config_path)
+    result = _run(bench_path, config_path, smoke_log_path=smoke_log_path)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert result.stderr.strip() != ""

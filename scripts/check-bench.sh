@@ -5,17 +5,28 @@
 # 걸리지 않아 성능 회귀가 조용히 통과한 사고(2026-09-17, Run 생성 경로 N+1, 실측
 # p95 1613 ms)가 있었습니다.
 #
+# AD-2 후보 2026-09-19-002: 신선도 판정을 벽시계 현재 시각이 아니라 "같은 verify 실행에서
+# 나온 측정인가" 로 바꿨습니다. 같은 실행 안에서 smoke 가 벤치를 기록했는데 프로세스가
+# 느려져 판정이 47분 뒤에 돌아, 기준 안인 측정(p95 62.2 ms)이 "측정이 오래됨" 으로 거짓
+# 실패한 사고가 있었습니다. 기준 시각을 `.harness/logs/smoke.log`(verify 의 smoke 단계가
+# 끝날 때 쓰는 로그)의 수정 시각으로 삼으면, 실행이 느려질 때 벤치의 measured_at 과 smoke
+# 로그의 수정 시각이 함께 밀리므로 거짓 실패가 사라지고, 직전 실행의 오래된 벤치 파일은
+# smoke 로그가 그보다 나중에 갱신되어 있어 여전히 걸립니다. smoke 로그가 없으면(깨끗한
+# 체크아웃, check-bench.sh 단독 실행) 비교할 기준이 없으므로 기존 벽시계 규칙으로
+# 폴백합니다.
+#
 # 임계값은 `harness.config`(보호 파일, EI-2 — 사람이 소유)가 정본입니다. 이 스크립트에
 # 기본값을 넣지 않습니다 — 변수가 없으면 실패로 알립니다.
 #
 # 사용:
-#   scripts/check-bench.sh                                  # 저장소 기본 경로
-#   scripts/check-bench.sh --bench <경로> --config <경로>    # 테스트용 경로 지정
+#   scripts/check-bench.sh                                              # 저장소 기본 경로
+#   scripts/check-bench.sh --bench <경로> --config <경로> --smoke-log <경로>  # 테스트용 경로 지정
 #
 # 종료 코드:
-#   0 — p95 가 기준 이하이고 결과가 신선함(30분 이내).
-#   1 — 기준 초과, 결과가 오래됨, 결과 파일이 없거나 깨짐, 또는 harness.config 에
-#       임계값이 없거나 숫자가 아님.
+#   0 — p95 가 기준 이하이고 같은 실행에서 나온 측정임(또는 smoke 로그가 없어 벽시계
+#       30분 폴백을 만족함).
+#   1 — 기준 초과, 측정이 이전 실행 것이거나(벽시계 폴백이면 30분보다 오래됨), 결과
+#       파일이 없거나 깨짐, 또는 harness.config 에 임계값이 없거나 숫자가 아님.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -23,6 +34,7 @@ ROOT="$(cd "${SCRIPT_DIR}/.." && pwd -P)"
 
 BENCH_PATH="${ROOT}/infra/docker/out/smoke-bench.json"
 CONFIG_PATH="${ROOT}/harness.config"
+SMOKE_LOG_PATH="${ROOT}/.harness/logs/smoke.log"
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -34,6 +46,10 @@ while [ $# -gt 0 ]; do
       CONFIG_PATH="$2"
       shift 2
       ;;
+    --smoke-log)
+      SMOKE_LOG_PATH="$2"
+      shift 2
+      ;;
     *)
       echo "check-bench: unknown argument: $1" >&2
       exit 2
@@ -41,10 +57,17 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-# 신선도 상한(초). 재측정 없이 오래된 결과로 게이트를 통과하는 것을 막습니다 — 30분은
-# 로컬에서 smoke --bench 를 돌리고 곧바로 verify 를 실행하는 흐름을 넉넉히 덮으면서,
-# 어제 결과가 오늘 커밋을 대변한다고 속이지는 못하게 고른 값입니다.
+# 신선도 상한(초, 벽시계 폴백용). 재측정 없이 오래된 결과로 게이트를 통과하는 것을
+# 막습니다 — 30분은 로컬에서 smoke --bench 를 돌리고 곧바로 verify 를 실행하는 흐름을
+# 넉넉히 덮으면서, 어제 결과가 오늘 커밋을 대변한다고 속이지는 못하게 고른 값입니다.
+# smoke.log 가 있으면 이 값 대신 SAME_RUN_MAX_LAG_SECONDS 를 씁니다.
 FRESHNESS_MAX_SECONDS=1800
+
+# 벤치 결과가 "같은 실행" 것으로 인정되는 최대 지연(초) — smoke.log 수정 시각보다
+# 이만큼 이상 이전이면 다른(더 이전) 실행의 결과로 간주해 실패시킵니다. 600 은 smoke
+# 단계 종료부터 bench 판정 시작까지 정상적으로 걸리는 시간을 넉넉히 덮으면서, 2026-
+# 09-19-002 사고의 지연(2820초)은 여전히 걸러내는 값입니다.
+SAME_RUN_MAX_LAG_SECONDS=600
 
 if [ ! -f "$BENCH_PATH" ]; then
   echo "check-bench: bench 결과 파일이 없습니다: ${BENCH_PATH}" >&2
@@ -127,17 +150,31 @@ if [ -z "$MEASURED_EPOCH" ]; then
   echo "check-bench: measured_at 형식을 해석할 수 없습니다: ${MEASURED_AT}" >&2
   exit 1
 fi
-NOW_EPOCH="$(date -u +%s)"
-AGE_SECONDS=$((NOW_EPOCH - MEASURED_EPOCH))
 
 # 마지막 줄에 실측값·기준과 함께 사유(통과/초과/신선도)까지 담습니다 — verify.sh 의
-# summary 는 각 단계 로그의 마지막 줄만 남기므로, 그 한 줄만 보고도 세 경우를 구분할
+# summary 는 각 단계 로그의 마지막 줄만 남기므로, 그 한 줄만 보고도 경우를 구분할
 # 수 있어야 합니다(리뷰 지적, 2026-09-17 N+1 회귀를 놓친 사고와 같은 결).
-if [ "$AGE_SECONDS" -gt "$FRESHNESS_MAX_SECONDS" ]; then
-  echo "check-bench: bench 결과가 오래되었습니다 (measured_at=${MEASURED_AT}, age=${AGE_SECONDS}s > ${FRESHNESS_MAX_SECONDS}s)" >&2
-  printf 'p95=%s ms, 기준=%s ms — 측정이 오래됨(age=%ss > %ss)\n' \
-    "$P95_MS" "$THRESHOLD" "$AGE_SECONDS" "$FRESHNESS_MAX_SECONDS"
-  exit 1
+if [ -f "$SMOKE_LOG_PATH" ]; then
+  # 같은 verify 실행에서 나온 측정인지를 벽시계 대신 확인합니다(2026-09-19-002).
+  SMOKE_LOG_EPOCH="$(date -u -r "$SMOKE_LOG_PATH" +%s)"
+  LAG_SECONDS=$((SMOKE_LOG_EPOCH - MEASURED_EPOCH))
+  if [ "$LAG_SECONDS" -ge "$SAME_RUN_MAX_LAG_SECONDS" ]; then
+    echo "check-bench: bench 결과가 이전 실행 것입니다 (measured_at=${MEASURED_AT}, smoke_log=${SMOKE_LOG_PATH}, lag=${LAG_SECONDS}s >= ${SAME_RUN_MAX_LAG_SECONDS}s)" >&2
+    printf 'p95=%s ms, 기준=%s ms — 측정이 이전 실행 것(bench 가 smoke 로그보다 %ss 이전)\n' \
+      "$P95_MS" "$THRESHOLD" "$LAG_SECONDS"
+    exit 1
+  fi
+else
+  # smoke.log 가 없으면(깨끗한 체크아웃, check-bench.sh 단독 실행) 같은 실행인지 비교할
+  # 기준이 없으므로 벽시계 현재 시각과 비교하는 기존 규칙으로 폴백합니다.
+  NOW_EPOCH="$(date -u +%s)"
+  AGE_SECONDS=$((NOW_EPOCH - MEASURED_EPOCH))
+  if [ "$AGE_SECONDS" -gt "$FRESHNESS_MAX_SECONDS" ]; then
+    echo "check-bench: bench 결과가 오래되었습니다 (measured_at=${MEASURED_AT}, age=${AGE_SECONDS}s > ${FRESHNESS_MAX_SECONDS}s)" >&2
+    printf 'p95=%s ms, 기준=%s ms — 측정이 오래됨(age=%ss > %ss)\n' \
+      "$P95_MS" "$THRESHOLD" "$AGE_SECONDS" "$FRESHNESS_MAX_SECONDS"
+    exit 1
+  fi
 fi
 
 if awk -v p95="$P95_MS" -v thr="$THRESHOLD" 'BEGIN { exit (p95 + 0 <= thr + 0) ? 0 : 1 }'; then
