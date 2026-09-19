@@ -79,12 +79,13 @@
 | 항목 | 내용 |
 | --- | --- |
 | 목적 | 진입점 문서에서 규약 문서로 가는 발견 경로가 살아 있는지 확인합니다. |
-| 입력 | `Agent Version` 을 다루는 코드를 추가하세요. 프로젝트 규약을 따릅니다. |
-| 기대 동작 | 작업 전에 [../../docs/architecture.md](../../docs/architecture.md) 와 [../../docs/domain.md](../../docs/domain.md) 를 찾아 읽고 그 규약을 적용합니다. `Agent` 와 `Agent Version` 과 `Run` 을 혼용하지 않습니다. |
-| 관측할 계층 | `architecture`, `quality` |
-| 합격 기준 | AR-* 위반 0건. 작업 기록에 두 문서를 읽은 흔적이 있음. 도메인 용어를 추측으로 재정의한 흔적이 없음. |
+| 입력 | `aether-api` 에 특정 `Agent Version` 의 정의를 JSON 으로 출력하는 서브커맨드를 추가하세요. 기존 계층 구조를 따릅니다. |
+| 기대 동작 | 작업 전에 [../../docs/architecture.md](../../docs/architecture.md) 와 [../../docs/domain.md](../../docs/domain.md) 를 찾아 읽고 그 규약을 적용합니다. 이미 있는 inbound 포트에 어댑터를 하나 더 붙이는 일이므로 HTTP 계약(spec 0002 D-9 의 9경로)은 건드리지 않습니다. `Agent` 와 `Agent Version` 과 `Run` 을 혼용하지 않습니다. 변경 후 `./harness/scripts/verify.sh` 를 실행합니다. |
+| 관측할 계층 | `architecture`, `quality`, `correctness` |
+| 합격 기준 | `api-arch`·`web-arch` 단계 통과(계약 위반 0건). 새 서브커맨드를 검증하는 테스트가 1건 이상 추가되고 통과. `packages/sdk/openapi.json` 의 diff 0줄(HTTP 계약 불변). 작업 기록에 두 규약 문서를 읽은 흔적이 있음. 도메인 용어를 추측으로 재정의한 흔적이 없음(출력 필드가 `Agent Version` 의 것만 담고 `Agent` 의 가변 필드나 `Run` 필드를 섞지 않음). |
 | 잡아내는 실패 모드 | 진입점 문서가 비대해지거나 링크가 끊겨 규약 문서가 발견되지 않습니다. |
-| 실행 가능 | **지금 가능**. 문서 발견 경로만 측정하므로 코드가 없어도 성립합니다 |
+| 실행 가능 | 지금. 해당 서브커맨드가 없는 동안. `.eval-blind` 마커를 켜고 실행합니다(blind 조건, [../../scripts/guard-eval-blind.sh](../../scripts/guard-eval-blind.sh)) |
+| 개정 | 2026-09-19. 입력·기대 동작·합격 기준을 다시 썼습니다. 근거 improvement log `2026-09-19-001`. 이전 입력("`Agent Version` 을 다루는 코드를 추가하세요")은 blind 조건에서 작업 지시로 읽히지 않아 변경 0건·not-run 이었습니다([../runs/2026-09-19-REP-5-blind.md](../runs/2026-09-19-REP-5-blind.md)). 실패 모드는 그대로라 ID 를 유지합니다. 정답을 아는 조건에서의 이전 판정은 [../runs/2026-09-17-REP-5.md](../runs/2026-09-17-REP-5.md) 입니다 |
 
 ## REP-6 — 범위가 애매한 요청
 
