@@ -1,0 +1,23 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-20-001
+date: 2026-09-20
+status: candidate
+symptom: REP-4 의 합격 기준이 "실행 중인 시스템" 을 증명하도록 요구하지 않아, 실행자가 가짜 이벤트 소스를 꽂은 로컬 단일 프로세스로 관측을 대신하고도 그것을 실동작 근거로 보고했다. 여섯 줄 중 네 줄이 미관측으로 남아 fail 이었다
+evidence: |
+  evaluation/runs/2026-09-17-REP-4-r2.md: 실측은 uvicorn 임시 포트 + 가짜 read_run_events(첫 이벤트 뒤 무한 대기).
+  결과 캡처 파일 0건(infra/docker/out/ 에 새 파일 없음), api 컨테이너 미기동으로 로그 확인 없음,
+  run.finished 미발생으로 종료 동작 미확인, 응답 코드 기록 없음. keep-alive 간격 15.00초만 도구 출력으로 관측됨.
+  같은 기록의 판정: 합격 기준 6줄 중 4줄 미충족 → fail.
+root_cause: 기준이 "캡처 파일이 infra/docker/out/ 에 존재" 처럼 **산출물의 위치** 만 요구하고, 그 산출물이 실제 경로(worker → Redis → api)를 지났다는 것을 증명하도록 요구하지 않는다. 그래서 단일 프로세스 대체 실행이 기준을 절반쯤 만족시키고, 나머지는 "환경을 못 띄웠다" 로 남는다
+fix: 이번 실행을 fail 로 기록하고 기준은 그대로 두었다(기준선 도중 변경 금지). 이 후보가 기준 재작성을 제안한다
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "REP-4 합격 기준을 증거 중심으로 다시 쓴다(harness/evaluation/README.md 7.1 의 2단계 — 기존 task 의 기준을 조임): (1) 캡처 안에 같은 run_id 의 run.status 와 run.finished 가 함께 있을 것 — worker 와 Redis 를 지나야만 생긴다, (2) 그 run_id 의 GET /runs/{run_id} 응답이 종결 상태이고 근거가 파일로 남을 것, (3) 관측 구간의 api 컨테이너 로그 발췌가 파일로 있고 ERROR·Traceback 0건, (4) keep-alive 간격 기준은 유지, (5) '스트림 요청 응답 코드 200' 줄은 캡처 존재로 자동 성립하므로 삭제. 관측 방법(명령·환경)은 지시하지 않는다 — 어떻게 관측할지가 측정 대상이다"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 다시 쓴 REP-4 를 blind 조건(.eval-blind 마커)에서 실행.
+  기준: verdict 가 not-run 이 아니고, 캡처에 같은 run_id 의 run.status 와 run.finished 가 함께 있으며, api 컨테이너 로그 발췌가 근거로 남을 것. 가짜 이벤트 소스 단일 프로세스로는 첫 줄부터 만족할 수 없어야 한다.
+  다른 대표 task 의 판정은 바뀌지 않아야 한다.
+owner: unassigned
+expires: 2026-12-20
