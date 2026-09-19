@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-09-17-004
 date: 2026-09-17
-status: candidate
+status: validating
 symptom: AD-2 기준선의 eval.sh 결과에서 performance 와 subjective 계층 점수가 null 이고 가중치가 다른 계층으로 재분배되었다. 사람이 고정한 성능 기준(Run 생성 P95 ≤ 150 ms)은 smoke --bench 결과 파일로만 존재해 계층 점수·기준선 비교에 들어가지 않는다
 evidence: |
   .harness/latest-eval.json(2026-09-16, main d85effa, 17/17 통과, score 100):
@@ -20,5 +20,6 @@ trust: untrusted
 regression_check: |
   대상: eval.sh 전체, REP-8(입력을 다시 쓴 뒤 — 2026-09-17-002).
   기준: latest-eval.json 의 performance score 가 null 이 아님. 벤치 p95 를 인위로 151 ms 이상으로 만든 브랜치에서 그 단계가 실패하고 eval 이 불합격. 다른 계층 점수와 verify 총 시간 증가는 사람이 정한 상한 안.
+  판정(2026-09-19, PG 절차 3~4): 적용 완료(PR #47·#48). 대표 task 쪽 근거 — verify 18/18 에서 bench 단계 통과(로컬 p95 42.5 ms, CI 68.8 ms, 기준 150 ms), eval.sh 의 performance 계층이 null → 100 으로 채워지고 기준선 재고정. 게이트 동작은 같은 실측에 기준만 10 ms 로 바꾼 임시 설정에서 exit 1 로 확인. held-out: **미실행**(AD-3 예정).
 owner: unassigned
 expires: 2026-12-17

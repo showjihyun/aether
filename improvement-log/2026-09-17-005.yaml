@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-09-17-005
 date: 2026-09-17
-status: candidate
+status: validating
 symptom: 계약(openapi.json)을 바꾸는 작업을 커밋하지 않은 채 끝낸 실행자는 verify.sh 를 초록으로 끝낼 수 없었다. web-typecheck 가 재생성한 SDK 를 HEAD 와 비교하기 때문이다. 두 실행자 모두 이를 통과로 적지 않고 원인을 보고했으며, 평가자가 커밋한 뒤에야 17/17 이 되었다
 evidence: |
   evaluation/runs/2026-09-17-REP-7.md: 에이전트의 verify.sh --continue-on-fail 16/17, 실패 web-typecheck — 평가자 커밋 뒤 17/17.
@@ -18,5 +18,6 @@ trust: untrusted
 regression_check: |
   대상: REP-1(개정 입력), REP-7 을 미커밋 상태로 끝내는 실행.
   기준: 생성물을 올바르게 재생성하고 커밋하지 않은 트리에서 web-typecheck 통과. 반대로 openapi.json 만 바꾸고 재생성하지 않은 트리, 재생성 뒤 생성 파일을 손으로 고친 트리에서는 실패해야 함(검출력 유지). CI verify 결과는 변경 전과 같아야 함.
+  판정(2026-09-19, PG 절차 3~4): 적용 완료(PR #49). 대표 task 쪽 근거 — 계약을 바꾸고 재생성한 뒤 **커밋하지 않은** 트리에서 verify 18/18 통과(이전 규칙에서는 항상 실패). 계약만 어긋나게 만든 트리에서는 여전히 실패. REP-5 개정 입력 실행(2026-09-19-REP-5-revised.md)이 미커밋 상태로 web-typecheck 를 통과한 첫 실제 사례. held-out: **미실행**(AD-3 예정).
 owner: unassigned
 expires: 2026-12-17
