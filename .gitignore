@@ -18,6 +18,10 @@ harness.config.local
 # 평가 task 실행용 임시 워크트리. 런타임 산출물이며 커밋하지 않습니다.
 .claude/worktrees/
 
+# 평가 실행 blind 마커와 그 차단 로그. 런타임 산출물입니다.
+.eval-blind
+.eval-blind.log
+
 # 도구 부산물
 .playwright-mcp/
 *.png

@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-19-001
+date: 2026-09-19
+status: candidate
+symptom: REP-5 의 입력("Agent Version 을 다루는 코드를 추가하세요")은 blind 조건에서 작업 지시로 읽히지 않았다. 정답을 모르는 에이전트는 "이미 전 계층에 구현되어 있고 새 범위는 승인된 intent 가 없다" 며 변경 0건으로 끝냈고, 판정은 not-run 이 되었다
+evidence: |
+  evaluation/runs/2026-09-19-REP-5-blind.md: 2026-09-19 06:09~06:12, 하네스 8ef40bf, 마커를 켠 blind 실행. 변경 0건, git status clean.
+  같은 입력의 2026-09-17 실행(evaluation/runs/2026-09-17-REP-5.md)은 task 문서를 5회 참조해 자신이 REP-5 임을 알고 CLI 어댑터를 추가했고 pass.
+  회귀 확인(2026-09-19, 하네스 ee80451, blind 마커 켬): 개정 입력으로 재실행 — verdict pass, 합격 기준 다섯 줄 모두 근거 있음, 차단 0건(평가 문서 참조 시도 자체가 없음), 두 규약 문서를 04:21:03 에 함께 읽음, HTTP 계약 diff 0줄, verify 18/18(evaluation/runs/2026-09-19-REP-5-revised.md).
+  두 번째 에이전트가 든 근거는 이 저장소의 규칙 자체다: intents/intent.md "사슬은 건너뛰지 않습니다", AGENTS.md "범위를 벗어난 구조 변경은 수행하지 않고 제안으로 남깁니다", spec 0002 D-9 "삭제·Run 목록 없음".
+root_cause: 입력이 무엇을 추가할지 특정하지 않는다. Phase 1 이 Agent Version 을 전 계층에 이미 구현했으므로, 규칙을 지키는 에이전트에게 이 문장은 "승인된 범위 밖을 발명하라" 로 읽힌다. REP-1·4·8 과 같은 종류의 낡음이며, 그때는 코드가 앞서가 입력이 무의미해진 경우였다
+fix: 이번 실행을 not-run 으로 기록한 뒤, 사람이 승인한 개정안으로 입력을 다시 썼다(7.1 절차) — "aether-api 에 특정 Agent Version 의 정의를 JSON 으로 출력하는 서브커맨드를 추가하세요". 합격 기준도 기계 판정이 가능하게 조였다(api-arch·web-arch 통과, 테스트 1건 이상, packages/sdk/openapi.json diff 0줄)
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "harness/evaluation/README.md 7.1 에 따라 REP-5 의 입력을 아직 없는 구체적 대상으로 다시 쓴다(사람 결정). 측정 대상은 그대로 — 진입점에서 docs/architecture.md·docs/domain.md 로 가는 발견 경로. 예: 승인된 범위 안에서 기존 포트에 두 번째 어댑터를 붙이는 작업처럼, 규칙을 지키는 에이전트도 intent 사슬을 건드리지 않고 끝낼 수 있는 입력"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 다시 쓴 REP-5 를 blind 조건(.eval-blind 마커)에서 실행.
+  기준: verdict 가 not-run 이 아니고, 합격 기준 세 줄이 모두 관측 근거를 가짐. 차단 로그에 우회 시도 0건. 다른 대표 task 의 판정은 바뀌지 않아야 함.
+owner: unassigned
+expires: 2026-12-19
