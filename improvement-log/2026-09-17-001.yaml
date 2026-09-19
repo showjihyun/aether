@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-09-17-001
 date: 2026-09-17
-status: candidate
+status: validating
 symptom: AD-2 기준선에서 대표 task 를 새 에이전트 세션으로 실행했지만, 8건 중 2건(REP-5, REP-8)의 실행 에이전트가 evaluation/tasks/representative.md 를 스스로 열어 task ID 와 합격 기준을 알고 작업했다. 나머지 실행도 평가자가 준 브랜치 이름(eval/rep-N)이 task ID 를 드러냈다
 evidence: |
   evaluation/runs/2026-09-17-REP-5.md "측정 타당성": 에이전트 최종 보고 첫 줄 "Task recognized as REP-5 (evaluation/tasks/representative.md)".
@@ -21,5 +21,6 @@ regression_check: |
   대상: REP-5, REP-8(이번에 blind 가 깨진 두 task)을 hook 모드로 다시 실행.
   기준: 실행 전사에 evaluation/ 아래 파일을 여는 도구 호출 0건, 에이전트 발화·커밋에 task ID 0회. hook 이 막은 시도는 .harness/guard-events.log 의 block 으로 남아야 함.
   회귀 판정: hook 모드가 아닌 일반 세션에서 evaluation/README.md 읽기가 막히면 회귀(self-check.sh --only protection 과 guard --list 로 확인).
+  판정(2026-09-19, PG 절차 3~4): 적용 완료(PR #50). 대표 task 쪽 근거 — REP-5 를 개정 입력으로 blind 실행해 pass, 차단 시도 0건, 정상 작업 차단 0건(evaluation/runs/2026-09-19-REP-5-revised.md). 같은 장치로 이전 입력 실행은 not-run (2026-09-19-REP-5-blind.md). held-out: **미실행** — 세트 문서가 첫 실행 시점을 AD-3 으로 정하고 있고 HLD-4·5 는 전제(MCP)가 아직 없음. PG-3 을 아직 만족하지 않으므로 promoted 로 올리지 않습니다.
 owner: unassigned
 expires: 2026-12-17
