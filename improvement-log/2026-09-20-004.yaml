@@ -1,0 +1,22 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-20-004
+date: 2026-09-20
+status: candidate
+symptom: REP-4 가 네 번 연속 fail 인데, 마지막 두 번은 관측이 아니라 서류에서 걸렸다. 네 번째 실행은 배포 이미지로 띄운 격리 스택에서 실제 Run 의 시작·keep-alive 3회·종료를 한 캡처에 담았지만, 조회 응답과 로그 발췌를 별도 파일로 남기지 않아 미충족 두 줄이 남았다
+evidence: |
+  evaluation/runs/2026-09-20-REP-4-r5.md: 캡처 sse-heartbeat-raw.log 에 run_id 30f53940… 의
+  run.status(running) → keep-alive 14.996s·14.996s·15.006s → run.finished(succeeded) → 스트림 종료가
+  시각과 함께 남음. 방법 기술 sse-heartbeat-evidence.md 도 함께. 미충족은 (1)의 조회 응답 파일과 (3)의 로그 발췌 파일.
+  네 실행의 미충족 줄: 4/6 → 3/6 → 3/6 → 2/5. 관측 환경은 가짜 소스 → 실제 Redis·PG → 격리 compose → 배포 이미지로 상승.
+root_cause: 기준이 라이브 증명을 위해 산출물 목록을 늘려 왔는데, 캡처 하나가 이미 그 증명을 담고 있다. 추가 산출물은 증거가 아니라 서식 요구가 되었고, 실행자는 매번 다른 형태(메모·요약표)로 같은 내용을 남긴다
+fix: 이번 실행도 fail 로 기록했다. 기준은 그대로 두고 이 후보가 마지막 단순화를 제안한다
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "REP-4 합격 기준을 세 줄로 줄인다(사람 결정): (1) 실행 중인 시스템에서 받은 SSE 원문 캡처가 infra/docker/out/ 에 있고, 그 안에 같은 run_id 의 실제 이벤트(시작과 종료)와 keep-alive 가 시각과 함께 남아 있을 것. (2) keep-alive 간격이 14~16초. (3) 관측 방법을 적은 파일이 함께 있고(어떤 스택·어떤 경로로 받았는지), smoke 단계가 통과할 것. 조회 응답·로그 발췌의 별도 파일 요구는 뺀다 — 캡처가 라이브 경로를 이미 증명한다"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 세 줄로 줄인 기준으로 2026-09-20 네 번째 실행 기록을 재채점, 그리고 다음 실행 1회.
+  기준: 네 번째 실행이 재채점에서 pass 여야 하고(기준이 실제 관측을 인정하는지), 09-17 실행(가짜 이벤트 소스)은 재채점에서도 fail 이어야 한다(검출력 유지). 이후 blind 실행 1회에서 pass.
+owner: unassigned
+expires: 2026-12-20
