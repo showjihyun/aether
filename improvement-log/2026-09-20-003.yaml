@@ -1,0 +1,23 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-20-003
+date: 2026-09-20
+status: candidate
+symptom: REP-4 의 기준 (1)(2)가 서로 충돌하는 조건을 한 캡처 안에서 요구한다. keep-alive 를 보려면 이벤트가 없어야 하고 run.finished 를 보려면 worker 가 돌아야 하는데, 입력은 2단계 시나리오를 요구하지 않는다. 세 번째 실행은 격리 compose 스택으로 관측하고 근거 파일까지 남겼는데도 같은 두 줄에서 미충족이었다
+evidence: |
+  evaluation/runs/2026-09-20-REP-4-r4.md: 캡처에 run.status(run_id 7d9c7036…)와 15.000초 간격 keep-alive 5회,
+  응답 200 이 있으나 run.finished 0건 — 실행자가 이벤트 없는 구간을 만들려고 worker 를 의도적으로 미기동
+  (sse-heartbeat-evidence-notes.txt 에 그 판단을 적음).
+  세 실행의 미충족 줄: 09-17 4줄 → 09-20(1차) 3줄 → 09-20(2차) 3줄. 관측 환경은 가짜 소스 → 실제 Redis·Postgres →
+  격리 compose 스택으로 매번 올라갔고 근거 파일도 이번에 처음 남았다.
+root_cause: 기준이 "실제 경로를 지났다" 를 증명하는 수단으로 같은 캡처 안의 run.finished 를 택했는데, 그 수단이 이 task 가 만들어야 하는 관측 상황(이벤트 공백)과 양립하기 어렵다. 실제 경로 증명은 다른 방식으로도 가능하다
+fix: 이번 실행을 fail 로 기록했다. 기준은 그대로 두고 이 후보가 완화를 제안한다
+recurrence_risk: medium
+harness_element: HE-14
+proposed_harness_change: "기준 (1)(2)를 다음으로 바꾼다(사람 결정): (1) 캡처가 파일로 있고 응답 200 이며 그 run_id 가 실제 저장소의 Run 과 일치할 것(조회 응답을 파일로 남겨 증명 — 상태는 종결이 아니어도 된다), (2) run.finished 뒤 연결이 닫히는 동작은 라이브 캡처 또는 기존 통합 테스트 중 하나로 확인하고 근거를 제시할 것. 기준 (3)(4)(6)은 유지한다 — 실제 서버에서 받은 캡처와 로그 발췌가 핵심 증거다"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 완화한 기준으로 REP-4 를 blind 조건에서 실행.
+  기준: verdict pass 이고, 캡처·로그 발췌·조회 응답이 모두 파일로 남을 것. 가짜 이벤트 소스나 로컬 단일 프로세스로는 여전히 통과할 수 없어야 한다(응답 200 + 실제 run_id 조회 일치).
+owner: unassigned
+expires: 2026-12-20
