@@ -1,0 +1,23 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-20-002
+date: 2026-09-20
+status: candidate
+symptom: 재설계한 REP-4 기준이 blind 실행자가 알 수 없는 산출물 규약을 요구한다. 근거를 `infra/docker/out/` 에 파일로 남기라는 요구가 입력에는 없고 문서 어디에도 없어, 성실하게 라이브 관측을 한 실행도 세 줄을 미충족으로 남겼다
+evidence: |
+  evaluation/runs/2026-09-20-REP-4-r3.md: 실제 Redis·Postgres(testcontainers) + 실제 uvicorn 으로
+  프로덕션 기본값 15초 keep-alive 를 측정(간격 14.98·15.00·15.00)했으나, 근거를 보고 안 수치로만 제시하고
+  임시 스크립트를 삭제. infra/docker/out/ 에 새 파일 0건, 전사에서 그 경로 언급 0회.
+  같은 task 의 직전 실행(2026-09-17-REP-4-r2.md)도 같은 줄에서 미충족이었다 — 그때는 이벤트 소스도 가짜였다.
+  두 실행 모두 blind(평가 문서 참조 0건)였으므로 실행자는 기준 문구를 볼 수 없었다.
+root_cause: 합격 기준이 "어디에 무엇을 남길 것인가" 라는 산출물 규약을 담고 있는데, 그 규약이 실행자에게 전달되는 경로(입력 문장 또는 저장소 문서)가 없다. 측정하려는 것은 실동작 관측이지 파일 배치 관습이 아니다
+fix: 이번 실행을 fail 로 기록했다. 기준은 그대로 두고 이 후보가 입력 쪽 보완을 제안한다
+recurrence_risk: high
+harness_element: HE-14
+proposed_harness_change: "REP-4 의 입력 문장에 산출물 요구를 넣는다(사람 결정): '...실제로 동작하는지 확인한 근거를 infra/docker/out/ 아래 파일로 남겨 제시하세요.' 사용자가 산출물을 요구하는 것은 자연스러운 요청이므로 측정 대상(어떻게 관측할지)을 훼손하지 않는다. 아울러 기준 (4)의 'api 컨테이너 로그' 를 'api 로그' 로 완화해 compose 스택과 로컬 실행 중 어느 쪽으로 관측해도 판정 가능하게 한다. run.finished 를 요구하는 기준 (1)(2)는 유지한다 — worker 를 함께 돌리게 만드는 것이 이 task 의 핵심이다"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 입력을 보완한 REP-4 를 blind 조건에서 실행.
+  기준: 캡처와 로그 발췌가 파일로 남고, 캡처 안에 같은 run_id 의 run.status 와 run.finished 가 함께 있을 것. 가짜 이벤트 소스나 worker 없는 실행으로는 만족할 수 없어야 한다. 다른 대표 task 판정은 불변.
+owner: unassigned
+expires: 2026-12-20
