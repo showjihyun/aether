@@ -1,0 +1,24 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-22-002
+date: 2026-09-21
+status: candidate
+symptom: 문서만 바꾼 PR #57 의 CI verify 가 bench 단계에서 실패했다(p95 165.6 ms > 150 ms). 같은 커밋이 그 전 두 번은 통과했고, 실패한 job 만 다시 돌리자 65.9 ms 로 통과했다. 측정 한 번으로 판정하는 게이트가 공유 러너의 지연 꼬리에 닿기 시작했다
+evidence: |
+  관측 2026-09-21 14:57 UTC(23:57 KST). 항목은 다음 날 발급.
+  GitHub Actions harness.yml, PR #57 (head 61992cb, 변경은 evaluation/·improvement-log/ 문서뿐):
+  run 35612465375 (push) p95 79.4 ms 통과, run 35612471990 (pull_request) 65.4 ms 통과,
+  run 35615267214 (labeled) 1차 165.59 ms "초과" → 같은 run 의 실패 job 재실행 65.90 ms 통과.
+  최근 harness.yml 실행 30회의 bench p95: 대부분 43~80 ms, 100 ms 넘은 것 5회(103.1·105.7·120.7·128.2·134.3), 초과 1회(이번).
+  로컬 기준선은 42.5 ms, CI 기준선은 68.8 ms(evaluation/runs/README.md).
+root_cause: bench 게이트가 smoke --bench 한 번의 p95 로 통과·실패를 가른다. 공유 러너의 잡음 꼬리가 기준 150 ms 에 닿으면 제품과 무관한 변경도 필수 검사에서 떨어진다
+fix: 기준과 측정 조건은 바꾸지 않고 실패한 job 을 한 번 재실행해 통과를 확인한 뒤 병합했다. 재실행은 잡음을 확인하는 수단이지 게이트 해소 방법으로 굳히지 않는다
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: "(사람 결정) 기준값 150 ms 와 부하 조건은 그대로 두고, 판정의 잡음만 줄인다. 후보 둘: (a) check-bench 가 초과를 보면 같은 verify 실행 안에서 한 번 더 측정하고 두 번 모두 초과일 때만 실패, 재측정 사실을 로그 마지막 줄에 남김 (b) smoke --bench 의 표본 수를 늘려 p95 의 분산을 줄임. 추천은 (a) — 회귀(2026-09-17 N+1, p95 1613 ms)는 두 번 다 초과하므로 검출력이 그대로다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: 제안 적용 뒤 harness.yml 실행 30회, 그리고 REP-8 의 N+1 시드.
+  기준: 제품 코드 변경이 없는 실행에서 bench 실패 0건. N+1 시드를 넣은 트리는 여전히 bench 에서 실패(두 측정 모두 초과).
+owner: unassigned
+expires: 2026-12-22

@@ -1,0 +1,25 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-22-003
+date: 2026-09-22
+status: candidate
+symptom: REP-4 여섯 번째 실행의 실행자가 격리 프로젝트가 아닌 기본 개발 compose 프로젝트(docker)로 스택을 띄웠다가 정리하며 down -v 를 실행해, 실행 전부터 있던 개발 볼륨 docker_postgres_data · docker_redis_data 를 지웠다. 보고에는 "호스트를 작업 전 상태로 되돌렸다" 고 적었다
+evidence: |
+  실행 전사(2026-09-21 UTC): 15:26:24 docker compose -f infra/docker/compose.yaml --env-file infra/docker/.env up -d --build postgres redis migrate otel-collector api
+  — 출력에 "Network docker_default Created" 는 있으나 "Volume ... Created" 가 없음(볼륨이 이미 있었다는 뜻).
+  15:31:51 같은 파일로 down -v → "Volume docker_postgres_data Removed", "Volume docker_redis_data Removed".
+  지운 볼륨의 내용은 알 수 없다. 되돌릴 수 없다.
+  비교: scripts/smoke.sh 는 -p aether-smoke 와 임시 .env 로 격리해 "이미 떠 있는 개발 스택을 건드리지 않는다" 고 주석에 적는다. REP-4 4·5차 실행자는 -p 로 격리했다.
+  원본: C:\WorkSpace\aether-eval-evidence\rep4-r6\sse-idle-ping-method.md 절차 9("docker compose down -v").
+root_cause: 개발 스택과 검증용 스택을 가르는 규칙이 smoke.sh 의 주석에만 있고, 에이전트가 compose 를 직접 부를 때 적용되는 장치가 없다. down -v 는 볼륨이 누구 것인지 묻지 않는다
+fix: 실행 기록과 이 후보에 사실을 남기고 사람에게 알렸다. 볼륨은 복구하지 않았다(복구 수단 없음)
+recurrence_risk: high
+harness_element: HE-10
+proposed_harness_change: "(사람 결정) PreToolUse 훅으로 기본 프로젝트(-p 없이, 또는 -p docker)에 대한 docker compose down -v 와 docker volume rm 을 막고, 격리 프로젝트(-p <이름>)의 down -v 는 허용한다. 막을 때 사유에 smoke.sh 의 격리 방식을 안내한다. 대안은 infra/docker/README 등 문서에 규칙을 적는 것인데, 이번 실행자는 문서를 읽고도 기본 프로젝트를 썼으므로 추천하지 않는다"
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: 훅 단위 테스트, 그리고 compose 를 직접 부르는 다음 REP-4 실행 1회.
+  기준: -p 없는 down -v 와 docker volume rm docker_* 는 exit 2, -p aether-smoke 의 down -v 는 exit 0(smoke 단계 통과 유지).
+  실행 전후 docker volume ls 의 docker_* 볼륨 목록이 같을 것.
+owner: unassigned
+expires: 2026-12-22
