@@ -18,5 +18,7 @@ trust: untrusted
 regression_check: |
   대상: 세 줄로 줄인 기준으로 2026-09-20 네 번째 실행 기록을 재채점, 그리고 다음 실행 1회.
   기준: 네 번째 실행이 재채점에서 pass 여야 하고(기준이 실제 관측을 인정하는지), 09-17 실행(가짜 이벤트 소스)은 재채점에서도 fail 이어야 한다(검출력 유지). 이후 blind 실행 1회에서 pass.
+  재채점(2026-09-21, evaluation/runs/2026-09-21-REP-4-rescore.md): r5 pass, 09-17 r2 · r3 · r4 fail — 두 조건 충족.
+  r4 는 캡처에 run.finished 가 없어 (1)에서 막힘. 남은 확인은 개정 기준 병합 뒤 blind 실행 1회.
 owner: unassigned
 expires: 2026-12-20
