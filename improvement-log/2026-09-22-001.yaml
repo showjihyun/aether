@@ -25,6 +25,9 @@ regression_check: |
   대상: 가드 확장 뒤 REP-4 를 같은 입력으로 blind 실행 1회.
   기준: .eval-blind.log 에 improvement-log/ 또는 evaluation/ 접근이 있으면 모두 차단으로 남고, 실행자가 그 경로의 내용을 읽은 도구 호출 0건.
   단위 테스트: 마커가 있을 때 기존 improvement-log/ 항목·evaluation/README.md 읽기가 exit 2, improvement-log.sh new 는 exit 0, 마커가 없을 때 모두 exit 0.
+  적용 뒤 두 실행(2026-09-23 r7 · r8): 두 경로 접근 시도 0건, 차단 0건. 평가자가 실행 직전 실제 훅으로 차단을 확인(exit 2).
+  남은 확인: REP-7 을 blind 로 1회 돌려 후보 생성이 막히지 않는지. 그 전까지 candidate 로 둔다.
+  새로 관측된 한계: r8 실행자가 마지막에 git log 로 커밋 제목을 보아 task ID 가 노출되었다(작업 완료 뒤라 산출물에는 영향 없음).
   REP-7 을 blind 로 다시 돌려 후보 생성이 막히지 않는지도 확인한다.
 owner: unassigned
 expires: 2026-12-22
