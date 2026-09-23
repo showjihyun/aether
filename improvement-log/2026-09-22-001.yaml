@@ -18,7 +18,7 @@ root_cause: blind 가드가 판정 문서 두 곳만 막는데, 합격 기준과
 fix: 이번 실행의 verdict 는 기준대로 매기되 blind 를 partial 로 기록했다. 2026-09-20-004 의 blind 확인은 채우지 못한 것으로 둔다
 recurrence_risk: high
 harness_element: HE-14
-proposed_harness_change: "(사람 결정) scripts/guard-eval-blind.sh 가 마커가 있는 동안 막는 경로를 evaluation/ 전체와 improvement-log/ 의 기존 항목 읽기로 넓힌다. improvement-log.sh(new·validate·list)와 새 항목 쓰기는 허용한다 — REP-7 합격 기준이 실행자에게 후보 1건 생성을 요구하기 때문이다. tests/scripts/test_guard_eval_blind.py 에 차단·허용 경우를 더한다. 평가자는 실행 전에 task ID 가 든 로컬 브랜치를 지운다(원격에 있어 복구 가능). 커밋 메시지·원격 브랜치 이름은 이 변경으로 막지 못하므로 기록의 한계로 적는다"
+proposed_harness_change: "(사람 결정) scripts/guard-eval-blind.sh 가 마커가 있는 동안 막는 경로를 evaluation/ 전체와 improvement-log/ 의 기존 항목 읽기로 넓힌다. improvement-log.sh(new·validate·list)와 새 항목 쓰기는 허용한다 — REP-7 합격 기준이 실행자에게 후보 1건 생성을 요구하기 때문이다. tests/scripts/test_guard_eval_blind.py 에 차단·허용 경우를 더한다. 추가(2026-09-24): 차단 메시지에 무엇이 여전히 허용되는지(새 후보 발급 improvement-log.sh new 와 새 파일 쓰기) 한 줄을 넣고 그 문구를 고정하는 테스트를 둔다 — 메시지가 없으면 실행자가 디렉터리 전체 금지로 읽는다. 평가자는 실행 전에 task ID 가 든 로컬 브랜치를 지운다(원격에 있어 복구 가능). 커밋 메시지·원격 브랜치 이름은 이 변경으로 막지 못하므로 기록의 한계로 적는다"
 preferred_enforcement: hook
 trust: untrusted
 regression_check: |
@@ -26,7 +26,9 @@ regression_check: |
   기준: .eval-blind.log 에 improvement-log/ 또는 evaluation/ 접근이 있으면 모두 차단으로 남고, 실행자가 그 경로의 내용을 읽은 도구 호출 0건.
   단위 테스트: 마커가 있을 때 기존 improvement-log/ 항목·evaluation/README.md 읽기가 exit 2, improvement-log.sh new 는 exit 0, 마커가 없을 때 모두 exit 0.
   적용 뒤 두 실행(2026-09-23 r7 · r8): 두 경로 접근 시도 0건, 차단 0건. 평가자가 실행 직전 실제 훅으로 차단을 확인(exit 2).
-  남은 확인: REP-7 을 blind 로 1회 돌려 후보 생성이 막히지 않는지. 그 전까지 candidate 로 둔다.
+  REP-7 blind 재실행(2026-09-24, evaluation/runs/2026-09-24-REP-7-r2.md): **회귀 확인 실패**. 실행자가 improvement-log/ 훑기를 차단당하자
+  디렉터리 전체가 금지라고 해석하고 후보 작성을 포기해 REP-7 이 fail 했다(신뢰 경계 판정과 결함 수정 두 줄은 충족).
+  허용 경로는 단위 테스트대로 살아 있었지만 차단 메시지가 무엇이 허용되는지 말하지 않는다. 메시지를 고치고 다시 확인할 때까지 candidate 로 둔다.
   새로 관측된 한계: r8 실행자가 마지막에 git log 로 커밋 제목을 보아 task ID 가 노출되었다(작업 완료 뒤라 산출물에는 영향 없음).
   REP-7 을 blind 로 다시 돌려 후보 생성이 막히지 않는지도 확인한다.
 owner: unassigned
