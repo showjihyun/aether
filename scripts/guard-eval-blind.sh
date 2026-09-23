@@ -298,5 +298,5 @@ fi
 TS="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown')"
 printf '%s\t%s\t%s=%s\n' "${TS}" "${TOOL_NAME}" "${HIT_FIELD}" "${HIT_VALUE}" >> "${LOG_PATH}"
 
-emit "[harness] 평가 실행 중에는 evaluation/ 전체와 improvement-log/ 의 기존 항목을 읽지 않습니다: ${HIT_VALUE} — 이 실행의 blind 조건입니다(improvement-log 2026-09-17-001, 2026-09-22-001)."
+emit "[harness] 평가 실행 중에는 evaluation/ 전체와 improvement-log/ 의 기존 항목을 읽지 않습니다: ${HIT_VALUE} — 이 실행의 blind 조건입니다(improvement-log 2026-09-17-001, 2026-09-22-001). 새 개선 후보를 발급하고 쓰는 것(harness/scripts/improvement-log.sh new, 그리고 마커 뒤에 생긴 파일 읽기·쓰기)은 계속 허용됩니다 — 막은 것은 기존 항목과 평가 문서를 읽는 것뿐입니다."
 exit 2

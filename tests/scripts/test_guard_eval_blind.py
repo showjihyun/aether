@@ -319,3 +319,19 @@ def test_no_marker_allows_reading_improvement_log_entry(tmp_path: Path) -> None:
     result = _run(tmp_path, payload)
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_block_message_states_allowed_scope(tmp_path: Path) -> None:
+    """AD-2 2026-09-22-001 후속: REP-7 재실행에서 실행자가 improvement-log/ 전체가
+    금지라고 오해해 후보 작성을 포기했다(2026-09-24). 차단 메시지가 새 후보 발급·쓰기는
+    계속 허용된다는 것을 명시해야 한다 — `improvement-log.sh new` 호출과 "허용" 문구가
+    stderr 에 있어야 한다.
+    """
+    _touch_marker(tmp_path)
+    payload = _payload("Read", {"file_path": "evaluation/tasks/representative.md"})
+
+    result = _run(tmp_path, payload)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+    assert "improvement-log.sh new" in result.stderr, result.stderr
+    assert "허용" in result.stderr, result.stderr
