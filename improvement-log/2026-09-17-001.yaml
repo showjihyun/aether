@@ -12,6 +12,7 @@ evidence: |
   남은 누출 경로: 같은 실행자가 git reflog 로 이전 평가 실행 브랜치(feature/sse-keepalive, 커밋 5cc177a)를 찾아 설계를 대조했다고 보고. 증거 브랜치를 지워도 reflog 와 도달 불가 객체는 남는다(평가자 확인: reflog 관련 항목 19건). 보완 방향: 평가 실행을 저장소 사본에서 하거나, 실행 뒤 번들로 옮길 때 reflog 까지 정리하거나, 훅의 차단 목록에 reflog·branch 열람을 더한다.
   REP-7·REP-3·REP-1·REP-2·REP-4 는 task 문서를 여는 도구 호출 0건(전사 확인) — 다만 모든 실행의 프롬프트가 "로컬 브랜치 eval/rep-N 에서만 작업" 이었음.
   추가 관측(2026-09-17 개정 입력 실행, 하네스 3bac2e9): 평가자가 브랜치 이름에서 task ID 를 빼고 증거 브랜치를 저장소 밖 번들로 옮긴 뒤에도, REP-8 실행 에이전트는 기준값을 찾으려 읽은 evaluation/README.md 의 성능 기준 행("넘으면 REP-8 실패")에서 task ID 를 알고 코드 주석·테스트 docstring 에 "REP-8 회귀 수정" 이라고 적음(evaluation/runs/2026-09-17-REP-8-r2.md). task 문서 밖의 평가 문서도 누출 경로.
+  판정 무효 첫 사례(2026-09-22, REP-4 r6, 하네스 51b817e): 차단 2건이 있었지만 실행자가 improvement-log/2026-09-20-004.yaml 을 열어 합격 기준을 알았다 — blind: partial. 후속은 2026-09-22-001.
 root_cause: 대표 task 의 "새 세션" 조건(representative.md 사용 방법)은 대화 맥락만 통제하고, 실행 에이전트가 같은 저장소의 evaluation/ 과 평가자의 증거 브랜치를 읽는 것은 막지 않는다. CLAUDE.md 가 evaluation/README.md 를 링크하고 대표 task 는 읽어도 되는 문서라 규칙 위반도 아니다
 fix: 기준선 기록마다 blind 여부와 근거를 적었고, 2026-09-19 에 차단 장치를 만들었다 — scripts/guard-eval-blind.sh(루트 .eval-blind 마커가 있는 동안 evaluation/tasks·evaluation/runs 참조를 exit 2 로 차단하고 .eval-blind.log 에 기록), .claude/settings.json 등록, 실행 기록 머리말에 blind 키(evaluation/runs/README.md). 증거 브랜치는 저장소 밖 번들로 옮기고 브랜치 이름에서 task ID 를 뺐다
 recurrence_risk: high

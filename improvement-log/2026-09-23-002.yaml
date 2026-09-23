@@ -1,0 +1,31 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-23-002
+date: 2026-09-23
+status: candidate
+symptom: 진입점 지침(AGENTS.md)에 낡거나 지켜지지 않는 줄이 넷 있다. 모델 이름을 산문에 박아 두어 세대 교체 때 낡고, 브랜치·커밋 규약은 아무것도 검사하지 않아 실제로 어긋나며 blind 규칙과 충돌하고, 중단 관련 문장 하나가 Loop 의 중단 조건과 반대로 읽히고, 반복 예산 숫자가 규칙 문서·harness.config 와 중복된다
+evidence: |
+  claude-api 스킬의 prompt-audit 절차로 AGENTS.md(52줄) · CLAUDE.md(39줄) · .claude/agents/implementer.md(67줄)를 감사(2026-09-23).
+  F1 AGENTS.md:39 "`.claude/agents/implementer.md`(Sonnet 5)에 위임" 과 implementer.md:3 description "비용이 낮은 모델(Sonnet 5)로 돕니다" —
+     정본은 frontmatter `model: sonnet`(별칭). 같은 날 Claude Opus 5.5(claude-opus-5-5)가 현행 모델로 확인되어 산문 핀이 낡는 경로가 실증됨
+     (platform.claude.com 모델 개요: Opus 5 는 legacy 목록).
+  F2 AGENTS.md:40 "브랜치 이름은 단위 번호(p0-5-compose), 커밋에는 Unit: P0-5 trailer" — 최근 40커밋 중 Unit trailer 14건,
+     최근 브랜치는 rep4-three-criteria · ad2-blind-leak-log · blind-guard-scope 로 단위 번호가 아님. .github/workflows/harness.yml 에 검사 없음.
+     또한 후보 2026-09-22-001(브랜치 이름이 평가 task ID 를 누출)과 정면으로 충돌한다.
+  F3 AGENTS.md:22 "실패를 고치기 전에 멈추지 않습니다" — AGENTS.md:42 "같은 실패가 3회 반복되면 중단합니다" 와 반대 방향.
+  F4 AGENTS.md:41-42 의 8 · 3회 · 2라운드 — harness/rules/loop-budget.rule.md 23~25행과 harness.config 의 HARNESS_MAX_ITERATIONS 등에 같은 값이 있다.
+     같은 문서가 verify 단계에 대해서는 "개수와 내용을 여기 적지 않습니다" 라고 정해 두었다(AGENTS.md:26).
+  깨끗한 것: CLAUDE.md 의 @AGENTS.md import 는 공식 동작과 일치(CLAUDE.md 가 있으면 AGENTS.md 는 무시되므로 import 가 유일한 로드 경로).
+  압박 표현·오래된 프롬프트 유물 0건. 세 파일 합계 158줄로 200줄 권고 안.
+root_cause: 지침 문서에 들어간 규약이 강제 수단 없이 산문으로만 남아 있고, 모델 이름·숫자처럼 바깥에서 바뀌는 사실이 복제되어 있다. 새 규칙(blind 브랜치 이름)이 들어올 때 옛 규칙을 함께 정리하지 않아 충돌이 남았다
+fix: 감사 보고와 제안 diff 를 만들었고 적용은 하지 않았다. 앞선 하네스 변경(2026-09-22-001, PR #59)의 회귀 확인이 끝나기 전이라 CC-1 에 따라 적용을 미룬다
+recurrence_risk: medium
+harness_element: HE-1
+proposed_harness_change: "(사람 결정) AGENTS.md 네 곳을 고친다. (1) 모델 이름을 빼고 'frontmatter 가 정본' 으로, implementer description 의 (Sonnet 5)도 함께. (2) 브랜치 규약을 실제 운용에 맞추고 평가 task ID 금지를 명시하며, Unit trailer 는 commit-msg 훅이나 CI 한 줄 검사로 올린다. (3) '실패를 고치기 전에 멈추지 않습니다' 를 빼고 '고칠 수 없으면 Loop 의 중단 조건을 따른다' 로. (4) 반복 예산 숫자를 빼고 loop-budget.rule.md·harness.config 를 가리킨다. 각 항목은 추가와 삭제가 짝지어져 있다(CLAUDE.md 의 편집 규칙)"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 적용 뒤 REP-1 · REP-5(진입점에서 규약 문서로 가는 발견 경로를 재는 task) 각 1회, 그리고 다음 10커밋.
+  기준: 두 task 의 verdict 가 적용 전과 같거나 낫고, 진입점에서 규칙 문서로 가는 참조가 끊기지 않을 것.
+  trailer 검사를 올렸다면 다음 10커밋의 Unit trailer 누락 0건. 평가 실행 브랜치 이름에 task ID 0건.
+owner: unassigned
+expires: 2026-12-23

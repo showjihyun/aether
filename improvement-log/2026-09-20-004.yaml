@@ -20,5 +20,7 @@ regression_check: |
   기준: 네 번째 실행이 재채점에서 pass 여야 하고(기준이 실제 관측을 인정하는지), 09-17 실행(가짜 이벤트 소스)은 재채점에서도 fail 이어야 한다(검출력 유지). 이후 blind 실행 1회에서 pass.
   재채점(2026-09-21, evaluation/runs/2026-09-21-REP-4-rescore.md): r5 pass, 09-17 r2 · r3 · r4 fail — 두 조건 충족.
   r4 는 캡처에 run.finished 가 없어 (1)에서 막힘. 남은 확인은 개정 기준 병합 뒤 blind 실행 1회.
+  개정 기준 첫 실행(2026-09-22 r6, 하네스 51b817e, evaluation/runs/2026-09-22-REP-4-r6.md): 세 줄 모두 충족해 verdict pass.
+  그러나 실행자가 이 파일을 열어 기준 세 줄을 알고 작업해 blind: partial — blind 확인으로 세지 않는다(누출은 2026-09-22-001).
 owner: unassigned
 expires: 2026-12-20

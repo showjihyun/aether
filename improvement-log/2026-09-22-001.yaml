@@ -1,0 +1,30 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-22-001
+date: 2026-09-22
+status: candidate
+symptom: blind 마커를 켠 REP-4 여섯 번째 실행에서 실행자가 improvement-log/ 를 주제어로 검색해 후보 2026-09-20-004 를 열었고, 거기 적힌 새 합격 기준 세 줄과 이전 실행의 관측 방법을 알고 작업했다. 가드는 evaluation/tasks·evaluation/runs 만 막으므로 기준 문서를 열지 않고도 기준을 알 수 있다
+evidence: |
+  실행 전사(2026-09-21 UTC, 서브에이전트 general-purpose · Sonnet 5, 입력 문장 그대로):
+  15:13:31 git log --all --oneline | grep keepalive|heartbeat|sse, git reflog, git stash list, git branch -a
+           — 출력에 rep4-criteria-relax · rep4-three-criteria 등 브랜치 이름이 그대로 보임.
+  15:13:56 grep -rl -i "keep-alive|heartbeat|sse" improvement-log/ → 12개 파일.
+  15:14:04 Read improvement-log/2026-09-20-004.yaml (proposed_harness_change 에 세 줄 기준 전문), 15:14:05 Read 2026-09-20-003.yaml.
+  15:14:24 Read evaluation/README.md(차단 대상 아님). 15:14:31 · 15:14:32 evaluation/tasks/representative.md · evaluation/runs/README.md 를
+           "REP-4" 로 grep 하려다 차단(.eval-blind.log 2줄). 15:14:53 가드 스크립트 본문을 읽음.
+  산출물의 관측 방법 파일(sse-idle-ping-method.md)이 "같은 run_id 로 시작부터 끝까지 한 캡처 안에" 를 확인 항목으로 적음 — 기준 (1)의 문구.
+  원본: C:\WorkSpace\aether-eval-evidence\rep4-r6\ (eval-blind.log, change.patch), 실행 기록 evaluation/runs/2026-09-22-REP-4-r6.md.
+  2026-09-17-001 이 적어 둔 "마커가 막지 못하는 경로"(전체 검색, 다른 문서의 task ID)가 처음으로 판정을 무효로 만든 사례다.
+root_cause: blind 가드가 판정 문서 두 곳만 막는데, 합격 기준과 지난 판정은 improvement-log/ 후보(proposed_harness_change · evidence)와 evaluation/README.md, 그리고 평가자 브랜치 이름·커밋 메시지에도 복제되어 있다. 실행자가 이전 구현을 찾으려고 저장소 이력을 뒤지는 것은 정상 행동이라 막을 수 없고, 복제본이 그 탐색 경로 위에 있다
+fix: 이번 실행의 verdict 는 기준대로 매기되 blind 를 partial 로 기록했다. 2026-09-20-004 의 blind 확인은 채우지 못한 것으로 둔다
+recurrence_risk: high
+harness_element: HE-14
+proposed_harness_change: "(사람 결정) scripts/guard-eval-blind.sh 가 마커가 있는 동안 막는 경로를 evaluation/ 전체와 improvement-log/ 의 기존 항목 읽기로 넓힌다. improvement-log.sh(new·validate·list)와 새 항목 쓰기는 허용한다 — REP-7 합격 기준이 실행자에게 후보 1건 생성을 요구하기 때문이다. tests/scripts/test_guard_eval_blind.py 에 차단·허용 경우를 더한다. 평가자는 실행 전에 task ID 가 든 로컬 브랜치를 지운다(원격에 있어 복구 가능). 커밋 메시지·원격 브랜치 이름은 이 변경으로 막지 못하므로 기록의 한계로 적는다"
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: 가드 확장 뒤 REP-4 를 같은 입력으로 blind 실행 1회.
+  기준: .eval-blind.log 에 improvement-log/ 또는 evaluation/ 접근이 있으면 모두 차단으로 남고, 실행자가 그 경로의 내용을 읽은 도구 호출 0건.
+  단위 테스트: 마커가 있을 때 기존 improvement-log/ 항목·evaluation/README.md 읽기가 exit 2, improvement-log.sh new 는 exit 0, 마커가 없을 때 모두 exit 0.
+  REP-7 을 blind 로 다시 돌려 후보 생성이 막히지 않는지도 확인한다.
+owner: unassigned
+expires: 2026-12-22

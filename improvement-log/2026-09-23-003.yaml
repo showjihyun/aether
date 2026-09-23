@@ -1,0 +1,26 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-23-003
+date: 2026-09-23
+status: candidate
+symptom: implementer subagent 가 frontmatter 로 강제할 수 있는 것을 산문으로 부탁하고 있다. 지금 지원되는 필드는 tools · disallowedTools · model · permissionMode · maxTurns · skills · mcpServers · hooks · memory · background · omitClaudeMd · effort · isolation 인데 이 저장소는 tools 와 model 둘만 쓴다
+evidence: |
+  code.claude.com/docs/en/sub-agents 의 frontmatter 필드 목록(2026-09-23 확인).
+  .claude/agents/implementer.md frontmatter: name · description · tools · model 네 줄.
+  측정(이 기계의 서브에이전트 전사 46건, 2026-09-23): implementer 18건의 assistant 턴 수 중앙값 259, p90 382, 최대 538.
+  general-purpose 27건은 중앙값 134, p90 187, 최대 232.
+  즉 maxTurns 를 600 아래로 잡으면 정상 실행이 잘린다 — 이 필드는 반복 예산(8회)의 강제 수단이 아니라 폭주 차단기다. 둘을 같은 것으로 적지 않는다.
+  isolation: worktree 는 이번 세션에서 실측했다(2026-09-23, 가드 확장 작업). worktree 에는 node_modules 가 없어
+  tests/arch/test_depcruise.py 가 거짓 실패했고 pnpm 설치가 추가로 필요했다 — 기본값으로 켤 근거가 없다.
+root_cause: subagent 정의를 만든 시점(2026-09-11) 이후 frontmatter 가 넓어졌는데 정의를 다시 보지 않았다. 이 저장소는 자연어보다 기계 수단을 우선한다고 정해 두었으므로(AGENTS.md Learning) 이 공백은 원칙과 어긋난다
+fix: 필드 목록과 실제 턴 수를 측정해 근거를 만들었다. 값은 후보로만 남기고 적용하지 않았다
+recurrence_risk: low
+harness_element: HE-9
+proposed_harness_change: "(사람 결정) implementer frontmatter 에 maxTurns 를 폭주 차단기로 넣는다 — 측정된 최대 538 턴 위 여유를 둔 값(예: 700). 반복 예산 8회의 대체물이 아니라고 파일 주석에 적는다. effort 와 skills 는 값의 근거가 없으므로 이번에 넣지 않고, 다음 실행 몇 건에서 비용·결과를 재고 정한다. isolation: worktree 는 넣지 않는다(위 실측). disallowedTools 는 tools 허용 목록이 이미 더 좁으므로 불필요하다"
+preferred_enforcement: subagent
+trust: untrusted
+regression_check: |
+  대상: maxTurns 적용 뒤 implementer 실행 3건.
+  기준: 세 건 모두 maxTurns 에 걸리지 않고 정상 종료(턴 수를 기록에 남긴다). 한 건이라도 상한에 걸리면 값이 낮은 것이므로 되돌린다.
+  effort·skills 를 나중에 넣을 때는 같은 단위를 두 설정으로 각각 돌려 결과와 비용을 비교한 기록이 있어야 한다.
+owner: unassigned
+expires: 2026-12-23
