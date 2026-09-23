@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-09-23-004
 date: 2026-09-23
-status: candidate
+status: validating
 symptom: REP-4 의 합격 기준이 입력에 없는 산출물 규약을 요구한다. blind 실행자는 기준을 볼 수 없으므로 "한 캡처 안에 시작과 종료 이벤트" 와 "관측 방법 파일" 을 남길 이유를 알 수 없다. 기준을 읽은 실행(r6)은 pass, 읽지 못한 실행(r7)은 같은 질의 관측을 하고도 fail 이었다
 evidence: |
   evaluation/runs/2026-09-23-REP-4-r7.md: 격리 compose(-p aether-keepalive-demo), 실제 Redis 스트림, 실제 curl, keep-alive 15.00초 ×3,
@@ -22,5 +22,7 @@ regression_check: |
   대상: 고른 방안을 적용한 뒤 blind 실행 1회.
   기준: verdict pass. 그리고 검출력 확인 — 09-17 실행(가짜 이벤트 소스)을 같은 기준으로 재채점했을 때 여전히 fail.
   (a)를 골랐다면 입력만 바뀌고 기준은 그대로이므로 지난 재채점 결과(2026-09-21-REP-4-rescore.md)는 그대로 유효하다.
+  결과(2026-09-23 r8, evaluation/runs/2026-09-23-REP-4-r8.md): blind 실행에서 pass. 실행자가 시작~종료 캡처와 관측 방법 파일을 모두 남겼다.
+  r7 과 관측 환경은 같고 입력만 달랐으므로 진단이 맞았다. 검출력 확인(09-17 가짜 소스 재채점 fail)은 기준이 바뀌지 않아 그대로 유효하다. status 를 validating 으로 올린다.
 owner: unassigned
 expires: 2026-12-23
