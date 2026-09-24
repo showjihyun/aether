@@ -184,6 +184,15 @@ describe("createClient().listAgents()", () => {
       "http://localhost:8000/agents?limit=10&cursor=opaque-cursor",
     );
   });
+
+  it("encodes name as a query param", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: { items: [], next_cursor: null } });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listAgents({ name: "billing" });
+
+    expect(callUrl(fetchMock)).toBe("http://localhost:8000/agents?name=billing");
+  });
 });
 
 describe("createClient().getAgent()", () => {

@@ -24,9 +24,13 @@ class CreateAgent(Protocol):
 
 
 class ListAgents(Protocol):
-    """`cursor` 이후 최대 `limit` 개의 Agent 를 돌려줍니다."""
+    """`cursor` 이후 최대 `limit` 개의 Agent 를 돌려줍니다.
 
-    def __call__(self, limit: int, cursor: str | None) -> AgentPage: ...
+    `name` 이 주어지면 이름에 그 문자열을 포함하는(대소문자 구분 없이) Agent 만
+    돌려줍니다.
+    """
+
+    def __call__(self, limit: int, cursor: str | None, name: str | None = None) -> AgentPage: ...
 
 
 class GetAgent(Protocol):
