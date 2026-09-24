@@ -1,0 +1,27 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-24-001
+date: 2026-09-24
+status: candidate
+symptom: 대표 task 네 건(REP-1·4·5·7)의 실행 전제가 "그 기능이 없는 동안" 이어서, 실행자가 만든 구현을 매번 저장소 밖으로 버려야 task 가 유지되었다. 평가가 제품 출하를 막는 구조다
+evidence: |
+  저장소 밖 증거 폴더에 버려진 구현 번들 15개(C:\WorkSpace\aether-eval-evidence\*.bundle).
+  SSE keep-alive 는 7번 구현되고 7번 버려졌다(09-17 r2, 09-20 r3·r4·r5, 09-22 r6, 09-23 r7·r8).
+  openapi 계약의 401 누락 수정은 3번(09-17 REP-7, 09-24 r2·r3), GET /agents ?name= 필터와 CLI 서브커맨드는 각각 2번.
+  401 누락은 docs/api.md 9행이 계약한 실재 결함인데 그 사이 main 에 계속 남아 있었다.
+  2026-09-17 이후 8일 동안 apps/·packages/ 커밋은 6건이고 전부 Dependabot 의존성 범프다 — 사람·에이전트가 만든 제품 변경 0건.
+  같은 기간 하네스·평가·문서 커밋은 51건.
+  대비: REP-2·REP-3·REP-8 은 결함을 심어서 실행하므로 기능을 출하해도 영구히 재사용된다(REP-8 의 실행 가능 행이 그 관례를 이미 적어 두었다).
+root_cause: task 를 설계할 때 "아직 없는 기능" 을 시나리오의 재료로 썼다. 그러면 task 의 수명과 제품의 진행이 서로를 배제한다. 결함 주입형은 그 결합을 끊는다
+fix: 네 task 의 전제를 시드 주입형으로 개정하고, 버려졌던 구현 네 건을 제품으로 회수한다(401 수정 PR #66, CLI 서브커맨드 PR #68, 나머지 둘은 뒤따른다)
+recurrence_risk: high
+harness_element: HE-14
+proposed_harness_change: "(사람 결정, 2026-09-24 적용) REP-1·4·5·7 의 실행 가능 행을 '기능이 없는 동안' 에서 '평가자가 시드를 심어 실행' 으로 바꾼다. 입력도 '만들어라' 에서 '동작하지 않는다, 고쳐라' 로 바꾼다. 시드 내용은 실행 기록에만 적고 task 문서에는 적지 않는다(REP-8 의 관례). 합격 기준의 겨냥점은 바꾸지 않는다 — 계층 경계, 실동작 관측, 규약 발견, 신뢰 경계 그대로다. REP-4·REP-5 는 회수한 기능이 병합된 뒤부터 실행 가능하다"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 개정한 네 task 를 각 1회 blind 실행. REP-1·REP-7 은 지금, REP-4·REP-5 는 회수 병합 뒤.
+  기준: 네 실행 모두 시드를 심은 상태에서 verdict 가 개정 전 기준선과 같거나 나을 것(REP-1 pass, REP-4 pass, REP-5 pass, REP-7 pass).
+  그리고 실행 뒤 산출물을 버리지 않고 제품으로 병합할 수 있을 것 — 그것이 이 개정의 목적이다.
+  실패 시: 시드가 task 의 실패 모드를 겨냥하지 못한다는 뜻이므로 시드 설계를 고치고 다시 확인한다.
+owner: unassigned
+expires: 2026-12-24
