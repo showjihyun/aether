@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-09-23-002
 date: 2026-09-23
-status: candidate
+status: validating
 symptom: 진입점 지침(AGENTS.md)에 낡거나 지켜지지 않는 줄이 넷 있다. 모델 이름을 산문에 박아 두어 세대 교체 때 낡고, 브랜치·커밋 규약은 아무것도 검사하지 않아 실제로 어긋나며 blind 규칙과 충돌하고, 중단 관련 문장 하나가 Loop 의 중단 조건과 반대로 읽히고, 반복 예산 숫자가 규칙 문서·harness.config 와 중복된다
 evidence: |
   claude-api 스킬의 prompt-audit 절차로 AGENTS.md(52줄) · CLAUDE.md(39줄) · .claude/agents/implementer.md(67줄)를 감사(2026-09-23).
@@ -25,7 +25,9 @@ preferred_enforcement: doc
 trust: untrusted
 regression_check: |
   대상: 적용 뒤 REP-1 · REP-5(진입점에서 규약 문서로 가는 발견 경로를 재는 task) 각 1회, 그리고 다음 10커밋.
-  적용은 2026-09-24 에 끝났고 두 task 는 아직 돌리지 않았다 — 그래서 status 는 candidate 다.
+  적용 뒤 두 task 를 blind 로 돌렸다(2026-09-24, 하네스 53eb4a1): REP-1 pass(evaluation/runs/2026-09-24-REP-1.md),
+  REP-5 pass(evaluation/runs/2026-09-24-REP-5.md) — REP-5 는 첫 blind pass 이고 실행자가 docs/architecture.md 를 읽고 3.1 을 설계 근거로 인용했다.
+  발견 경로가 끊기지 않았고 두 task 의 verdict 가 기준선과 같거나 낫다. trailer 기계 검사는 넣지 않았으므로 그 조항은 해당 없음. status 를 validating 으로 올린다.
   기준: 두 task 의 verdict 가 적용 전과 같거나 낫고, 진입점에서 규칙 문서로 가는 참조가 끊기지 않을 것.
   trailer 검사를 올렸다면 다음 10커밋의 Unit trailer 누락 0건. 평가 실행 브랜치 이름에 task ID 0건.
 owner: unassigned
