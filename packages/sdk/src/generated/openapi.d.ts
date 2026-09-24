@@ -529,6 +529,13 @@ export interface operations {
                     "application/json": components["schemas"]["ListAgentsResponse"];
                 };
             };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -561,6 +568,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentResponse"];
                 };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description agent_name_taken */
             409: {
@@ -599,6 +613,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentDetailResponse"];
                 };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description agent_not_found */
             404: {
@@ -641,6 +662,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AgentDetailResponse"];
                 };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description agent_not_found */
             404: {
@@ -688,6 +716,13 @@ export interface operations {
                     "application/json": components["schemas"]["AgentVersionResponse"];
                 };
             };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description agent_not_found | agent_version_not_found */
             404: {
                 headers: {
@@ -730,6 +765,13 @@ export interface operations {
                     "application/json": components["schemas"]["RunAccepted"];
                 };
             };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description agent_not_found | agent_version_not_found */
             404: {
                 headers: {
@@ -768,6 +810,13 @@ export interface operations {
                     "application/json": components["schemas"]["RunDetailResponse"];
                 };
             };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description run_not_found */
             404: {
                 headers: {
@@ -805,6 +854,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CancelAccepted"];
                 };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description run_not_found */
             404: {
@@ -845,6 +901,13 @@ export interface operations {
                 content: {
                     "text/event-stream": unknown;
                 };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description run_not_found */
             404: {
