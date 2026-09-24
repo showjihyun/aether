@@ -21,6 +21,16 @@ red→green 대상이 아니라 계약 자체가 산출물입니다(spec DP-1).
 `StreamingResponse` 가 단절을 감지하면 스트리밍 태스크를 취소합니다) — 조용히
 끝냅니다(2.7 "종료"): worker 는 이 취소를 모르고 Run 을 계속 실행합니다(AR-7, R-3).
 
+**Idle keep-alive.** 중간 프록시(nginx, ALB 등)는 일정 시간 바이트가 없으면 연결을
+끊습니다. `events` 에서 다음 이벤트가 `_KEEPALIVE_SECONDS`(15초) 안에 오지 않으면
+SSE 주석 라인(`: keep-alive\n\n` — 콜론으로 시작해 클라이언트가 이벤트로 해석하지
+않습니다, HTML SSE 스펙)을 대신 내보내고 같은 `__anext__()` 대기를 계속합니다.
+`asyncio.wait_for` 대신 `asyncio.wait` 로 감쌉니다 — `wait_for` 는 타임아웃 시 안의
+awaitable 을 취소하므로, 매 15초마다 진행 중인 Redis `XREAD` 대기(`ReadRunEvents`
+쪽 제너레이터)를 취소했다가 다시 시작하게 됩니다. `asyncio.wait` 는 타임아웃이
+지나도 대기 중이던 태스크(`pending`)를 취소하지 않고 다음 라운드에 이어 기다리므로
+이벤트를 놓치지 않습니다.
+
 `agents.py`·`runs.py` 와 같은 이유로 `from __future__ import annotations` 을 쓰지
 않습니다 — 아래 라우트는 팩토리 인자로 받은 지역 변수(`principal_dep`)를 캡처한
 `Annotated[Principal, Depends(...)]` 를 파라미터 타입으로 씁니다. 애노테이션이 지연
@@ -44,6 +54,9 @@ from aether_api.domain.api_key import Principal
 from aether_api.domain.run import RunNotFound
 
 logger = logging.getLogger(__name__)
+
+_KEEPALIVE_SECONDS = 15.0
+_KEEPALIVE_COMMENT = ": keep-alive\n\n"
 
 
 def _run_not_found() -> HTTPException:
@@ -94,13 +107,29 @@ def build_events_router(
             first_event = None
 
         async def _stream() -> AsyncIterator[str]:
+            pending: asyncio.Task[RunEvent] | None = None
             try:
                 if first_event is not None:
                     yield _format_sse(first_event)
-                async for event in events:
+                while True:
+                    if pending is None:
+                        pending = asyncio.ensure_future(events.__anext__())
+                    done, _pending_set = await asyncio.wait({pending}, timeout=_KEEPALIVE_SECONDS)
+                    if not done:
+                        # 15초 동안 다음 이벤트가 없었습니다 — `pending` 은 취소하지
+                        # 않고(위 docstring) 다음 라운드에 계속 기다립니다.
+                        yield _KEEPALIVE_COMMENT
+                        continue
+                    pending = None
+                    try:
+                        event = done.pop().result()
+                    except StopAsyncIteration:
+                        return
                     yield _format_sse(event)
             except asyncio.CancelledError:
                 # 클라이언트 단절(2.7 "종료") — worker 는 이 취소를 모릅니다(AR-7, R-3).
+                if pending is not None:
+                    pending.cancel()
                 logger.info("api.run_events.client_disconnected", extra={"run_id": str(run_id)})
                 return
 
