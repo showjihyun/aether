@@ -75,6 +75,7 @@ def build_events_router(
         response_class=StreamingResponse,
         responses={
             200: {"content": {"text/event-stream": {}}, "description": "Run 이벤트 SSE 스트림"},
+            401: {"description": "unauthorized"},
             404: {"description": "run_not_found"},
         },
     )

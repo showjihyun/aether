@@ -121,6 +121,7 @@ def build_runs_router(
         response_model=RunAccepted,
         status_code=status.HTTP_202_ACCEPTED,
         responses={
+            401: {"description": "unauthorized"},
             404: {"description": "agent_not_found | agent_version_not_found"},
         },
     )
@@ -146,7 +147,10 @@ def build_runs_router(
     @router.get(
         "/runs/{run_id}",
         response_model=RunDetailResponse,
-        responses={404: {"description": "run_not_found"}},
+        responses={
+            401: {"description": "unauthorized"},
+            404: {"description": "run_not_found"},
+        },
     )
     def get_run_route(
         run_id: UUID,
@@ -174,7 +178,10 @@ def build_runs_router(
         "/runs/{run_id}/cancel",
         response_model=CancelAccepted,
         status_code=status.HTTP_202_ACCEPTED,
-        responses={404: {"description": "run_not_found"}},
+        responses={
+            401: {"description": "unauthorized"},
+            404: {"description": "run_not_found"},
+        },
     )
     def cancel_run_route(
         run_id: UUID,

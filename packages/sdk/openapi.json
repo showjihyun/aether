@@ -48,6 +48,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "409": {
             "description": "agent_name_taken"
           },
@@ -107,6 +110,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "422": {
             "description": "Validation Error",
             "content": {
@@ -146,6 +152,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "agent_not_found"
@@ -197,6 +206,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "agent_not_found"
@@ -253,6 +265,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "404": {
             "description": "agent_not_found | agent_version_not_found"
           },
@@ -306,6 +321,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "404": {
             "description": "agent_not_found | agent_version_not_found"
           },
@@ -349,6 +367,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "404": {
             "description": "run_not_found"
           },
@@ -391,6 +412,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "run_not_found"
@@ -446,6 +470,9 @@
             "content": {
               "text/event-stream": {}
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "run_not_found"
