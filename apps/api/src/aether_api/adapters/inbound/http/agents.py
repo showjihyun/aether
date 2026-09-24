@@ -174,7 +174,10 @@ def build_agents_router(
         "/agents",
         response_model=AgentResponse,
         status_code=status.HTTP_201_CREATED,
-        responses={409: {"description": "agent_name_taken"}},
+        responses={
+            401: {"description": "unauthorized"},
+            409: {"description": "agent_name_taken"},
+        },
     )
     def create_agent_route(
         body: CreateAgentRequest,
@@ -192,13 +195,18 @@ def build_agents_router(
             updated_at=agent.updated_at,
         )
 
-    @router.get("/agents", response_model=ListAgentsResponse)
+    @router.get(
+        "/agents",
+        response_model=ListAgentsResponse,
+        responses={401: {"description": "unauthorized"}},
+    )
     def list_agents_route(
         principal: require_principal_dep,
         limit: int = Query(default=50, ge=1, le=200),
         cursor: str | None = Query(default=None),
+        name: str | None = Query(default=None, description="이름 부분 일치(대소문자 구분 없음)"),
     ) -> ListAgentsResponse:
-        page = list_agents(limit, cursor)
+        page = list_agents(limit, cursor, name)
         return ListAgentsResponse(
             items=[
                 AgentSummary(
@@ -215,7 +223,10 @@ def build_agents_router(
     @router.get(
         "/agents/{agent_id}",
         response_model=AgentDetailResponse,
-        responses={404: {"description": "agent_not_found"}},
+        responses={
+            401: {"description": "unauthorized"},
+            404: {"description": "agent_not_found"},
+        },
     )
     def get_agent_route(
         agent_id: UUID,
@@ -230,7 +241,10 @@ def build_agents_router(
     @router.get(
         "/agents/{agent_id}/versions/{version}",
         response_model=AgentVersionResponse,
-        responses={404: {"description": "agent_not_found | agent_version_not_found"}},
+        responses={
+            401: {"description": "unauthorized"},
+            404: {"description": "agent_not_found | agent_version_not_found"},
+        },
     )
     def get_agent_version_route(
         agent_id: UUID,
@@ -254,6 +268,7 @@ def build_agents_router(
         "/agents/{agent_id}",
         response_model=AgentDetailResponse,
         responses={
+            401: {"description": "unauthorized"},
             404: {"description": "agent_not_found"},
             409: {"description": "agent_version_conflict"},
         },

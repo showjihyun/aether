@@ -22,6 +22,7 @@ import redis.asyncio as aioredis
 from fastapi import FastAPI
 from redis import Redis
 
+from aether_api.adapters.inbound.cli import agents_get_version as write_agents_get_version
 from aether_api.adapters.inbound.cli import build_parser
 from aether_api.adapters.inbound.cli import events_schema as write_events_schema
 from aether_api.adapters.inbound.cli import keys_create as write_keys_create
@@ -245,8 +246,9 @@ def cli() -> None:
     """`aether-api` 스크립트 진입점: 조립된 `app`/유스케이스를 `cli.py` 의 함수에 건넵니다.
 
     `openapi` 는 모듈 임포트 시 이미 조립된 `app`(위)을 재사용합니다 — 다시 조립하면
-    telemetry 가 두 번 초기화됩니다. `keys create` 는 매번 새 `Settings()` 를 읽어
-    `IssueApiKeyUseCase` 를 조립합니다 — CLI 프로세스는 매번 새로 뜨기 때문입니다.
+    telemetry 가 두 번 초기화됩니다. `keys create` 와 `agents get-version` 은 매번 새
+    `Settings()` 를 읽어 유스케이스를 조립합니다 — CLI 프로세스는 매번 새로 뜨기
+    때문입니다.
     """
     parser = build_parser()
     args = parser.parse_args()
@@ -259,3 +261,7 @@ def cli() -> None:
         settings = Settings()
         issue = IssueApiKeyUseCase(_postgres_api_key_store(settings))
         write_keys_create(issue, args.label)
+    elif args.command == "agents" and args.agents_command == "get-version":
+        settings = Settings()
+        get_agent_version = GetAgentVersionUseCase(_postgres_agent_repository(settings))
+        write_agents_get_version(get_agent_version, args.agent_id, args.version)

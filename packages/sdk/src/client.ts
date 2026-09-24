@@ -47,6 +47,8 @@ export type CancelAccepted =
 export interface ListAgentsParams {
   limit?: number;
   cursor?: string | null;
+  /** 이름 부분 일치(대소문자 구분 없음, spec 0002 2.2 `GET /agents?name=`). */
+  name?: string | null;
 }
 
 export interface CreateClientOptions {
@@ -118,6 +120,9 @@ function buildListAgentsPath(params: ListAgentsParams | undefined): string {
   }
   if (params?.cursor) {
     query.set("cursor", params.cursor);
+  }
+  if (params?.name) {
+    query.set("name", params.name);
   }
   const queryString = query.toString();
   return queryString ? `/agents?${queryString}` : "/agents";

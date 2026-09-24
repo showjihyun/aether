@@ -124,6 +124,49 @@ def test_list_agents_pages_with_cursor(client: TestClient, auth_headers: dict[st
     assert second.json()["id"] in seen_ids
 
 
+def test_list_agents_filters_by_name_substring(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """`?name=` 은 대소문자 구분 없이 부분 일치하는 Agent 만 돌려줍니다."""
+    prefix = uuid4().hex
+    matching = client.post(
+        "/agents",
+        json={"name": f"{prefix}-billing-agent", "definition": _definition_payload()},
+        headers=auth_headers,
+    )
+    other = client.post(
+        "/agents",
+        json={"name": f"{prefix}-support-agent", "definition": _definition_payload()},
+        headers=auth_headers,
+    )
+    assert matching.status_code == 201
+    assert other.status_code == 201
+
+    response = client.get(
+        "/agents",
+        params={"name": f"{prefix.upper()}-BILLING"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    names = {item["name"] for item in body["items"]}
+    assert names == {f"{prefix}-billing-agent"}
+
+
+def test_list_agents_name_filter_with_no_match_is_empty(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    response = client.get(
+        "/agents",
+        params={"name": f"no-such-agent-{uuid4()}"},
+        headers=auth_headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"] == []
+
+
 def test_create_duplicate_name_is_409(client: TestClient, auth_headers: dict[str, str]) -> None:
     name = f"dup-{uuid4()}"
     first = client.post(

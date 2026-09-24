@@ -48,6 +48,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "409": {
             "description": "agent_name_taken"
           },
@@ -94,6 +97,24 @@
               ],
               "title": "Cursor"
             }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "이름 부분 일치(대소문자 구분 없음)",
+              "title": "Name"
+            },
+            "description": "이름 부분 일치(대소문자 구분 없음)"
           }
         ],
         "responses": {
@@ -106,6 +127,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "422": {
             "description": "Validation Error",
@@ -146,6 +170,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "agent_not_found"
@@ -197,6 +224,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "agent_not_found"
@@ -253,6 +283,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "404": {
             "description": "agent_not_found | agent_version_not_found"
           },
@@ -306,6 +339,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "404": {
             "description": "agent_not_found | agent_version_not_found"
           },
@@ -349,6 +385,9 @@
               }
             }
           },
+          "401": {
+            "description": "unauthorized"
+          },
           "404": {
             "description": "run_not_found"
           },
@@ -391,6 +430,9 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "run_not_found"
@@ -446,6 +488,9 @@
             "content": {
               "text/event-stream": {}
             }
+          },
+          "401": {
+            "description": "unauthorized"
           },
           "404": {
             "description": "run_not_found"
