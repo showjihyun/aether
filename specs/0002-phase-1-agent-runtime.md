@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 10 | [실질] 2026-09-24. 2.7 에 **idle keep-alive** 를 더했습니다 — 이벤트가 15초 동안 없으면 SSE 주석 줄을 보내 중간 프록시가 열린 스트림을 끊지 못하게 합니다. 이벤트 봉투·필드·종료 계약은 바뀌지 않습니다. 이 동작은 대표 task REP-4 의 평가 실행에서 일곱 번 구현되고 일곱 번 저장소 밖으로 버려졌던 것을 회수한 것입니다 — 실행자들이 세 번에 걸쳐 '2.7 에 이 동작이 없다' 고 스스로 지적했습니다(근거 improvement log `2026-09-24-001`) |
 | 개정 9 | [실질] 2026-09-24. `GET /agents` 에 이름 부분 일치 필터 `?name=` 를 더했습니다 — 대소문자를 구분하지 않는 부분 일치이고 기존 커서 조건과 함께 동작합니다. 2.3 계약 표의 질의 문자열과 2.10 SDK 서명(`listAgents`)이 함께 바뀝니다. 이 기능은 대표 task REP-1 의 평가 실행에서 두 번 구현되고 두 번 저장소 밖으로 버려졌던 것을 회수한 것입니다(근거 improvement log `2026-09-24-001`). 응답 본문과 다른 경로의 계약은 바뀌지 않습니다 |
 | 개정 8 | [편집] 2026-09-16. R-9·R-10 실측 기록 — 로컬 verify 17단계 163.4초(smoke 39.7초, api-integration 37.7초), CI `verify` job 2분 58초 ~ 3분 16초(bake 캐시 포함). D-15 회귀 조건(smoke ≤ 240초, CI ≤ 8분, 합계 ≤ 600초) 전부 충족. `{{성능_기준}}` 은 사람이 **150 ms** 로 고정(H-7, EI-2) — 실측 p50 33.4 · p95 36.8 · max 40.1 ms |
 | 개정 7 | [편집] 2026-09-16. P1-9 실측 — (a) 2.11 격리에 `infra/docker/compose.smoke.yaml`(api 호스트 포트 `!reset []`, collector 출력 `./out/otel-smoke`): 개발 스택과 포트 충돌 없음을 확인. (b) 시나리오의 HTTP 호출은 호스트가 아니라 **api 컨테이너 안에서** `scripts/smoke_client.py`(stdin 으로 넘김, 표준 라이브러리만) — 호스트에 curl·jq·포트를 가정하지 않음. (c) CI 캐시: bake 는 compose 의 상대 빌드 컨텍스트를 **실행 위치** 기준으로 해석하므로 `docker/bake-action@v6` 의 `source: .` + `workdir: infra/docker`(v7 에는 `workdir` 없음, improvement-log `2026-09-16-002`). (d) 2.13 측정 위치는 api 컨테이너 안(`localhost:8000`) — 호스트·Docker 네트워크 왕복을 포함하지 않음, 결과 파일 `infra/docker/out/smoke-bench.json`. (e) C-12: 로컬 compose v2.29.7 에서 `up --wait` + 일회성 `migrate` 가 그대로 성공. D-15 근거 `2026-09-16-001` |
@@ -245,6 +246,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 | 순서 | `seq` 순. `run.status` 의 순서가 2.4 의 전이 순서와 같습니다(R-3) |
 | `Last-Event-ID` | 값 `n` 을 받으면 스트림 ID `n-0` 다음부터 읽습니다 — explicit ID 덕에 매핑이 직접입니다. `MAXLEN` 으로 잘려 나간 구간은 건너뛰어집니다(보장 안 함, 6절) |
 | 스트림이 없을 때 | `control.runs` 가 종결이면 `run.finished { status }` 하나를 **합성**해 보내고 닫습니다(TTL 뒤 늦게 온 독자, 또는 발행 전 crash — 2.4 의 재발행이 곧 채우지만 기다리지 않습니다). 종결이 아니면 스트림이 생길 때까지 블록(`XREAD BLOCK` 은 없는 키에도 동작) |
+| idle keep-alive | 다음 이벤트가 15초 안에 오지 않으면 SSE 주석 줄 `: keep-alive` 를 보냅니다. 콜론으로 시작하는 줄이므로 `EventSource` 는 이벤트로 해석하지 않고 `Last-Event-ID` 재개 계산에도 들어가지 않습니다. 중간 프록시의 유휴 타임아웃이 열린 스트림을 끊는 것을 막기 위한 것이고, 대기 중인 Redis 읽기를 취소하지 않는 구조로 구현합니다(취소하면 그 뒤 실제 이벤트를 놓칩니다) |
 | 종료 | `run.finished` 를 보낸 뒤 서버가 닫습니다. 클라이언트 단절은 api 의 읽기 취소로 끝나고 worker 는 api 를 모릅니다(AR-7) |
 | 스키마 소유 | 이벤트 모델은 `aether_runtime.domain.events`. `aether-api events-schema` 가 pydantic JSON Schema 를 내보내 `packages/sdk/events.schema.json` 에 커밋하고, `pnpm -F sdk run generate` 가 `json-schema-to-typescript` 로 `src/generated/events.d.ts` 를 만듭니다. 드리프트는 R-12 |
 
