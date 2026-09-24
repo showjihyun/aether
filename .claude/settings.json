@@ -33,6 +33,17 @@
             "statusMessage": "평가 blind 조건 확인 중"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/guard-docker-volumes.sh\"",
+            "timeout": 10,
+            "statusMessage": "개발 볼륨 보호 확인 중"
+          }
+        ]
       }
     ],
     "PostToolUse": [
