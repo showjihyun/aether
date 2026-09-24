@@ -93,7 +93,7 @@ def _setup_repo(root: Path) -> None:
 
 
 def _run(root: Path, *, ci: bool = False) -> subprocess.CompletedProcess[str]:
-    env = {}
+    env: dict[str, str] = {}
     import os
 
     env.update(os.environ)
