@@ -136,8 +136,11 @@ class FakeAgentRepository:
             raise AgentNotFound(agent_id)
         return agent
 
-    def list(self, limit: int, cursor: str | None) -> AgentPage:
+    def list(self, limit: int, cursor: str | None, name: str | None = None) -> AgentPage:
         ordered = sorted(self._agents.values(), key=lambda a: (a.created_at, str(a.id)))
+        if name is not None:
+            needle = name.lower()
+            ordered = [a for a in ordered if needle in a.name.lower()]
         start = int(cursor) if cursor is not None else 0
         page_items = ordered[start : start + limit]
         end = start + len(page_items)

@@ -97,6 +97,24 @@
               ],
               "title": "Cursor"
             }
+          },
+          {
+            "name": "name",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "이름 부분 일치(대소문자 구분 없음)",
+              "title": "Name"
+            },
+            "description": "이름 부분 일치(대소문자 구분 없음)"
           }
         ],
         "responses": {

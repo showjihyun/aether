@@ -30,8 +30,13 @@ class AgentRepository(Protocol):
         """없으면 `AgentNotFound` 를 던집니다."""
         ...
 
-    def list(self, limit: int, cursor: str | None) -> AgentPage:
-        """`cursor` 이후 최대 `limit` 개. `next_cursor` 는 불투명 문자열입니다."""
+    def list(self, limit: int, cursor: str | None, name: str | None = None) -> AgentPage:
+        """`cursor` 이후 최대 `limit` 개.
+
+        `name` 이 주어지면 대소문자 구분 없이 부분 일치(substring)하는 Agent 만
+        돌려줍니다(spec 0002 2.2 `GET /agents?name=`). `next_cursor` 는 불투명
+        문자열이며, `name` 필터가 걸린 페이지에도 같은 규칙으로 이어집니다.
+        """
         ...
 
     def get_version(self, agent_id: UUID, version: int) -> AgentVersion:

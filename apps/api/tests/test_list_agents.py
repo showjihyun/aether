@@ -44,6 +44,19 @@ def test_list_agents_pages_with_cursor() -> None:
     assert names == {"a", "b", "c"}
 
 
+def test_list_agents_filters_by_name_substring_case_insensitive() -> None:
+    """spec 0002 2.2: `name` 은 대소문자 구분 없이 부분 일치하는 Agent 만 남깁니다."""
+    repo = FakeAgentRepository()
+    create_agent = CreateAgentUseCase(repo)
+    list_agents = ListAgentsUseCase(repo)
+    create_agent("billing-agent", _definition())
+    create_agent("support-agent", _definition())
+
+    page = list_agents(50, None, "BILLING")
+
+    assert [agent.name for agent in page.items] == ["billing-agent"]
+
+
 def test_list_agents_empty_repository_returns_empty_page() -> None:
     """spec 0002 2.2: Agent 가 없으면 빈 목록과 `next_cursor is None`."""
     repo = FakeAgentRepository()

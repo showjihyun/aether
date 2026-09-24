@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 9 | [실질] 2026-09-24. `GET /agents` 에 이름 부분 일치 필터 `?name=` 를 더했습니다 — 대소문자를 구분하지 않는 부분 일치이고 기존 커서 조건과 함께 동작합니다. 2.3 계약 표의 질의 문자열과 2.10 SDK 서명(`listAgents`)이 함께 바뀝니다. 이 기능은 대표 task REP-1 의 평가 실행에서 두 번 구현되고 두 번 저장소 밖으로 버려졌던 것을 회수한 것입니다(근거 improvement log `2026-09-24-001`). 응답 본문과 다른 경로의 계약은 바뀌지 않습니다 |
 | 개정 8 | [편집] 2026-09-16. R-9·R-10 실측 기록 — 로컬 verify 17단계 163.4초(smoke 39.7초, api-integration 37.7초), CI `verify` job 2분 58초 ~ 3분 16초(bake 캐시 포함). D-15 회귀 조건(smoke ≤ 240초, CI ≤ 8분, 합계 ≤ 600초) 전부 충족. `{{성능_기준}}` 은 사람이 **150 ms** 로 고정(H-7, EI-2) — 실측 p50 33.4 · p95 36.8 · max 40.1 ms |
 | 개정 7 | [편집] 2026-09-16. P1-9 실측 — (a) 2.11 격리에 `infra/docker/compose.smoke.yaml`(api 호스트 포트 `!reset []`, collector 출력 `./out/otel-smoke`): 개발 스택과 포트 충돌 없음을 확인. (b) 시나리오의 HTTP 호출은 호스트가 아니라 **api 컨테이너 안에서** `scripts/smoke_client.py`(stdin 으로 넘김, 표준 라이브러리만) — 호스트에 curl·jq·포트를 가정하지 않음. (c) CI 캐시: bake 는 compose 의 상대 빌드 컨텍스트를 **실행 위치** 기준으로 해석하므로 `docker/bake-action@v6` 의 `source: .` + `workdir: infra/docker`(v7 에는 `workdir` 없음, improvement-log `2026-09-16-002`). (d) 2.13 측정 위치는 api 컨테이너 안(`localhost:8000`) — 호스트·Docker 네트워크 왕복을 포함하지 않음, 결과 파일 `infra/docker/out/smoke-bench.json`. (e) C-12: 로컬 compose v2.29.7 에서 `up --wait` + 일회성 `migrate` 가 그대로 성공. D-15 근거 `2026-09-16-001` |
 | 개정 6 | [편집] 2026-09-15. P1-8 구현에서 드러난 배치 — api 에 outbound 포트 `RequestTracing`(`span`·`current_traceparent`)과 어댑터 `otel_request_tracing.py` 를 두어 `RequestRun` 이 `run.request` span 안에서 선언·통지하고 그 `traceparent` 를 실음(application 은 `opentelemetry` 를 모름, AR-9). worker 는 `adapters/outbound/otel_trace_context.py` 가 `TraceContext` 를 구현. 어댑터는 `TracerProvider` 를 주입받아 테스트가 전역을 덮지 않음. R-5 판정 경로를 2.9·2.11 과 같은 `infra/docker/out/otel-smoke/spans.jsonl` 로. collector 이미지는 `0.160.0` digest 고정 |
@@ -107,7 +108,7 @@ intent 가 정한 문제·범위·제약은 반복하지 않습니다. 이 문�
 | 메서드·경로 | 요청 | 성공 응답 | 오류 |
 | --- | --- | --- | --- |
 | `POST /agents` | `{ name, definition }` | `201 { id, name, current_version: 1, created_at, updated_at }` | `409 agent_name_taken` · `422`(정의 검증) |
-| `GET /agents` | `?limit=50&cursor=` | `200 { items: [{ id, name, current_version, updated_at }], next_cursor }` | — |
+| `GET /agents` | `?limit=50&cursor=&name=` | `200 { items: [{ id, name, current_version, updated_at }], next_cursor }` | — |
 | `GET /agents/{id}` | — | `200 { id, name, current_version, definition, versions: [{ version, created_at }], created_at, updated_at }` | `404 agent_not_found` |
 | `GET /agents/{id}/versions/{version}` | — | `200 { agent_id, version, definition, created_at }` | `404 agent_not_found` · `404 agent_version_not_found` |
 | `PUT /agents/{id}` | `{ definition }` | `200`(`GET /agents/{id}` 와 같은 본문, `current_version` +1) | `404` · `409 agent_version_conflict`(동시 수정) · `422` |
@@ -376,7 +377,7 @@ worker 는 `AETHER_WORKER_HEARTBEAT_SECONDS`(기본 5)마다 Redis 키 `aether:w
 
 | 함수 | 경로 |
 | --- | --- |
-| `createAgent(body)`, `listAgents({ limit, cursor })`, `getAgent(id)`, `getAgentVersion(id, version)`, `updateAgent(id, body)` | 2.2 |
+| `createAgent(body)`, `listAgents({ limit, cursor, name })`, `getAgent(id)`, `getAgentVersion(id, version)`, `updateAgent(id, body)` | 2.2 |
 | `runAgent(id, body)`, `getRun(runId)`, `cancelRun(runId)` | 2.2 |
 | `streamRunEvents(runId, { lastEventId?, signal? })` → `AsyncIterable<RunEvent>` | `fetch` 로 `text/event-stream` 을 열고 SSE 를 직접 파싱합니다 — 브라우저 `EventSource` 는 `Authorization` 헤더를 붙일 수 없습니다(C-4). `signal` 로 중단 |
 
