@@ -513,6 +513,8 @@ export interface operations {
             query?: {
                 limit?: number;
                 cursor?: string | null;
+                /** @description 이름 부분 일치(대소문자 구분 없음) */
+                name?: string | null;
             };
             header?: never;
             path?: never;

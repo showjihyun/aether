@@ -120,17 +120,19 @@ class PostgresAgentRepository:
             raise AgentNotFound(agent_id)
         return _row_to_agent(row)
 
-    def list(self, limit: int, cursor: str | None) -> AgentPage:
+    def list(self, limit: int, cursor: str | None, name: str | None = None) -> AgentPage:
+        name_pattern = f"%{name}%" if name is not None else None
         with self._connect() as conn, conn.cursor() as cur:
             if cursor is None:
                 cur.execute(
                     """
                     SELECT id, name, current_version, created_at, updated_at
                     FROM control.agents
+                    WHERE %(name_pattern)s::text IS NULL OR name ILIKE %(name_pattern)s::text
                     ORDER BY created_at, id
-                    LIMIT %s
+                    LIMIT %(limit)s
                     """,
-                    (limit + 1,),
+                    {"name_pattern": name_pattern, "limit": limit + 1},
                 )
             else:
                 after_created_at, after_id = _decode_cursor(cursor)
@@ -138,11 +140,17 @@ class PostgresAgentRepository:
                     """
                     SELECT id, name, current_version, created_at, updated_at
                     FROM control.agents
-                    WHERE (created_at, id) > (%s, %s)
+                    WHERE (created_at, id) > (%(after_created_at)s, %(after_id)s)
+                    AND (%(name_pattern)s::text IS NULL OR name ILIKE %(name_pattern)s::text)
                     ORDER BY created_at, id
-                    LIMIT %s
+                    LIMIT %(limit)s
                     """,
-                    (after_created_at, after_id, limit + 1),
+                    {
+                        "after_created_at": after_created_at,
+                        "after_id": after_id,
+                        "name_pattern": name_pattern,
+                        "limit": limit + 1,
+                    },
                 )
             rows = cur.fetchall()
 

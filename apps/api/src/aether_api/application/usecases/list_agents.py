@@ -12,5 +12,5 @@ class ListAgentsUseCase:
     def __init__(self, repository: AgentRepository) -> None:
         self._repository = repository
 
-    def __call__(self, limit: int, cursor: str | None) -> AgentPage:
-        return self._repository.list(limit, cursor)
+    def __call__(self, limit: int, cursor: str | None, name: str | None = None) -> AgentPage:
+        return self._repository.list(limit, cursor, name)

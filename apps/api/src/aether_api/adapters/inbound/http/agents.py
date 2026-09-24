@@ -204,8 +204,9 @@ def build_agents_router(
         principal: require_principal_dep,
         limit: int = Query(default=50, ge=1, le=200),
         cursor: str | None = Query(default=None),
+        name: str | None = Query(default=None, description="이름 부분 일치(대소문자 구분 없음)"),
     ) -> ListAgentsResponse:
-        page = list_agents(limit, cursor)
+        page = list_agents(limit, cursor, name)
         return ListAgentsResponse(
             items=[
                 AgentSummary(
