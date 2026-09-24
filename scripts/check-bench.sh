@@ -18,15 +18,25 @@
 # 임계값은 `harness.config`(보호 파일, EI-2 — 사람이 소유)가 정본입니다. 이 스크립트에
 # 기본값을 넣지 않습니다 — 변수가 없으면 실패로 알립니다.
 #
+# AD-2 후보 2026-09-22-002: p95 가 기준을 넘으면 같은 실행 안에서 한 번 더 측정하고,
+# 두 측정이 모두 기준을 넘을 때만 실패시킵니다. 2026-09-23 에 문서만 바꾼 PR 의 CI 가
+# p95 165.6 ms 로 떨어졌는데(기준 150) 같은 커밋의 다른 두 실행은 65~79 ms 였고, 실패한
+# job 을 재실행하니 65.9 ms 로 통과했습니다 — 공유 러너의 지연 꼬리가 기준값 자체가
+# 아니라 판정의 잡음이었습니다. 재측정 명령은 기본 `scripts/smoke.sh --bench` 이고
+# `HARNESS_BENCH_REMEASURE_CMD` 로 덮어쓸 수 있습니다(테스트가 도커 없이 검증하기
+# 위함). 재측정이 실패하거나 결과 파일을 갱신하지 못하면 잡음을 이유로 게이트를 열지
+# 않고 그대로 실패시킵니다.
+#
 # 사용:
 #   scripts/check-bench.sh                                              # 저장소 기본 경로
 #   scripts/check-bench.sh --bench <경로> --config <경로> --smoke-log <경로>  # 테스트용 경로 지정
 #
 # 종료 코드:
 #   0 — p95 가 기준 이하이고 같은 실행에서 나온 측정임(또는 smoke 로그가 없어 벽시계
-#       30분 폴백을 만족함).
+#       30분 폴백을 만족함). 1차 측정이 기준을 넘었어도 재측정이 기준 이하면 0.
 #   1 — 기준 초과, 측정이 이전 실행 것이거나(벽시계 폴백이면 30분보다 오래됨), 결과
-#       파일이 없거나 깨짐, 또는 harness.config 에 임계값이 없거나 숫자가 아님.
+#       파일이 없거나 깨짐, harness.config 에 임계값이 없거나 숫자가 아님, 또는
+#       재측정까지 두 번 모두 기준을 넘거나 재측정 자체가 실패/미갱신인 경우.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
@@ -90,7 +100,11 @@ if [ -z "$HOST_PYTHON" ]; then
   exit 1
 fi
 
-if ! PARSED="$("$HOST_PYTHON" - "$BENCH_PATH" <<'PY'
+# bench 결과 파일에서 p95_ms/measured_at 을 뽑아 두 줄로 출력하는 함수 — 1차 측정과
+# 재측정(2026-09-22-002) 모두 같은 파싱·검증을 거쳐야 하므로 공유합니다.
+parse_bench() {
+  local path="$1"
+  "$HOST_PYTHON" - "$path" <<'PY'
 import json
 import sys
 
@@ -113,7 +127,9 @@ if "measured_at" not in data:
 print(data["p95_ms"])
 print(data["measured_at"])
 PY
-)"; then
+}
+
+if ! PARSED="$(parse_bench "$BENCH_PATH")"; then
   exit 1
 fi
 
@@ -182,5 +198,45 @@ if awk -v p95="$P95_MS" -v thr="$THRESHOLD" 'BEGIN { exit (p95 + 0 <= thr + 0) ?
   exit 0
 fi
 
-printf 'p95=%s ms, 기준=%s ms — 초과\n' "$P95_MS" "$THRESHOLD"
+# 1차 초과 — 같은 실행 안에서 한 번 더 측정합니다(2026-09-22-002). 기준값과 측정
+# 부하는 바꾸지 않고, 잡음으로 인한 단발성 초과만 걸러냅니다.
+REMEASURE_CMD="${HARNESS_BENCH_REMEASURE_CMD:-${SCRIPT_DIR}/smoke.sh --bench}"
+ORIG_P95_MS="$P95_MS"
+ORIG_MEASURED_AT="$MEASURED_AT"
+
+if ! bash -c "$REMEASURE_CMD"; then
+  echo "check-bench: 재측정 명령이 실패했습니다: ${REMEASURE_CMD}" >&2
+  printf 'p95=%s ms → 재측정 실패, 기준=%s ms — 초과(재측정 명령 실패)\n' "$ORIG_P95_MS" "$THRESHOLD"
+  exit 1
+fi
+
+if [ ! -f "$BENCH_PATH" ]; then
+  echo "check-bench: 재측정 후 bench 결과 파일이 없습니다: ${BENCH_PATH}" >&2
+  printf 'p95=%s ms → 재측정 실패, 기준=%s ms — 초과(재측정 결과 없음)\n' "$ORIG_P95_MS" "$THRESHOLD"
+  exit 1
+fi
+
+if ! PARSED2="$(parse_bench "$BENCH_PATH")"; then
+  printf 'p95=%s ms → 재측정 실패, 기준=%s ms — 초과(재측정 결과 파싱 실패)\n' "$ORIG_P95_MS" "$THRESHOLD"
+  exit 1
+fi
+
+P95_MS_2="$(printf '%s\n' "$PARSED2" | sed -n '1p')"
+MEASURED_AT_2="$(printf '%s\n' "$PARSED2" | sed -n '2p')"
+
+# "갱신되었는가" 는 measured_at 문자열만으로 판단하지 않습니다 — 초 단위 타임스탬프는
+# 1차·2차 측정이 같은 초 안에 끝나면 텍스트가 우연히 같아질 수 있습니다(실측). p95 값과
+# measured_at 이 **둘 다** 원래 측정과 같을 때만 "갱신되지 않음" 으로 판단합니다.
+if [ "$MEASURED_AT_2" = "$ORIG_MEASURED_AT" ] && [ "$P95_MS_2" = "$ORIG_P95_MS" ]; then
+  echo "check-bench: 재측정 후에도 결과 파일이 갱신되지 않았습니다 (measured_at=${MEASURED_AT_2}, p95_ms=${P95_MS_2})" >&2
+  printf 'p95=%s ms → 재측정 갱신 안 됨, 기준=%s ms — 초과(재측정 결과 미갱신)\n' "$ORIG_P95_MS" "$THRESHOLD"
+  exit 1
+fi
+
+if awk -v p95="$P95_MS_2" -v thr="$THRESHOLD" 'BEGIN { exit (p95 + 0 <= thr + 0) ? 0 : 1 }'; then
+  printf 'p95=%s ms → 재측정 %s ms, 기준=%s ms — 통과(1차 초과, 2차 이내)\n' "$ORIG_P95_MS" "$P95_MS_2" "$THRESHOLD"
+  exit 0
+fi
+
+printf 'p95=%s ms → 재측정 %s ms, 기준=%s ms — 초과(2회 연속)\n' "$ORIG_P95_MS" "$P95_MS_2" "$THRESHOLD"
 exit 1
