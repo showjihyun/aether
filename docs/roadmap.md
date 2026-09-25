@@ -21,7 +21,7 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 제품 Phase | **Phase 1 완료**(2026-09-16, Agent Runtime) — P1-1~P1-9 전부 병합. Phase 0 은 2026-09-11 완료. Phase 2(Enterprise MCP Gateway)는 intent 0003 승인 뒤. 정본은 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) |
+| 제품 Phase | **Phase 1 완료**(2026-09-16, Agent Runtime) — P1-1~P1-9 전부 병합. Phase 0 은 2026-09-11 완료. Phase 2(Enterprise MCP Gateway)는 intent [0003](../intents/0003-phase-2-mcp-gateway.md) 승인 뒤 — 2026-09-25 발급, 승인 대기. 정본은 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) |
 | 하네스 도입 단계 | **AD-2** — 2026-09-11 P0-7 로 진입. 제품 단계 11개(2026-09-16 smoke 추가) + 임계값 80 + improvement-log 25건 — [../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) |
 | 하네스 성숙도 | **L2 Eval Loop 진입 시도** — 평가 기준(계층 가중치·임계값·성능 기준 150 ms)과 반복 예산은 있고, 평가 기준선(REP 실행)은 아직 — [../harness/references/maturity-levels.md](../harness/references/maturity-levels.md) |
 | 저장소에 있는 코드 | `apps/api`(healthz·인증·Agent Registry·Run API·SSE·상태 투영), `apps/worker`(Streams 소비자 → 실행·heartbeat), `packages/runtime`(상태 기계·lease·model gateway·Planner/Executor 루프·도구·이벤트·OTel), `apps/web`(Next + shadcn 셸), `packages/sdk`, 그 밖 `packages/*` 빈 껍데기, `infra/docker`(compose 7서비스 + llm 프로파일 + 오프라인 probe) |

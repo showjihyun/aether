@@ -293,7 +293,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 
 ## Phase 2 — Enterprise MCP Gateway
 
-Intent: 0003 (미발급. Phase 1 완료 2026-09-16 후 발급). 기간: Week 6~8.
+Intent: [0003](0003-phase-2-mcp-gateway.md) (2026-09-25 발급, **승인 대기** — 승인 전에는 이 단위들을 집지 않습니다). 기간: Week 6~8.
 
 **Phase 완료 판정** — Agent 의 모든 도구 호출이 `packages/mcp` 의 Gateway 한 곳을 지나고, Gateway 가 연결된 MCP Server 에서 Tool 을 발견하며, 호출마다 권한 판정과 감사 기록이 남습니다. Filesystem·HTTP·PostgreSQL MCP Server 가 인터넷 없이 붙습니다.
 
