@@ -36,7 +36,7 @@ def _principal_dep(request: Request) -> Principal:
 
 
 def _events_route() -> APIRoute:
-    router = build_events_router(_principal_dep, _fake_read_run_events)
+    router = build_events_router(_principal_dep, _fake_read_run_events, lambda run_id: True)
     (route,) = [r for r in router.routes if isinstance(r, APIRoute)]
     return route
 

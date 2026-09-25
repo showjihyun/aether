@@ -53,6 +53,7 @@ from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
 from aether_api.application.usecases.request_run import RequestRunUseCase
+from aether_api.application.usecases.run_exists import RunExistsUseCase
 from aether_api.application.usecases.update_agent import UpdateAgentUseCase
 from aether_api.settings import Settings
 
@@ -233,6 +234,7 @@ def create_app(
         build_events_router(
             require_principal(authenticate),
             ReadRunEventsUseCase(event_reader, run_declaration_store),
+            RunExistsUseCase(run_declaration_store),
         )
     )
     return app

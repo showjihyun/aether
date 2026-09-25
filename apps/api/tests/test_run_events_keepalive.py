@@ -54,7 +54,7 @@ async def test_idle_stream_sends_keepalive_comment_between_events(
             payload={"status": "succeeded"},
         )
 
-    router = build_events_router(_principal_dep, _fake_read_run_events)
+    router = build_events_router(_principal_dep, _fake_read_run_events, lambda run_id: True)
     (route,) = [r for r in router.routes if isinstance(r, APIRoute)]
     principal = Principal(key_id=uuid4(), label="test")
 
