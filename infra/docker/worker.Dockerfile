@@ -3,7 +3,7 @@
 # 이 이미지도 `apps/api` 소스를 담지만 그것은 uv workspace 설치의 부산물일 뿐,
 # `aether_worker` 코드가 그것을 참조하지 않는다는 사실은 AR-7 계약(api-arch)이 판정합니다.
 
-FROM ghcr.io/astral-sh/uv:0.12.16@sha256:adc68cd785ca65ea25c0611043b0a00b4ea3a22e1b54102fc084406d888082ee AS uv
+FROM ghcr.io/astral-sh/uv:0.12.19@sha256:04d046b13e60d6bcec73cbc5e1cad25d680dea90c8573340950a0ac2d1aef424 AS uv
 
 FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
 
