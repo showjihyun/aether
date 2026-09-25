@@ -5,6 +5,7 @@
 .harness/baseline-eval.json
 .harness/guard-events.log
 .harness/guard-volume-events.log
+.harness/guard-evidence-allow.log
 .harness/guard-snapshot.tsv
 .harness/guard-patterns.cache
 .harness/logs/

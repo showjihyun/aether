@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/harness/hooks/guard-evaluation-tampering.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/guard-protected.sh\"",
             "timeout": 10,
             "statusMessage": "평가 무결성 검사 중"
           }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash \"$CLAUDE_PROJECT_DIR/harness/hooks/guard-evaluation-tampering.sh\"",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/scripts/guard-protected.sh\"",
             "timeout": 10,
             "statusMessage": "평가 무결성 검사 중 (셸)"
           }
