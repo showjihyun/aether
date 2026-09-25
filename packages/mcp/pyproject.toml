@@ -3,7 +3,9 @@ name = "aether-mcp"
 version = "0.0.0"
 description = ""
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "mcp==2.2.0",
+]
 
 [build-system]
 requires = ["hatchling"]

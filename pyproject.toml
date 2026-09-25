@@ -29,6 +29,7 @@ dev = [
     "import-linter",
     "testcontainers[postgres,redis]",
     "httpx>=0.28.1",
+    "uvicorn",
 ]
 
 [tool.ruff]
@@ -40,7 +41,7 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.mypy]
 strict = true
-files = ["apps", "packages", "tests"]
+files = ["apps", "packages", "tests", "tools"]
 exclude = ["tests/arch/fixtures"]
 explicit_package_bases = true
 mypy_path = [

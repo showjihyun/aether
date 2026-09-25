@@ -206,7 +206,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | D-10 | 감사 기록 실패는 호출 결과를 바꾸지 않습니다. 임계·차단은 Phase 9 | — | 2.4, C-3 |
 | D-11 | 연결은 Run 수명에 묶입니다. 서버 1개 실패는 그 도구만 제거하고 Run 은 계속. 재연결은 호출당 1회 | — | 2.5 |
 | D-12 | 감사에 인자·결과 **본문을 넣지 않습니다** — 크기와 종류만. 결과는 `AETHER_MCP_MAX_RESULT_BYTES` 로 자릅니다 | R-11, DLP 는 Phase 10 | 2.7, 2.9 |
-| D-13 | `.importlinter` 변경은 P2-2 병합 뒤 **한 번**, 사람이 커밋. AR-6 계약을 `aether_mcp.adapters` 로 좁힘 | CC, EI-2 | 2.11 |
+| D-13 | `.importlinter` 변경은 P2-2b 병합 뒤 **한 번**, 사람이 커밋. 내용은 **`aether_mcp` → `aether_policy.adapters` 금지 계약 추가 하나**입니다 — AR-6 좁히기는 취소(개정 2: 기존 AR-6 이 다른 패키지 전부의 `mcp` import 를, AR-9 가 `aether_mcp.domain`·`application` 의 SDK import 를 이미 금지합니다) | CC, EI-2, 개정 2 | 2.11 |
 | D-14 | 정책 표에 행을 넣는 경로는 **CLI 서브커맨드**(`aether-api permissions allow --agent-version --tool`)입니다. HTTP 경로는 늘리지 않습니다. 관리 API·UI 는 Phase 9 | 개정 1 (리뷰 F-1) | 2.14 |
 | D-15 | 마이그레이션 0003 이 `aether_data` 에 `control.tool_permissions` **SELECT** 를 부여합니다. 그 확대는 `test_plane_roles.py` 의 판정에 들어가고 P2-4 의 🔒 검토 대상입니다 | 개정 1 (리뷰 F-2) | 2.7 |
 | D-16 | 도구 이름의 **생성 시 정적 검증을 없앱니다** — 도구는 Discovery 에서 오고 api 는 어떤 서버가 붙을지 모릅니다. 없는 도구는 Run 시점에 `ToolNotFound` 로 감사에 남습니다. spec 0002 D-3 의 `BUILTIN_TOOL_NAMES` 검증 부분을 **[실질] 개정** | 개정 1 (리뷰 F-5) | 2.15 |
@@ -241,4 +241,5 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | 개정 | 내용 |
 | --- | --- |
 | 초안 | 2026-09-25. intent 0003 의 열린 질문 6건을 D-1 ~ D-6 으로 고정하고, 외부 사실 확인에서 나온 D-7·D-8 을 더했습니다 |
+| 개정 2 | 2026-09-26. **P2-1 실행이 찾은 사실**로 D-13 의 범위를 줄였습니다 — `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 는 `aether_api`·`aether_worker`·`aether_runtime` 을 포함한 여덟 패키지에서 `mcp` 를 이미 금지하고, `ar9-core-is-framework-free` 는 `aether_mcp.domain`·`application` 에서 `mcp` 를 이미 금지합니다(위반 주입으로 확인). 그래서 R-2 는 계약 **추가**가 아니라 **발화 확인**으로 판정하고, H-1 은 policy 계약 하나만 더합니다 |
 | 개정 1 | 2026-09-25. **plan 0003 리뷰(F-1 ~ F-7)가 찾은 구멍 셋**을 D-14 ~ D-16 으로 메웠습니다 — 정책 표 쓰기 경로가 없어 기본 deny 아래 R-7 이 불가능했던 것(F-1), `aether_data` 에 `control.tool_permissions` SELECT 가 없던 것(F-2), 도구 이름 검증이 Discovery 로 바뀌며 자리를 잃은 것(F-5, spec 0002 D-3 **[실질] 개정**). R-3·R-4 의 integration 판정 시점을 P2-3 이후로 정정했습니다(F-3) |
