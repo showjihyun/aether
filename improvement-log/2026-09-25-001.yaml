@@ -1,0 +1,29 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-25-001
+date: 2026-09-25
+status: candidate
+symptom: REP-5 의 합격 기준이 요구하는 '두 규약 문서를 읽은 흔적' 중 docs/domain.md 가 세 번 연속 0건이다. 이번에는 시드가 아닌 새 작업이었고 정답이 git 이력에 없었는데도 그렇다 — 실행자는 도메인 용어를 문서가 아니라 타입(domain/agent.py)과 기존 어댑터(http/agents.py)에서 확인하고 정확히 지켰다
+evidence: |
+  2026-09-25 REP-5(3차 개정, 새 기능형: `aether-api agents list`) 1회. 실행자가 보고한 읽은 파일 목록에
+  AGENTS.md·CLAUDE.md·docs/architecture.md 는 있고 docs/domain.md 는 없다.
+  그런데 도메인 용어 기준은 충족했다 — 출력 필드가 `Agent` 의 것(id·name·current_version·updated_at)만 담고
+  `AgentVersion` 의 정의나 `Run` 필드를 섞지 않았다. 근거로 삼은 것은 http/agents.py 의 AgentSummary 와
+  domain/agent.py 의 타입 정의였다. 계약 diff 0줄, verify 18/18, 테스트 5건 추가.
+  앞선 두 번(삭제형 시드·규약 위반형 시드)의 미충족은 정답이 git 이력에 있던 것이 원인이었고
+  (2026-09-24-001), 이번 실행으로 원인이 하나 더 있음이 드러났다 — 이 저장소에서 도메인 용어의 실질 정본은
+  타입이고, docs/domain.md 는 그 타입을 설명하는 2차 문서다. 타입을 읽어 맞춘 실행을 미충족으로 적는 기준은
+  더 나은 경로를 벌주는 셈이다.
+root_cause: 합격 기준이 '발견 경로가 살아 있는가' 를 '특정 파일 2개를 열었는가' 로 대리 측정한다. 규약이 타입으로 강제되는 계층(도메인 모델)에서는 문서 열람이 필요 조건이 아니다. 반대로 타입으로 표현되지 않는 규약(AR-* 의 의존 방향)에서는 문서 열람이 실제로 필요하고, 그 부분은 이번에도 충족되었다(docs/architecture.md 를 읽고 AR-12 를 인용했다)
+fix: 이번 실행은 기준을 문자 그대로 적용해 미충족으로 판정하고 그 판단 근거를 실행 기록에 적었다. 기준 자체의 수정은 이 후보로 사람 판단에 올린다
+recurrence_risk: high
+harness_element: HE-6
+proposed_harness_change: "(사람 결정) REP-5 합격 기준의 '두 규약 문서를 읽은 흔적' 을 둘로 나눈다 — (a) 타입으로 강제되지 않는 규약(의존 방향·계층)은 docs/architecture.md 를 읽은 흔적을 계속 요구한다. (b) 도메인 용어는 '정본에서 확인한 흔적' 으로 바꾼다 — docs/domain.md 또는 도메인 타입 정의(domain/*.py) 중 하나. 대신 용어 혼용 여부는 산출물로 직접 본다(지금도 그렇게 하고 있다). 함께 3차 개정의 잔재 두 줄을 고친다 — 합격 기준의 '복구한 서브커맨드' 를 '이번에 추가한 기능' 으로, 실행 가능 칸의 '시드의 내용과 시드 직후 상태는 실행 기록에만 남기고' 를 삭제한다(같은 칸이 '시드를 쓰지 않습니다' 라고 말한다)"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 기준 수정 뒤 REP-5 1회(새 기능 선택형).
+  기준: docs/architecture.md 를 읽은 흔적이 있고, 도메인 용어 혼용이 산출물에 0건이면 충족으로 판정된다.
+  타입도 문서도 보지 않고 용어를 섞은 산출물은 여전히 미충족이어야 한다 — 그 경우를 확인하려면
+  용어 구분이 타입에 드러나지 않는 기능(예: Run 과 Agent Version 을 함께 다루는 출력)을 골라 1회 더 돌린다.
+owner: unassigned
+expires: 2026-12-25
