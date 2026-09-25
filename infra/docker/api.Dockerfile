@@ -8,7 +8,7 @@
 
 # 확인: uv 버전은 이 세션에서 로컬로 쓴 0.11.2 로 고정. digest 는
 # `docker buildx imagetools inspect ghcr.io/astral-sh/uv:0.11.2` 로 얻었습니다.
-FROM ghcr.io/astral-sh/uv:0.12.16@sha256:adc68cd785ca65ea25c0611043b0a00b4ea3a22e1b54102fc084406d888082ee AS uv
+FROM ghcr.io/astral-sh/uv:0.12.19@sha256:04d046b13e60d6bcec73cbc5e1cad25d680dea90c8573340950a0ac2d1aef424 AS uv
 
 # 확인: Python 버전은 .python-version(3.12)과 맞춥니다. Debian slim — psycopg[binary]
 # 는 자체 libpq 를 번들하므로 추가 시스템 패키지가 필요 없습니다.
