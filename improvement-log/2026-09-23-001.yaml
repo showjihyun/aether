@@ -10,11 +10,17 @@ evidence: |
   같은 휴리스틱의 오탐도 두 번 관측: `cp .harness/verify.json <저장소 밖>`(읽기만 하는 복사)과
   `sed -i ... improvement-log/2026-09-22-002.yaml && ... harness/scripts/improvement-log.sh validate` 가 차단되어 우회 경로로 다시 실행했다.
   실제로 버틴 게이트: PR #57 의 "보호 파일 변경 검토" 가 라벨 없이 fail 로 병합을 막았고, 라벨은 사람이 붙였다.
+  2026-09-24~25 라운드의 예외 두 건(사용자 승인): (a) 사람이 실행해야 하는 블록이 세 번 연속 메시지로만 전달되어 진행이 막히자,
+  사용자가 보호 파일 커밋을 주 세션에 위임했다(harness.config 단계 교체, CI 트리거, task 문서 2회, 실행 기록 4건).
+  (b) 같은 이유로 harness-change 라벨도 주 세션이 붙였다. 두 경우 모두 병합은 사람이 눌렀다.
+  실측 비용: 이 라운드에서 사람이 실행해야 했던 블록은 12회였고 그중 3회가 조용히 실패했다(브랜치 불일치 1회,
+  gh pr edit 의 Projects classic GraphQL 버그 2회). 블록 내용은 대부분 실행 기록과 후보 파일이었다 — 게이트가 아니라 증거다.
+  반대로 CI 의 보호 파일 검토는 이 라운드에서도 제 역할을 했다: 스택된 PR #65 에서 베이스가 병합되기 전에는 실패로 남아 있었다.
 root_cause: 보호는 두 층(로컬 훅, CI 라벨+브랜치 보호)인데 각 층이 무엇을 보증하는지 문서가 구분하지 않는다. 그래서 사람 손이 가장 자주 필요한 자리가, 마음먹은 에이전트를 막지 못하는 층에 붙어 있다
-fix: 이번에는 절차를 그대로 지켰다(사람이 보호 파일을 커밋). 이 후보로 층의 역할을 정리하자고 제안한다
+fix: 2026-09-23 라운드에서는 절차를 그대로 지켰고, 2026-09-24~25 라운드에서는 사용자 승인으로 주 세션이 보호 파일을 커밋하고 라벨도 붙였다(예외 두 건, 병합은 사람). 두 라운드의 실측 비용을 근거에 적었다
 recurrence_risk: medium
 harness_element: HE-10
-proposed_harness_change: "(사람 결정) (1) evaluation/runs/** 에 한해 에이전트가 직접 쓰게 한다 — 실행 기록은 게이트가 아니라 증거이고 내용 검토는 PR 에서 한다. 적용은 scripts/ 의 좁은 스크립트(evaluation/runs/ 밖 경로는 거부)와 그 단위 테스트로 한다. (2) evaluation/tasks·harness.config·.github·harness/ 는 지금처럼 사람이 커밋한다. (3) 로컬 훅은 실수 방지, 강제력은 CI 라벨과 사람 병합이라는 구분을 harness/rules 의 해당 규칙 문서에 한 줄로 적는다"
+proposed_harness_change: "(사람 결정) (1) evaluation/runs/** 에 한해 에이전트가 직접 쓰게 한다 — 실행 기록은 게이트가 아니라 증거이고 내용 검토는 PR 에서 한다. 적용은 scripts/ 의 좁은 스크립트(evaluation/runs/ 밖 경로는 거부)와 그 단위 테스트로 한다. (2) evaluation/tasks·harness.config·.github·harness/ 는 지금처럼 사람이 커밋한다. (3) 로컬 훅은 실수 방지, 강제력은 CI 라벨과 사람 병합이라는 구분을 harness/rules 의 해당 규칙 문서에 한 줄로 적는다. (4) 예외가 두 라운드에서 반복되었으므로, 규칙을 현실에 맞춘다 — 보호 파일 중 **증거**(evaluation/runs/**)와 **게이트**(evaluation/tasks/**, harness.config, .github/**, harness/**, .claude/settings.json)를 나누고, 앞쪽은 주 세션이 커밋하고 뒤쪽은 사람이 커밋한다. 라벨은 사람이 붙이는 것을 유지한다 — 그것이 CI 검사가 요구하는 사람 검토 신호다"
 preferred_enforcement: script
 trust: untrusted
 regression_check: |
