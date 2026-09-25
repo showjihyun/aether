@@ -293,7 +293,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 
 ## Phase 2 — Enterprise MCP Gateway
 
-Intent: [0003](0003-phase-2-mcp-gateway.md) (2026-09-25 발급, **승인 대기** — 승인 전에는 이 단위들을 집지 않습니다). 기간: Week 6~8.
+Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (**승인 대기** — D-1 ~ D-13 이 여섯 단위의 공통 결정입니다. spec 승인 전에는 단위를 집지 않습니다). 기간: Week 6~8.
 
 **Phase 완료 판정** — Agent 의 모든 도구 호출이 `packages/mcp` 의 Gateway 한 곳을 지나고, Gateway 가 연결된 MCP Server 에서 Tool 을 발견하며, 호출마다 권한 판정과 감사 기록이 남습니다. Filesystem·HTTP·PostgreSQL MCP Server 가 인터넷 없이 붙습니다.
 
@@ -346,7 +346,7 @@ Intent: [0003](0003-phase-2-mcp-gateway.md) (2026-09-25 발급, **승인 대기*
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | Filesystem, HTTP, PostgreSQL MCP Server 를 compose 에 넣고 Gateway 에 등록. 셋 다 인터넷 없이 동작하는 것 |
+| 범위 | Filesystem, HTTP, PostgreSQL MCP Server 를 compose 에 넣고 Gateway 에 등록. 셋 다 인터넷 없이 동작하는 것. Filesystem·HTTP 는 참조 구현을 **이미지 빌드 시점에** 넣고, PostgreSQL 은 참조 구현이 archive 되었으므로 저장소 안의 read-only 구현을 씁니다(spec 0003 D-7·D-8) |
 | 범위 밖 | GitHub, Slack — 외부 네트워크가 필요하므로 MVP 오프라인 시나리오 밖입니다. 로드맵에는 있으니 Public Beta 전에 붙입니다 |
 | 완료 판정 | 오프라인 compose 에서 Agent 가 Filesystem 도구로 파일을 읽어 Run 이 `succeeded` |
 | 걸리는 규칙 | DP-4 |

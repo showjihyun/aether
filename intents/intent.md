@@ -2,11 +2,11 @@
 
 | 키 | 값 |
 | --- | --- |
-| 활성 intent | [0003 — Phase 2: Enterprise MCP Gateway](0003-phase-2-mcp-gateway.md) — **승인 대기**. 직전 [0002](0002-phase-1-agent-runtime.md) 는 완료(2026-09-16) |
-| 상태 | 승인 대기 — 0003 을 2026-09-25 에 발급했습니다. 승인 행이 비어 있으므로 spec·plan·구현으로 넘어가지 않습니다 |
-| 승인 | (0003 미승인. 0002 는 showjihyun, 2026-09-12 에 승인되어 완료) |
-| 후속 spec | 0003 은 없습니다 — intent 승인 뒤 `specs/0003-phase-2-mcp-gateway.md` 를 씁니다. 0002 의 것은 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
-| 열린 질문 | 0003 에 6건 열려 있음 — MCP 클라이언트(공식 SDK vs 직접 구현) · 감사·바인딩의 스키마 자리(`control`/`data`) · 감사 조회 시점 · MCP Server 컨테이너와 10분 예산 · P1-4 내부 도구의 처리 · 권한 판정 질의 시점. 전부 spec 0003 에서 답합니다. 0002 의 8건은 닫힘(D-1 ~ D-19) |
+| 활성 intent | [0003 — Phase 2: Enterprise MCP Gateway](0003-phase-2-mcp-gateway.md) — 승인됨 2026-09-25. 직전 [0002](0002-phase-1-agent-runtime.md) 는 완료(2026-09-16) |
+| 상태 | 승인됨 — 0003 승인 2026-09-25. spec 0003 초안이 **승인 대기**이고, 그 승인 전에는 plan·구현으로 넘어가지 않습니다 |
+| 승인 | showjihyun, 2026-09-25 (0002 는 showjihyun, 2026-09-12) |
+| 후속 spec | [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인 대기, 2026-09-25 초안). 0002 의 것은 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 열린 질문 | 0003 의 6건 전부 닫힘 — spec 0003 의 D-1 ~ D-6 이 답입니다(공식 SDK `mcp` 2.2.0 · 바인딩은 definition·감사는 `data` · 이번엔 기록만 · `smoke` 는 Filesystem 하나 · 내부 도구 둘은 MCP Server 로 이전 · 판정은 호출마다). 외부 사실 확인에서 D-7·D-8 이 더해졌습니다. 0002 의 8건도 닫힘(D-1 ~ D-19) |
 | 갱신일 | 2026-09-25 |
 
 ## 이 파일이 무엇인가
@@ -21,8 +21,8 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 
 | 단계 | 산출물 | 이 저장소의 자리 | 누가 통과시키는가 | 지금 |
 | --- | --- | --- | --- | --- |
-| 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | **0003 승인 대기**(2026-09-25 발급). 0002 완료 2026-09-16. 0001 완료 |
-| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0003 은 intent 승인 뒤. 0002 승인됨 2026-09-12 (D-1 ~ D-19). 0001 승인됨 2026-09-09 |
+| 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0003 승인됨 2026-09-25. 0002 완료 2026-09-16. 0001 완료 |
+| 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | **0003 승인 대기**(2026-09-25 초안, D-1 ~ D-13). 0002 승인됨 2026-09-12 (D-1 ~ D-19). 0001 승인됨 2026-09-09 |
 | 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | 0002 승인됨 2026-09-12([../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md)). 0001 승인됨 2026-09-09 |
 | 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **완료.** 0002 의 11 단위가 전부 `verify.sh` 17단계 통과 + PR 병합(마지막 PR #29, 2026-09-16). 0001 도 완료(2026-09-11). **Phase 2 는 0003 승인 뒤 시작합니다 — 아직 시작하지 않았습니다** |
 
@@ -48,7 +48,7 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | --- | --- | --- | --- | --- |
 | [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [Phase 0](../docs/roadmap.md) | 완료 | [0001](../specs/0001-phase-0-foundation.md) 승인됨 |
 | [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [Phase 1](../docs/roadmap.md) | 완료 (2026-09-16) | [0002](../specs/0002-phase-1-agent-runtime.md) 승인됨 |
-| [0003](0003-phase-2-mcp-gateway.md) | Phase 2 — Enterprise MCP Gateway | [Phase 2](../docs/roadmap.md) | 승인 대기 (2026-09-25 발급) | 없음 — intent 승인 뒤 |
+| [0003](0003-phase-2-mcp-gateway.md) | Phase 2 — Enterprise MCP Gateway | [Phase 2](../docs/roadmap.md) | 승인됨 (2026-09-25) | [0003](../specs/0003-phase-2-mcp-gateway.md) 승인 대기 |
 
 아직 발급하지 않은 intent(0004 ~ 0006, Phase 3 ~ MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다.
 
