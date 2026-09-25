@@ -1,13 +1,15 @@
-"""`openapi`·`events-schema`·`keys create`·`agents get-version` 서브커맨드의 함수만 둡니다.
+"""`openapi`·`events-schema`·`keys create`·`agents get-version`·`agents list` 서브커맨드의
+함수만 둡니다.
 
 실행 진입점은 `main.cli` 입니다 — `main` 을 import 하지 않습니다. `keys_create` 는
 inbound 포트 `IssueApiKey` **타입**만 봅니다(AR-12) — 유스케이스 구현은 `main.py` 가
 조립해 건네줍니다. `events_schema` 는 `aether_runtime.domain.events` **타입**만
 봅니다 — api 는 `aether_runtime.domain` 을 import 할 수 있습니다(AR-7 확장, spec 0002
-2.7 "스키마 소유"). `agents_get_version` 은 inbound 포트 `GetAgentVersion` **타입**만
-봅니다(AR-12) — HTTP 라우터(`adapters/inbound/http/agents.py`)의 `GET
-/agents/{id}/versions/{version}` 과 같은 포트에 붙은 두 번째 inbound 어댑터입니다
-(architecture.md 3.1 "방향과 신뢰 경계").
+2.7 "스키마 소유"). `agents_get_version` 과 `agents_list` 는 각각 inbound 포트
+`GetAgentVersion`·`ListAgents` **타입**만 봅니다(AR-12) — HTTP 라우터
+(`adapters/inbound/http/agents.py`)의 `GET /agents/{id}/versions/{version}` 과
+`GET /agents` 와 같은 포트에 붙은 두 번째 inbound 어댑터입니다(architecture.md 3.1
+"방향과 신뢰 경계").
 """
 
 from __future__ import annotations
@@ -21,7 +23,7 @@ from uuid import UUID
 from aether_runtime.domain.events import PAYLOAD_MODELS, RunEvent
 from fastapi import FastAPI
 
-from aether_api.application.ports.inbound.agents import GetAgentVersion
+from aether_api.application.ports.inbound.agents import GetAgentVersion, ListAgents
 from aether_api.application.ports.inbound.issue_api_key import IssueApiKey
 from aether_api.domain.agent import AgentNotFound, AgentVersionNotFound
 
@@ -50,6 +52,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     get_version_parser.add_argument("--agent-id", required=True, type=UUID, help="Agent 의 UUID")
     get_version_parser.add_argument("--version", required=True, type=int, help="버전 번호")
+
+    list_parser = agents_subparsers.add_parser(
+        "list", help="Agent 목록을 커서 페이지로 JSON stdout 에 출력"
+    )
+    list_parser.add_argument(
+        "--limit", type=int, default=50, help="페이지 당 최대 개수(기본 50, HTTP 라우터와 동일)"
+    )
+    list_parser.add_argument("--cursor", default=None, help="이전 응답의 next_cursor")
+    list_parser.add_argument("--name", default=None, help="이름 부분 일치(대소문자 구분 없음) 필터")
 
     return parser
 
@@ -134,3 +145,30 @@ def agents_get_version(get_agent_version: GetAgentVersion, agent_id: UUID, versi
         f"agent_id={agent_version.agent_id} version={agent_version.version} "
         f"created_at={agent_version.created_at.isoformat()}\n"
     )
+
+
+def agents_list(
+    list_agents: ListAgents, limit: int, cursor: str | None, name: str | None = None
+) -> None:
+    """Agent 커서 페이지를 JSON 으로 stdout 에 출력합니다.
+
+    HTTP 라우터(`GET /agents`)의 `ListAgentsResponse` 와 같은 모양(`items[]` 는 `id`·
+    `name`·`current_version`·`updated_at`, 그리고 `next_cursor`)을 그대로 stdout 한
+    문서에 싣습니다 — `keys_create`·`agents_get_version` 과 달리 원문이나 정의처럼
+    분리해야 할 단일 비밀값이 없으므로, 다음 페이지를 이어 부르는 데 필요한
+    `next_cursor` 까지 한 번에 파이프로 받을 수 있어야 합니다.
+    """
+    page = list_agents(limit, cursor, name)
+    payload = {
+        "items": [
+            {
+                "id": str(agent.id),
+                "name": agent.name,
+                "current_version": agent.current_version,
+                "updated_at": agent.updated_at.isoformat(),
+            }
+            for agent in page.items
+        ],
+        "next_cursor": page.next_cursor,
+    }
+    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
