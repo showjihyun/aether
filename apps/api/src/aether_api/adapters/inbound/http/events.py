@@ -11,11 +11,20 @@ red→green 대상이 아니라 계약 자체가 산출물입니다(spec DP-1).
 돌려주게 하고, `responses=` 로 실제 매체 유형과 오류 상태 코드를 OpenAPI 에 직접
 적습니다(2.7).
 
-**404 를 스트리밍 시작 전에 판정**합니다: `read_run_events(...)` 가 돌려주는 비동기
-제너레이터의 **첫 이벤트를 미리 당겨**(`__anext__()`) `RunNotFound` 를 여기서
-잡습니다 — `StreamingResponse` 가 한 번 시작되면(첫 바이트가 나가면) 상태 코드를
-더 이상 바꿀 수 없기 때문입니다. 그 뒤의 본 스트리밍 제너레이터는 이미 당겨 둔 첫
-이벤트부터 이어 보냅니다.
+**404 를 스트리밍 시작 전에 판정**합니다 — 단 이벤트를 기다려서가 아니라
+`RunExists` 인바운드 포트로 존재만 확인합니다(AD-2 결함 수정). 예전에는
+`read_run_events(...)` 가 돌려주는 비동기 제너레이터의 **첫 이벤트를 미리
+당겨**(`__anext__()`) `RunNotFound` 를 여기서 잡았습니다 — 그래서 Run 이 아직
+이벤트를 하나도 내지 않은 동안(예: `queued` 대기)은 응답 헤더조차 나가지 않고 그
+구간이 `_KEEPALIVE_SECONDS` 의 보호를 받지 못했습니다(evaluation/runs 에 독립적으로
+네 번 보고됨). 존재 확인은 이벤트 유무와 무관하게 즉시 답할 수 있으므로, 이제는
+확인만 먼저 하고 `StreamingResponse` 를 곧바로 반환합니다 — 첫 이벤트 대기는
+`_stream()` 안의 keep-alive 루프를 그대로 탑니다.
+
+**경쟁 조건**: 존재 확인과 스트리밍 시작 사이에 Run 이 삭제되면 `read_run_events`
+가 스트림 도중 `RunNotFound` 를 던질 수 있습니다. 그때는 이미 200 과 헤더를
+보낸 뒤이므로 상태 코드를 404 로 바꿀 수 없습니다 — 조용히 스트림을 끝냅니다
+(아래 `_stream` 의 `except RunNotFound`).
 
 **클라이언트 단절**은 `asyncio.CancelledError` 로 옵니다(Starlette 의
 `StreamingResponse` 가 단절을 감지하면 스트리밍 태스크를 취소합니다) — 조용히
@@ -50,6 +59,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from aether_api.application.ports.inbound.read_run_events import ReadRunEvents
+from aether_api.application.ports.inbound.run_exists import RunExists
 from aether_api.domain.api_key import Principal
 from aether_api.domain.run import RunNotFound
 
@@ -75,6 +85,7 @@ def _format_sse(event: RunEvent) -> str:
 def build_events_router(
     principal_dep: Callable[[Request], Principal],
     read_run_events: ReadRunEvents,
+    run_exists: RunExists,
 ) -> APIRouter:
     """`GET /runs/{run_id}/events` 하나를 등록합니다. `principal_dep` 뒤에
     있습니다(R-8). 유스케이스는 inbound 포트 **타입**으로만 받습니다(AR-12) —
@@ -98,32 +109,36 @@ def build_events_router(
         last_event_id: Annotated[int | None, Header(alias="Last-Event-ID")] = None,
     ) -> StreamingResponse:
         del principal
+        if not run_exists(run_id):
+            raise _run_not_found()
+
         events = read_run_events(run_id, last_event_id)
-        try:
-            first_event: RunEvent | None = await events.__anext__()
-        except RunNotFound:
-            raise _run_not_found() from None
-        except StopAsyncIteration:
-            first_event = None
 
         async def _stream() -> AsyncIterator[str]:
             pending: asyncio.Task[RunEvent] | None = None
             try:
-                if first_event is not None:
-                    yield _format_sse(first_event)
                 while True:
                     if pending is None:
                         pending = asyncio.ensure_future(events.__anext__())
                     done, _pending_set = await asyncio.wait({pending}, timeout=_KEEPALIVE_SECONDS)
                     if not done:
-                        # 15초 동안 다음 이벤트가 없었습니다 — `pending` 은 취소하지
-                        # 않고(위 docstring) 다음 라운드에 계속 기다립니다.
+                        # `_KEEPALIVE_SECONDS` 동안 다음 이벤트가 없었습니다(첫 이벤트
+                        # 전이라도) — `pending` 은 취소하지 않고(위 docstring) 다음
+                        # 라운드에 계속 기다립니다.
                         yield _KEEPALIVE_COMMENT
                         continue
                     pending = None
                     try:
                         event = done.pop().result()
                     except StopAsyncIteration:
+                        return
+                    except RunNotFound:
+                        # 존재 확인과 스트리밍 시작 사이의 경쟁(위 docstring) — 이미
+                        # 200 을 보냈으므로 404 로 바꿀 수 없어 조용히 끝냅니다.
+                        logger.info(
+                            "api.run_events.run_not_found_mid_stream",
+                            extra={"run_id": str(run_id)},
+                        )
                         return
                     yield _format_sse(event)
             except asyncio.CancelledError:
