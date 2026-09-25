@@ -36,7 +36,7 @@ aether 는 Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 
 
 ## Loop
 
-- 코드 작성과 테스트 실행은 `.claude/agents/implementer.md` 에 위임합니다. 모델·도구·예산은 그 파일의 frontmatter 가 정본입니다. intent·spec·plan 작성, 리뷰, 커밋, 승격 판정, 보호 파일 제안은 주 세션이 합니다. 리뷰는 보고의 `red 증거`(구현 전 테스트 실패 기록)가 없거나 순서가 뒤바뀐 단위를 반려합니다. 판정 기준은 모델과 무관하게 `./harness/scripts/verify.sh` 입니다.
+- 코드 작성과 테스트 실행은 `.claude/agents/implementer.md` 에 위임합니다. 모델·도구·예산은 그 파일의 frontmatter 가 정본입니다. intent·spec·plan 작성, 리뷰, 커밋, 승격 판정은 주 세션이 합니다. 보호 파일은 둘로 나눕니다 — **증거**(`evaluation/runs/**`: 실행 기록)는 주 세션이 직접 씁니다. **게이트**(`evaluation/tasks/**`, `harness.config`, `harness/**`, `.github/**`, `.claude/settings*.json`)는 고칠 내용을 제안하고 사람이 커밋합니다. 로컬 훅(`scripts/guard-protected.sh`)은 실수 방지이고, 강제력은 CI 의 `harness-change` 라벨과 사람 병합입니다. 리뷰는 보고의 `red 증거`(구현 전 테스트 실패 기록)가 없거나 순서가 뒤바뀐 단위를 반려합니다. 판정 기준은 모델과 무관하게 `./harness/scripts/verify.sh` 입니다.
 - **모든 변경은 브랜치 → PR → CI → 사람 병합입니다.** 에이전트는 `main` 에 직접 push 하지 않습니다(브랜치 보호가 막습니다). 브랜치 이름은 무엇을 하는지 알아볼 수 있게 짓되 평가 task ID 를 넣지 않습니다(blind 조건). 커밋에는 `Unit: <단위>` trailer 를 답니다. CI 의 `verify` 와 `보호 파일 변경 검토` 가 필수 상태 검사이고, 보호 파일을 건드린 PR 은 사람이 `harness-change` 라벨을 붙여야 병합됩니다. 병합 버튼이 Production Gate 입니다 — 에이전트는 거기까지 갑니다.
 - 반복·중단 예산은 `harness/rules/loop-budget.rule.md` 와 `harness.config` 가 정본입니다. 숫자를 여기 적지 않습니다.
 - 보안에 닿는 변경(인증, 권한, 비밀값, Policy, MCP Firewall)은 진행하지 않고 사람 검토로 에스컬레이션합니다.
