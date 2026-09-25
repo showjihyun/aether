@@ -9,6 +9,7 @@
 | 작성일 | 2026-09-25 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-25 (리뷰 F-1 ~ F-7 반영본. spec 0003 개정 1 [실질] 도 이 승인으로 확정) |
+| 개정 | 1 — 2026-09-26. P2-1 실행이 찾은 사실로 H-1 의 범위를 줄였습니다: `.importlinter` 의 AR-6·AR-9 가 이미 SDK 누출과 다른 패키지의 `mcp` import 를 막고 있습니다. P2-1 의 "구조 테스트로 자체 판정" 전제는 틀렸습니다 |
 
 spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-13)은 반복하지 않습니다. 이 문서는 일곱 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`), **M** 주 세션(`docs/`·backlog·spec·plan), **H** 사람(보호 파일).
 
@@ -29,7 +30,7 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-13)은 반복하지 않
 | 1 | **P2-2a** 마이그레이션 0003 · 감사 싱크 | P2-1 과 파일이 겹치지 않습니다(다른 패키지·다른 앱). `AuditSink` 포트와 PG 어댑터, GRANT 판정 | — |
 | 2 | **P2-4** 🔒 권한 판정 | Gateway 보다 **먼저**(1절 문제 1). `packages/policy` 의 판정 함수 하나 + `control.tool_permissions` 읽기. 인터페이스·테스트 목록을 먼저 제안 | **사람 검토** |
 | 2 | **P2-2b** Gateway 유스케이스 | P2-1(호출)·P2-2a(감사)·P2-4(판정)를 판정 → 호출 → 감사 순서로 묶는 단위. R-3·R-4 가 여기서 판정됩니다 | — |
-| — | (경계) | `.importlinter` 한 번 — AR-6 을 `aether_mcp.adapters` 로 좁히고, `aether_mcp` → `aether_policy.adapters` 금지 계약 추가 | **H-1** |
+| — | (경계) | `.importlinter` 한 번 — **`aether_mcp` → `aether_policy.adapters` 금지 계약 추가**. AR-6 좁히기는 범위가 줄었습니다(개정 1: 기존 AR-6·AR-9 가 이미 대부분을 막습니다) | **H-1** |
 | 3 | **P2-3** runtime 이 Gateway 로만 | H-1 아래에서. `ToolGateway` outbound 포트, Executor 전환, 내부 도구 둘을 MCP Server 로 이전(D-5). R-2·R-6·R-10 | — |
 | 4 | **P2-6** 바인딩 | `AgentDefinition.mcp_servers`(D-2), Run 시작 시 바인딩된 서버만 연결. R-9. sdk 생성 타입 갱신 | — |
 | 5 | **P2-5** 초기 Integration · smoke | 전부가 있어야 e2e 가 성립합니다. Filesystem(smoke) · HTTP · PostgreSQL(우리 구현, D-7), 이미지 빌드 시점 주입(D-8), 실측 기록 | **H-2**(evaluation) |
@@ -47,7 +48,7 @@ P2-4 를 P2-2b 앞에 둔 것과 P2-2 를 2a·2b 로 쪼갠 것이 backlog 번�
 | 만드는 것 | `packages/mcp/src/aether_mcp/domain/tools.py`(`Tool`, `ToolResult`, `McpServerRef`) · `application/ports/outbound/mcp_client.py`(`McpClient`) · `application/ports/inbound/discover_tools.py` · `application/usecases/discover_tools.py` · `adapters/outbound/mcp_client/stdio.py`·`http.py` · `tools/mcp-servers/echo/`(도구 `echo`·`fail`. **파이썬 + 같은 `mcp` SDK 의 서버 API** — 테스트에 새 언어 런타임을 들이지 않습니다) |
 | 고치는 것 | `packages/mcp/pyproject.toml` 에 `mcp == 2.2.0`(D-1), 루트 `uv.lock` |
 | 판정 | `api-unit`: echo 서버 stdio Discovery 로 도구 2개 + 스키마(R-1), `call` 성공·실패 경로. 소켓 차단 아래 통과 — stdio 는 서브프로세스이므로 loopback 허용으로 충분한지 **실측해 보고**합니다(아니면 그 테스트만 `integration`) |
-| 주의 | SDK 타입이 `McpClient` 포트 밖으로 새지 않습니다. `domain`·`application` 은 `mcp` 를 import 하지 않습니다(AR-9) — H-1 전이라 계약이 아직 막지 않으므로 이 단위는 **구조 테스트로 자체 판정**합니다 |
+| 주의 | SDK 타입이 `McpClient` 포트 밖으로 새지 않습니다. `domain`·`application` 은 `mcp` 를 import 하지 않습니다(AR-9) — **이것은 `.importlinter` 의 `ar9-core-is-framework-free` 가 이미 막습니다**(`aether_mcp.domain`·`application` 이 `source_modules` 에, `mcp` 가 `forbidden_modules` 에). 별도 구조 테스트를 만들지 않습니다(P2-1 실행이 확인, 개정 1) |
 
 ### P2-2a 마이그레이션 0003 과 감사 싱크 (A)
 
@@ -86,7 +87,7 @@ P2-4 를 P2-2b 앞에 둔 것과 P2-2 를 2a·2b 로 쪼갠 것이 backlog 번�
 | --- | --- |
 | 만드는 것 | `packages/runtime/.../ports/outbound/tool_gateway.py` · `adapters/outbound/tool_gateway/mcp.py`(`aether_mcp` 의 inbound 포트 타입만 봄, AR-12) · `tools/mcp-servers/builtin/`(시계·계산기, D-5) |
 | 지우는 것 | `packages/runtime/.../adapters/outbound/tools/clock_tool.py`·`calculator.py`·`registry.py` — 같은 도구를 두 경로로 부를 수 있는 상태를 남기지 않습니다 |
-| 판정 | `api-unit`: Phase 1 의 도구 시나리오 테스트가 Gateway 포트 fake 로 그대로 통과(R-6). Executor 에 `aether_mcp` 외의 도구 호출 경로가 없음을 구조 테스트로. 지시 문장을 담은 fake 서버 결과가 `role: tool` + `trust: untrusted` 안에만 있음(R-10). `api-arch`: H-1 의 좁힌 AR-6 아래에서 통과, `tests/arch/test_real_importlinter_fires.py` 에 위반 주입 1건 추가(R-2) |
+| 판정 | `api-unit`: Phase 1 의 도구 시나리오 테스트가 Gateway 포트 fake 로 그대로 통과(R-6). Executor 에 `aether_mcp` 외의 도구 호출 경로가 없음을 구조 테스트로. 지시 문장을 담은 fake 서버 결과가 `role: tool` + `trust: untrusted` 안에만 있음(R-10). `api-arch`: `tests/arch/test_real_importlinter_fires.py` 에 위반 주입 1건 추가(R-2) — 기존 AR-6 계약이 `aether_runtime`·`aether_api`·`aether_worker` 의 `mcp` import 를 이미 금지하므로, 이 단위는 그 계약이 **실제로 발화하는지**를 판정합니다(개정 1) |
 | 이월 | P2-2b 에서 못 하는 Run 경유 판정 — 도구를 3회 부르는 Run 하나에서 감사 3행(R-3), deny 넣은 Run 이 `failed` + 사유 `tool_denied`(R-4). 리뷰 F-3 |
 | 주의 | 도구 이름의 **생성 시 정적 검증을 없앱니다**(spec 개정 1 의 D-16, spec 0002 D-3 [실질] 개정). 없는 도구는 Run 시점 `ToolNotFound` 로 감사에 남습니다 — 그 테스트를 이 단위에 넣습니다. `BUILTIN_TOOL_NAMES` 를 쓰던 검증 코드와 그 테스트를 지웁니다 |
 
@@ -183,8 +184,8 @@ backlog 의 Phase 2 완료 판정 + spec 0003 의 R-1 ~ R-12 전부가 판정 �
 
 | 무엇 | 왜 |
 | --- | --- |
-| AR-6 계약의 허용 범위를 `aether_mcp.adapters` 로 | 지금은 `aether_mcp.domain`·`application` 이 SDK 를 import 해도 통과합니다. AR-9 가 문장으로만 막고 있습니다 |
-| `aether_runtime`·`aether_api`·`aether_worker` → `mcp` 금지를 명시 | R-2 의 "우회 경로를 만들면 실패한다" 가 이 줄로 발화합니다 |
+| ~~AR-6 계약의 허용 범위를 `aether_mcp.adapters` 로~~ | **취소(개정 1).** `ar9-core-is-framework-free` 가 `aether_mcp.domain`·`application` 에서 `mcp` 를 이미 금지합니다 — P2-1 에서 실제 위반을 주입해 확인했습니다. 남는 빈틈은 `aether_mcp.adapters.inbound` 가 클라이언트 SDK 를 보는 경우뿐이고, 그것은 경계 위반이 아닙니다 |
+| ~~`aether_runtime`·`aether_api`·`aether_worker` → `mcp` 금지를 명시~~ | **이미 있습니다(개정 1).** 기존 AR-6 계약의 `source_modules` 에 그 셋과 나머지 패키지가 전부 들어 있습니다. R-2 는 계약 추가가 아니라 **발화 확인**(P2-3 의 위반 주입 테스트)으로 판정합니다 |
 | 새 계약: `aether_mcp` → `aether_policy.adapters` 금지 | Gateway 는 policy 의 **inbound 포트 타입만** 봅니다(AR-12) |
 | `ignore_imports` 는 실제 import 가 생긴 뒤에만 | `unmatched_ignore_imports_alerting = error` 때문입니다. 그래서 H-1 은 P2-2b 병합 뒤입니다 |
 
