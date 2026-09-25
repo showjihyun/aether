@@ -20,8 +20,8 @@ Phase 1 의 결정(spec 0002 D-1 ~ D-19)은 그대로 유효합니다. 이 spec 
 | --- | --- | --- | --- |
 | R-1 | `packages/mcp` 가 MCP Server 에 붙어 `Tool` 목록과 입력 스키마를 발견합니다 | Outcome 1 (P2-1) | `api-unit`: 저장소 안 테스트 서버(2.3)를 stdio 로 띄워 도구 2개 이상을 스키마와 함께 발견. `pytest-socket` 소켓 차단 아래 통과(loopback 만 허용, spec 0002 D-18) |
 | R-2 | 도구 호출은 **Gateway 함수 하나**만 지납니다. 우회 경로를 만들면 아키텍처 단계가 실패합니다 | Outcome 2 (P2-2, P2-3), AR-6 | `api-arch`: `.importlinter` 의 AR-6 계약에 `aether_runtime`·`aether_api`·`aether_worker` → `mcp`(SDK) 금지가 들어가고, `tests/arch/test_real_importlinter_fires.py` 에 위반 주입 케이스 1건 추가 — 실제 `.importlinter` 로 exit ≠ 0 (spec 0002 R-7 의 방식 재사용) |
-| R-3 | 호출마다 감사 기록이 남습니다 — Agent Version·Run·Tool·시각·결과 크기·판정 | Outcome 3 (P2-2) | `api-integration`: 도구를 3회 부르는 Run 하나에서 `data.tool_call_audit` 행이 정확히 3건, 각 행의 `run_id`·`agent_version_id`·`tool_name` 이 호출과 일치. deny 된 호출도 1건으로 남음(R-4) |
-| R-4 | deny 된 도구 호출은 **실행되지 않고** 감사에 남습니다 | Outcome 4 (P2-4) | `api-unit`: deny 를 돌려주는 fake 판정으로 Gateway 를 부르면 MCP 클라이언트의 `call_tool` 이 호출되지 않고(spy 0회) `ToolCallDenied` 가 돌아오며 감사 1건. `api-integration`: 정책 표에 deny 를 넣은 Run 이 `failed` 로 끝나고 사유가 `tool_denied` |
+| R-3 | 호출마다 감사 기록이 남습니다 — Agent Version·Run·Tool·시각·결과 크기·판정 | Outcome 3 (P2-2) | `api-integration`: P2-2b 에서는 Gateway 를 직접 3회 불러, **P2-3 이후**에는 도구를 3회 부르는 Run 하나에서 `data.tool_call_audit` 행이 정확히 3건, 각 행의 `run_id`·`agent_version_id`·`tool_name` 이 호출과 일치. deny 된 호출도 1건으로 남음(R-4) |
+| R-4 | deny 된 도구 호출은 **실행되지 않고** 감사에 남습니다 | Outcome 4 (P2-4) | `api-unit`: deny 를 돌려주는 fake 판정으로 Gateway 를 부르면 MCP 클라이언트의 `call_tool` 이 호출되지 않고(spy 0회) `ToolCallDenied` 가 돌아오며 감사 1건. `api-integration`(**P2-3 이후**, Run 경로가 Gateway 를 지난 뒤): 정책 표에 deny 를 넣은 Run 이 `failed` 로 끝나고 사유가 `tool_denied` |
 | R-5 | `packages/policy` 는 `runtime`·`mcp`·`context` 를 import 하지 않습니다 | Outcome 4, AR-4 | `api-arch`: 기존 `ar4-policy-judges-only` 계약이 처음으로 막을 코드를 갖습니다. `tests/arch/test_real_importlinter_fires.py` 에 `aether_policy/_bad.py`(`import aether_mcp.domain`) 주입 케이스 |
 | R-6 | Phase 1 의 도구 시나리오 테스트가 **Gateway 경유로 그대로** 통과합니다 | Outcome 5 (P2-3) | `api-unit`: `packages/runtime/tests/test_tools.py` 와 Planner/Executor 시나리오가 내부 함수 대신 Gateway 포트 fake 로 통과. `Executor` 에 `aether_mcp` 외의 도구 호출 경로가 없음을 구조 테스트로 단언 |
 | R-7 | 오프라인 compose 에서 Agent 가 Filesystem 도구로 파일을 읽어 Run 이 `succeeded` 까지 갑니다 | Outcome 6 (P2-5) | `smoke`: compose up(네트워크 없이) → Agent 생성(Filesystem 서버 바인딩) → Run → `succeeded`, 그리고 도구 결과에 그 파일의 내용이 있음 |
@@ -166,6 +166,18 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 
 외부 서버가 돌려준 내용은 spec 0002 D-6 의 경로를 그대로 탑니다 — `role: tool` + `tool_call_id` + `trust: untrusted`. 이번 Phase 가 더하는 것은 **그 내용의 출처가 처음으로 우리 프로세스 밖**이라는 사실입니다. 그래서 R-10 의 단언을 외부 서버(fake) 경로로 확장하고, 결과 크기 상한(2.9)을 둡니다.
 
+### 2.14 정책 표에 행을 넣는 경로 (개정 1, D-14)
+
+기본값이 deny(허용 목록)이므로 **행을 넣는 경로가 없으면 모든 도구 호출이 거부됩니다** — R-7(Filesystem 도구로 파일을 읽어 `succeeded`)이 원리적으로 불가능해집니다. 리뷰 F-1 이 찾은 구멍입니다.
+
+`aether-api permissions allow --agent-version <uuid> --tool <name>` 과 `... deny ...` 를 CLI 어댑터에 더합니다(`keys create` 와 같은 모양 — inbound 포트 타입만 보고, 조립은 `main.cli`). HTTP 경로는 늘리지 않습니다(D-2 와 같은 이유). `smoke` 는 이 명령으로 Filesystem 도구를 allow 한 뒤 Run 을 돌립니다.
+
+### 2.15 도구 이름 검증의 자리 (개정 1, D-16, spec 0002 D-3 [실질] 개정)
+
+spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.tools.BUILTIN_TOOL_NAMES` 로 검증했습니다. P2-3 뒤에는 도구가 Discovery 에서 오고, api 는 Agent 생성 시점에 어떤 MCP Server 가 붙을지 알 수 없습니다(바인딩은 같은 `definition` 안에 있지만 그 서버가 실제로 무엇을 내놓는지는 연결해야 압니다).
+
+그래서 **생성 시 정적 검증을 없앱니다.** 없는 도구 이름은 Run 시점에 `ToolNotFound` 로 실패하고 감사에 남습니다 — 거부·실패·성공 세 경로가 모두 기록되는 설계(D-9)가 이것을 덮습니다. 대안(생성 시 서버에 연결해 검증)은 기각합니다: Agent 생성이 외부 프로세스 기동에 의존하게 되고, 그 시점의 Discovery 결과가 Run 시점과 다를 수 있어 검증이 보증이 되지 못합니다.
+
 ## 3. 우려 지점
 
 | # | 우려 | 지금의 답 |
@@ -176,6 +188,7 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 | C-4 | 호출마다 권한 판정이 성능에 닿습니다 | 같은 프로세스 안 표 조회입니다. `smoke --bench` 에 도구 호출 있는 Run 을 1종 더해 P95 를 기록만 합니다 — 기준값은 사람이 정합니다(EI-2) |
 | C-5 | 참조 서버(npm)를 이미지에 넣으면 그 버전을 우리가 고정해야 합니다 | `package-lock` 을 이미지 빌드에 포함하고 버전을 compose 에 적습니다. 갱신은 Dependabot 밖이라 사람이 주기적으로 봅니다 — 그 사실을 `docs/` 에 적습니다 |
 | C-6 | PostgreSQL 서버를 우리가 쓰면 유지 대상이 하나 늘어납니다 | 참조 구현이 archive 되었으므로 선택지가 좁습니다(D-7). read-only 조회 한 가지로 범위를 묶고, 커뮤니티 구현은 신뢰 경계 때문에 쓰지 않습니다 |
+| C-7 | `aether_data` 가 `control` 에서 읽을 수 있는 표가 셋으로 늘어납니다(개정 1, D-15) | 권한 확대이므로 P2-4 의 🔒 검토에 넣고 `test_plane_roles.py` 가 범위를 고정합니다. 쓰기는 여전히 `aether_control` 만 |
 
 ## 4. 결정 요청
 
@@ -194,6 +207,9 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 | D-11 | 연결은 Run 수명에 묶입니다. 서버 1개 실패는 그 도구만 제거하고 Run 은 계속. 재연결은 호출당 1회 | — | 2.5 |
 | D-12 | 감사에 인자·결과 **본문을 넣지 않습니다** — 크기와 종류만. 결과는 `AETHER_MCP_MAX_RESULT_BYTES` 로 자릅니다 | R-11, DLP 는 Phase 10 | 2.7, 2.9 |
 | D-13 | `.importlinter` 변경은 P2-2 병합 뒤 **한 번**, 사람이 커밋. AR-6 계약을 `aether_mcp.adapters` 로 좁힘 | CC, EI-2 | 2.11 |
+| D-14 | 정책 표에 행을 넣는 경로는 **CLI 서브커맨드**(`aether-api permissions allow --agent-version --tool`)입니다. HTTP 경로는 늘리지 않습니다. 관리 API·UI 는 Phase 9 | 개정 1 (리뷰 F-1) | 2.14 |
+| D-15 | 마이그레이션 0003 이 `aether_data` 에 `control.tool_permissions` **SELECT** 를 부여합니다. 그 확대는 `test_plane_roles.py` 의 판정에 들어가고 P2-4 의 🔒 검토 대상입니다 | 개정 1 (리뷰 F-2) | 2.7 |
+| D-16 | 도구 이름의 **생성 시 정적 검증을 없앱니다** — 도구는 Discovery 에서 오고 api 는 어떤 서버가 붙을지 모릅니다. 없는 도구는 Run 시점에 `ToolNotFound` 로 감사에 남습니다. spec 0002 D-3 의 `BUILTIN_TOOL_NAMES` 검증 부분을 **[실질] 개정** | 개정 1 (리뷰 F-5) | 2.15 |
 
 ## 5. 검증 매핑
 
@@ -225,3 +241,4 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 | 개정 | 내용 |
 | --- | --- |
 | 초안 | 2026-09-25. intent 0003 의 열린 질문 6건을 D-1 ~ D-6 으로 고정하고, 외부 사실 확인에서 나온 D-7·D-8 을 더했습니다 |
+| 개정 1 | 2026-09-25. **plan 0003 리뷰(F-1 ~ F-7)가 찾은 구멍 셋**을 D-14 ~ D-16 으로 메웠습니다 — 정책 표 쓰기 경로가 없어 기본 deny 아래 R-7 이 불가능했던 것(F-1), `aether_data` 에 `control.tool_permissions` SELECT 가 없던 것(F-2), 도구 이름 검증이 Discovery 로 바뀌며 자리를 잃은 것(F-5, spec 0002 D-3 **[실질] 개정**). R-3·R-4 의 integration 판정 시점을 P2-3 이후로 정정했습니다(F-3) |

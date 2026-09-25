@@ -293,7 +293,7 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 
 ## Phase 2 — Enterprise MCP Gateway
 
-Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25 — D-1 ~ D-13 이 공통 결정입니다). Plan: [../plans/0003-phase-2-mcp-gateway.md](../plans/0003-phase-2-mcp-gateway.md) (**승인 대기**). 기간: Week 6~8.
+Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25 — D-1 ~ D-16 이 공통 결정입니다. 개정 1 은 plan 리뷰에서). Plan: [../plans/0003-phase-2-mcp-gateway.md](../plans/0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25, 리뷰 F-1 ~ F-7 반영). 기간: Week 6~8.
 
 plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 불변), 순서는 plan 이 소유합니다 — 권한 판정(P2-4)이 Gateway(P2-2b)보다 **먼저** 갑니다. 판정 없는 Gateway 가 main 에 남는 구간을 만들지 않기 위해서입니다.
 
@@ -349,7 +349,7 @@ plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | `packages/policy` 에 판정 함수 하나: (주체=Agent Version, 자원=Tool) → allow/deny. Gateway 가 호출 전에 이것을 묻습니다. 정책 저장은 단순 표(Agent × Tool) |
+| 범위 | `packages/policy` 에 판정 함수 하나: (주체=Agent Version, 자원=Tool) → allow/deny. Gateway 가 호출 전에 이것을 묻습니다. 정책 저장은 단순 표(Agent × Tool). 표에 행을 넣는 `aether-api permissions allow|deny` CLI 서브커맨드도 이 단위입니다(spec 0003 D-14 — 기본값이 deny 이므로 행을 넣는 경로가 없으면 모든 호출이 거부됩니다) |
 | 범위 밖 | Policy Engine 의 실행 구조(Phase 9), 조직·역할, 승인 흐름 |
 | 완료 판정 | deny 된 Tool 호출이 Gateway 에서 막히고 감사에 남음. `packages/policy` 가 `runtime`·`mcp`·`context` 를 import 하지 않음(AR-4) |
 | 걸리는 규칙 | **AR-4, DP-6, Trust.** 에이전트는 인터페이스와 테스트를 제안하고 사람 검토를 거칩니다 |
