@@ -293,16 +293,19 @@ Intent: [0002](0002-phase-1-agent-runtime.md) (승인됨 2026-09-12). Spec: [../
 
 ## Phase 2 — Enterprise MCP Gateway
 
-Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (**승인 대기** — D-1 ~ D-13 이 여섯 단위의 공통 결정입니다. spec 승인 전에는 단위를 집지 않습니다). 기간: Week 6~8.
+Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25 — D-1 ~ D-13 이 공통 결정입니다). Plan: [../plans/0003-phase-2-mcp-gateway.md](../plans/0003-phase-2-mcp-gateway.md) (**승인 대기**). 기간: Week 6~8.
+
+plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 불변), 순서는 plan 이 소유합니다 — 권한 판정(P2-4)이 Gateway(P2-2b)보다 **먼저** 갑니다. 판정 없는 Gateway 가 main 에 남는 구간을 만들지 않기 위해서입니다.
 
 **Phase 완료 판정** — Agent 의 모든 도구 호출이 `packages/mcp` 의 Gateway 한 곳을 지나고, Gateway 가 연결된 MCP Server 에서 Tool 을 발견하며, 호출마다 권한 판정과 감사 기록이 남습니다. Filesystem·HTTP·PostgreSQL MCP Server 가 인터넷 없이 붙습니다.
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
 | P2-1 | MCP Client 와 Tool Discovery | P0-1 | — | 대기 |
-| P2-2 | MCP Gateway (단일 통로, 연결 관리, 감사 기록) | P2-1 | — | 대기 |
-| P2-3 | Runtime 이 Gateway 로만 도구를 부름 | P2-2, P1-4 | — | 대기 |
-| P2-4 | 🔒 Permission 판정 지점 | P2-2 | — | 대기 |
+| P2-2a | 마이그레이션 0003 과 감사 싱크 | P0-8 | — | 대기 |
+| P2-2b | MCP Gateway (단일 통로, 연결 관리, 감사 기록) | P2-1, P2-2a, P2-4 | — | 대기 |
+| P2-3 | Runtime 이 Gateway 로만 도구를 부름 | P2-2b, P1-4 | — | 대기 |
+| P2-4 | 🔒 Permission 판정 지점 | P2-2a | — | 대기 |
 | P2-5 | 초기 Integration: Filesystem, HTTP, PostgreSQL | P2-3 | — | 대기 |
 | P2-6 | Agent 에 MCP Server 바인딩 | P2-3, P1-1 | — | 대기 |
 
@@ -314,7 +317,16 @@ Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../sp
 | 범위 밖 | Gateway, 권한, 실제 외부 시스템 |
 | 완료 판정 | 테스트 서버에 붙어 도구 2개 이상을 스키마와 함께 발견하는 테스트. 네트워크 없이 통과 |
 
-### P2-2 MCP Gateway
+### P2-2a 마이그레이션 0003 과 감사 싱크
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | `data.tool_call_audit`(감사)와 `control.tool_permissions`(정책 표)를 마이그레이션 0003 에 한 번에. `AuditSink` 포트와 PostgreSQL 어댑터. 감사 레코드 타입 |
+| 범위 밖 | Gateway 유스케이스(P2-2b), 판정 함수(P2-4), 조회 API(Phase 9) |
+| 완료 판정 | 빈 DB 에서 up/down 왕복. `aether_control` 로 `data.tool_call_audit` 접근 시 permission denied. 레코드에 인자·결과 본문과 자격증명이 없음(spec 0003 D-12) |
+| 걸리는 규칙 | P0-8 의 역할 분리를 유지합니다. 용어를 새로 만들지 않습니다 |
+
+### P2-2b MCP Gateway
 
 | 항목 | 내용 |
 | --- | --- |

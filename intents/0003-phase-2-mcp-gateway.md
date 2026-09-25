@@ -7,7 +7,7 @@
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 2 (Week 6~8) — 원본 로드맵 7장 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-25 |
-| 후속 spec | [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인 대기) |
+| 후속 spec | [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 P2-1 ~ P2-6 이 소유합니다. 이 문서는 그 여섯 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
 

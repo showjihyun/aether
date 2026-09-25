@@ -5,9 +5,10 @@
 | 번호 | 0003 |
 | 작성일 | 2026-09-25 |
 | 선행 intent | [../intents/0003-phase-2-mcp-gateway.md](../intents/0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25) |
-| 상태 | 승인 대기 |
-| 승인 | (사람 이름과 날짜. 비어 있으면 plan·구현으로 넘어가지 않습니다) |
-| 대상 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P2-1 ~ P2-6 |
+| 후속 plan | [../plans/0003-phase-2-mcp-gateway.md](../plans/0003-phase-2-mcp-gateway.md) (승인 대기) |
+| 상태 | 승인됨 |
+| 승인 | showjihyun, 2026-09-25 |
+| 대상 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 P2-1 ~ P2-6 (P2-2 는 plan 에서 2a·2b 로 분할) |
 
 이 문서는 intent 0003 의 열린 질문 6건을 결정(D-1 ~ D-13)으로 고정하고, 여섯 단위의 완료 판정을 **검증 가능한 명제**(R-1 ~ R-12)로 옮깁니다. 단위의 범위는 backlog 가 소유합니다 — 여기 복제하지 않습니다.
 
