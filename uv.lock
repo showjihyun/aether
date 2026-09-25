@@ -99,10 +99,14 @@ version = "0.0.0"
 source = { editable = "packages/mcp" }
 dependencies = [
     { name = "mcp" },
+    { name = "psycopg", extra = ["binary"] },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "mcp", specifier = "==2.2.0" }]
+requires-dist = [
+    { name = "mcp", specifier = "==2.2.0" },
+    { name = "psycopg", extras = ["binary"] },
+]
 
 [[package]]
 name = "aether-memory"

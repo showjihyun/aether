@@ -5,6 +5,7 @@ description = ""
 requires-python = ">=3.12"
 dependencies = [
     "mcp==2.2.0",
+    "psycopg[binary]",
 ]
 
 [build-system]

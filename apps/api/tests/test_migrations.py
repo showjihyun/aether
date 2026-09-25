@@ -1,9 +1,11 @@
 """spec 0001 R-8: 초기화 스크립트 없는 빈 DB(testcontainers)에서 마이그레이션 왕복.
 spec 0002 2.10: 마이그레이션 0002 가 더하는 열·기본값(P1-2a).
+spec 0003 2.7, P2-2a: 마이그레이션 0003 이 더하는 `data.tool_call_audit`,
+`control.tool_permissions`.
 
 역할은 `db_roles`(conftest) 가 이미 만들어 둔 상태 위에서, `upgrade head` →
 `downgrade base` → `upgrade head` 가 예외 없이 끝나고 `control`·`data` 스키마와
-다섯 테이블이 실재하는지만 봅니다. 열·제약의 세부는 다른 테스트 파일이 봅니다.
+테이블 전부가 실재하는지만 봅니다. 열·제약의 세부는 다른 테스트 파일이 봅니다.
 """
 
 from __future__ import annotations
@@ -25,6 +27,8 @@ _EXPECTED_TABLES = {
     ("control", "api_keys"),
     ("control", "runs"),
     ("data", "run_executions"),
+    ("control", "tool_permissions"),
+    ("data", "tool_call_audit"),
 }
 
 
