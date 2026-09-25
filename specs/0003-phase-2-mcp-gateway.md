@@ -122,6 +122,8 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 
 `data.tool_call_audit` 의 열: `id`, `run_id`, `agent_version_id`, `server_name`, `tool_name`, `decision`(`allow`/`deny`), `outcome`(`ok`/`error`/`denied`), `result_bytes`, `error_kind`(nullable), `started_at`, `duration_ms`. 인자와 결과 **본문은 넣지 않습니다** — 크기와 종류만 남깁니다(R-11, 그리고 DLP 는 Phase 10).
 
+감사표는 **append-only** 입니다(개정 3) — `aether_data` 에 `INSERT`·`SELECT` 만 주고 `UPDATE`·`DELETE` 는 주지 않습니다. 기록을 쓰는 주체가 자기 기록을 지울 수 있으면 사후 추적이 성립하지 않습니다. `control.agent_versions` 의 불변 트리거(P0-8)와 같은 취급입니다.
+
 정책 표는 `control.tool_permissions`(`agent_version_id`, `tool_name`, `decision`)입니다 — 선언이므로 `control` 입니다. `packages/policy` 는 이 표를 자기 outbound 포트로만 읽습니다(AR-4).
 
 ### 2.8 감사 조회 (열린 질문 3)
@@ -241,5 +243,6 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | 개정 | 내용 |
 | --- | --- |
 | 초안 | 2026-09-25. intent 0003 의 열린 질문 6건을 D-1 ~ D-6 으로 고정하고, 외부 사실 확인에서 나온 D-7·D-8 을 더했습니다 |
+| 개정 3 | 2026-09-26. **P2-2a 리뷰**에서 감사표를 append-only 로 조였습니다 — `GRANT ALL PRIVILEGES` 였던 것을 `INSERT, SELECT` 로. 조이기 전 테스트가 `DID NOT RAISE InsufficientPrivilege` 로 실패해 권한이 넓었다는 것이 실측으로 확인되었습니다. `control.tool_permissions` 의 PK 는 `(agent_version_id, tool_name)` 복합키이고, 이 가정이 P2-4 의 CLI upsert 설계와 맞는지는 그 단위의 🔒 검토에서 확인합니다 |
 | 개정 2 | 2026-09-26. **P2-1 실행이 찾은 사실**로 D-13 의 범위를 줄였습니다 — `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 는 `aether_api`·`aether_worker`·`aether_runtime` 을 포함한 여덟 패키지에서 `mcp` 를 이미 금지하고, `ar9-core-is-framework-free` 는 `aether_mcp.domain`·`application` 에서 `mcp` 를 이미 금지합니다(위반 주입으로 확인). 그래서 R-2 는 계약 **추가**가 아니라 **발화 확인**으로 판정하고, H-1 은 policy 계약 하나만 더합니다 |
 | 개정 1 | 2026-09-25. **plan 0003 리뷰(F-1 ~ F-7)가 찾은 구멍 셋**을 D-14 ~ D-16 으로 메웠습니다 — 정책 표 쓰기 경로가 없어 기본 deny 아래 R-7 이 불가능했던 것(F-1), `aether_data` 에 `control.tool_permissions` SELECT 가 없던 것(F-2), 도구 이름 검증이 Discovery 로 바뀌며 자리를 잃은 것(F-5, spec 0002 D-3 **[실질] 개정**). R-3·R-4 의 integration 판정 시점을 P2-3 이후로 정정했습니다(F-3) |
