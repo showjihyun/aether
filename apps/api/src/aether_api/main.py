@@ -28,6 +28,7 @@ from aether_api.adapters.inbound.cli import build_parser
 from aether_api.adapters.inbound.cli import events_schema as write_events_schema
 from aether_api.adapters.inbound.cli import keys_create as write_keys_create
 from aether_api.adapters.inbound.cli import openapi as write_openapi
+from aether_api.adapters.inbound.cli import permissions_set as write_permissions_set
 from aether_api.adapters.inbound.http.agents import build_agents_router
 from aether_api.adapters.inbound.http.auth import require_principal
 from aether_api.adapters.inbound.http.events import build_events_router
@@ -37,6 +38,7 @@ from aether_api.adapters.inbound.stream.status_consumer import StatusConsumer, e
 from aether_api.adapters.outbound.db.agent_repository import PostgresAgentRepository
 from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
 from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
+from aether_api.adapters.outbound.db.tool_permissions import PostgresToolPermissionStore
 from aether_api.adapters.outbound.otel_request_tracing import OtelRequestTracing
 from aether_api.adapters.outbound.redis.run_event_reader import RedisRunEventReader
 from aether_api.adapters.outbound.redis.run_notifier import RedisRunNotifier
@@ -55,6 +57,7 @@ from aether_api.application.usecases.list_agents import ListAgentsUseCase
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
 from aether_api.application.usecases.request_run import RequestRunUseCase
 from aether_api.application.usecases.run_exists import RunExistsUseCase
+from aether_api.application.usecases.set_tool_permission import SetToolPermissionUseCase
 from aether_api.application.usecases.update_agent import UpdateAgentUseCase
 from aether_api.settings import Settings
 
@@ -81,6 +84,14 @@ def _postgres_agent_repository(settings: Settings) -> PostgresAgentRepository:
 def _postgres_run_declaration_store(settings: Settings) -> PostgresRunDeclarationStore:
     """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
     return PostgresRunDeclarationStore(lambda: psycopg.connect(settings.psycopg_dsn))
+
+
+def _postgres_tool_permission_store(settings: Settings) -> PostgresToolPermissionStore:
+    """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3).
+
+    🔒 spec 0003 D-14: 이 연결은 `aether_control` 역할로 접속해 정책 표를 씁니다.
+    """
+    return PostgresToolPermissionStore(lambda: psycopg.connect(settings.psycopg_dsn))
 
 
 def _connect_redis_with_backoff(redis_url: str, stop: Event) -> Redis | None:
@@ -272,3 +283,17 @@ def cli() -> None:
         settings = Settings()
         list_agents = ListAgentsUseCase(_postgres_agent_repository(settings))
         write_agents_list(list_agents, args.limit, args.cursor, args.name)
+    elif args.command == "permissions" and args.permissions_command in ("allow", "deny"):
+        settings = Settings()
+        agent_repository = _postgres_agent_repository(settings)
+        set_tool_permission = SetToolPermissionUseCase(
+            GetAgentVersionUseCase(agent_repository), _postgres_tool_permission_store(settings)
+        )
+        write_permissions_set(
+            set_tool_permission,
+            args.agent_id,
+            args.version,
+            args.server,
+            args.tool,
+            args.permissions_command,
+        )

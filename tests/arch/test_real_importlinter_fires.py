@@ -132,6 +132,29 @@ def test_runtime_execution_layers_import_from_api_is_rejected_ar7(tmp_path: Path
     assert "AR-7" in output, output
 
 
+def test_policy_import_of_mcp_domain_is_rejected_ar4(tmp_path: Path) -> None:
+    """spec 0003 R-5 (🔒 P2-4): `ar4-policy-judges-only` 가 처음으로 막을 코드를 갖습니다.
+
+    `aether_policy` 는 `runtime`·`mcp`·`context` 를 import 하지 않습니다(AR-4). 이
+    테스트는 그 계약이 fixture 가 아니라 **실제 `.importlinter`** 와 **복사된 실제
+    src** 위에서 발화하는지를 봅니다(P2-1 착수 전까지는 `aether_mcp` 도, P2-4 착수
+    전까지는 `aether_policy` 도 판단할 코드가 없어 이 계약이 한 번도 발화한 적이
+    없었습니다).
+    """
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "packages" / "policy" / "src" / "aether_policy" / "_bad.py"
+    bad_module.write_text("import aether_mcp.domain\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "AR-4" in output, output
+
+
 def test_real_importlinter_contract_bodies_declare_the_expected_forbidden_modules() -> None:
     """spec 개정 2: 실제 파일의 contract 본문 단언.
 

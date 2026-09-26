@@ -15,19 +15,20 @@ spec 2.8 이, 열의 세부(타입·기본값·제약 이름)는 이 문서가 �
 
 | 스키마 | 소유(Plane) | 테이블 | 접근 역할과 권한 |
 | --- | --- | --- | --- |
-| `control` | Control Plane(`apps/api`) | `agents`, `agent_versions`, `api_keys`, `runs` | `aether_control`: `USAGE` + 테이블 전부 |
-| `data` | Data Plane(`apps/worker`, `packages/runtime`) | `run_executions`, `run_states` | `aether_data`: `USAGE` + 테이블 전부, 그리고 `control` 스키마 `USAGE` + `control.agent_versions`·`control.runs` **SELECT 만** |
+| `control` | Control Plane(`apps/api`) | `agents`, `agent_versions`, `api_keys`, `runs`, `tool_permissions` | `aether_control`: `USAGE` + 테이블 전부 |
+| `data` | Data Plane(`apps/worker`, `packages/runtime`, `packages/mcp`) | `run_executions`, `run_states`, `tool_call_audit` | `aether_data`: `USAGE` + `run_executions`·`run_states` 전부, `tool_call_audit` 은 **`INSERT`·`SELECT` 만**(append-only). 그리고 `control` 스키마 `USAGE` + `control.agent_versions`·`control.runs`·`control.tool_permissions` **SELECT 만** |
 
 `aether_control` 은 `data` 스키마에 **아무 권한이 없습니다** — `USAGE` 조차 없습니다. `SELECT`
 를 시도하면 relation 이 아니라 스키마 단계에서 `permission denied for schema data` 로
 거부됩니다([../specs/0001-phase-0-foundation.md](../specs/0001-phase-0-foundation.md) R-7,
-`apps/api/tests/test_plane_roles.py`). `aether_data` 가 `control` 의 두 테이블을 읽는 것은
+`apps/api/tests/test_plane_roles.py`). `aether_data` 가 `control` 의 세 테이블을 읽는 것은
 의도된 허용입니다 — Control Plane 이 **선언**하고(`control.runs`), Data Plane 이 그 선언을
 읽어 **실행**합니다([../docs/architecture.md](architecture.md) 4절, AR-7).
 
 역할 자체(`CREATE ROLE`)는 클러스터 수준이라 마이그레이션이 만들 수 없습니다.
 `infra/docker/postgres/init/01-roles.sh` 가 두 역할만 만들고, 스키마·테이블·트리거·GRANT
-는 `apps/api/migrations/versions/0001_schemas_and_roles_grants.py` 가 전부 소유합니다.
+는 `apps/api/migrations/versions/0001_schemas_and_roles_grants.py` 가 전부 소유합니다(이후 표의 추가는 그 표를
+만든 마이그레이션이 자기 GRANT 를 함께 소유합니다 — 0002, 0003).
 마이그레이션은 관리자 역할로 실행합니다 — `aether_control`/`aether_data` 는 스키마를 만들
 권한이 없습니다.
 
@@ -152,6 +153,57 @@ INSERT 성공)과 상충하지 않으려면 `NOT NULL` 로 두고 삽입 시 기
 조건부 UPDATE 한 문장(`lease_until IS NULL OR lease_until < now()`)이며 DB 시계만 씁니다(P1-2b). 접근 역할은 `aether_data` 만 전부 — `aether_control` 은 여전히 `data`
 스키마에 권한이 없습니다(spec 0001 R-7 불변, `apps/api/tests/test_plane_roles.py` 의
 `test_control_role_cannot_select_data_run_states`).
+
+### `control.tool_permissions`
+
+MCP 도구 호출의 **허용 목록**입니다(Phase 2, spec 0003 2.7·개정 4). 마이그레이션 0003(P2-2a·P2-4)이 만들었습니다.
+
+| 열 | 타입 | 제약 |
+| --- | --- | --- |
+| `agent_version_id` | `uuid` | PK(복합), FK → `control.agent_versions.id` |
+| `server_name` | `text` | PK(복합), `NOT NULL` |
+| `tool_name` | `text` | PK(복합) |
+| `decision` | `text` | `NOT NULL`, `CHECK (decision IN ('allow','deny'))` |
+| `created_at` | `timestamptz` | `NOT NULL`, 기본값 `now()` |
+
+PK 가 셋의 복합키인 이유는 MCP 에 **전역 도구 이름공간이 없다**는 것입니다 — 서버가 다르면 같은 이름의 도구가
+겹칠 수 있고, `server_name` 이 키에 없으면 "Filesystem 의 `read` 는 허용, PostgreSQL 의 `read` 는 금지" 를
+표현할 수 없습니다. 감사 표가 이미 `server_name` 을 담으므로 판정의 신분 기준도 같아야 합니다(spec 0003 개정 4).
+
+**행이 없으면 deny 입니다.** 표는 명시된 행만 담고 기본값은 코드(`aether_policy` 의 `JudgeToolCallUseCase`)가
+판정합니다. 도구 이름은 정확히 일치하며 정규화도 와일드카드도 없습니다(spec 0003 D-6). 쓰는 것은
+`aether_control`(CLI `aether-api permissions allow|deny`, spec 0003 D-14)이고, `aether_data` 는 **SELECT 만**
+합니다 — 판정이 worker 프로세스 안에서 일어나기 때문입니다(spec 0003 D-15,
+`apps/api/tests/test_plane_roles.py::test_data_role_can_select_but_not_write_control_tool_permissions`).
+
+### `data.tool_call_audit`
+
+도구 호출 하나의 **감사 기록**입니다(Phase 2, spec 0003 2.7). 마이그레이션 0003(P2-2a)이 만들었습니다.
+
+| 열 | 타입 | 제약 |
+| --- | --- | --- |
+| `id` | `uuid` | PK, 기본값 `gen_random_uuid()` |
+| `run_id` | `uuid` | `NOT NULL`, FK → `control.runs.id` |
+| `agent_version_id` | `uuid` | `NOT NULL`, FK → `control.agent_versions.id` |
+| `server_name` | `text` | `NOT NULL` |
+| `tool_name` | `text` | `NOT NULL` |
+| `decision` | `text` | `NOT NULL`, `CHECK (decision IN ('allow','deny'))` |
+| `outcome` | `text` | `NOT NULL`, `CHECK (outcome IN ('ok','error','denied'))` |
+| `result_bytes` | `int` | `NOT NULL`, 기본값 `0` |
+| `error_kind` | `text` | nullable |
+| `started_at` | `timestamptz` | `NOT NULL` |
+| `duration_ms` | `int` | `NOT NULL`, 기본값 `0` |
+
+**인자와 결과의 본문은 담지 않습니다** — 크기와 종류만입니다(spec 0003 D-12). 자격증명도 들어가지
+않습니다(R-11). 본문 검사·마스킹은 MCP Firewall·DLP 의 일이고 Phase 10 입니다.
+
+**append-only 입니다.** `aether_data` 에 `INSERT`·`SELECT` 만 주고 `UPDATE`·`DELETE` 는 주지 않습니다
+(spec 0003 개정 3) — 기록을 쓰는 주체가 자기 기록을 지울 수 있으면 사후 추적이 성립하지 않습니다.
+`control.agent_versions` 의 불변 트리거와 같은 취급이며, 여기서는 트리거가 아니라 GRANT 로 막습니다
+(`apps/api/tests/test_plane_roles.py::test_data_role_cannot_update_or_delete_tool_call_audit`).
+`aether_control` 은 이 표에 여전히 아무 권한이 없습니다.
+
+조회 경로(API·대시보드)와 보존 정책은 이번 Phase 에 없습니다 — Phase 9 입니다(spec 0003 D-3).
 
 ## 3. 트리거
 

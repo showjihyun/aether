@@ -3,7 +3,9 @@ name = "aether-policy"
 version = "0.0.0"
 description = ""
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "psycopg[binary]",
+]
 
 [build-system]
 requires = ["hatchling"]

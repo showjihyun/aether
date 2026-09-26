@@ -5,6 +5,7 @@ description = ""
 requires-python = ">=3.12"
 dependencies = [
     "aether-runtime",
+    "aether-policy",
     "alembic>=1.20.0",
     "fastapi>=0.141.1",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
@@ -28,3 +29,4 @@ packages = ["src/aether_api"]
 
 [tool.uv.sources]
 aether-runtime = { workspace = true }
+aether-policy = { workspace = true }
