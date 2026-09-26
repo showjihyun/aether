@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any, Literal
+from uuid import UUID
 
 Transport = Literal["stdio", "http"]
 
@@ -51,3 +52,17 @@ class ToolResult:
 
     content: str
     is_error: bool = False
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    """spec 0003 2.4, D-9: `CallToolUseCase` 가 받는 호출 요청 하나.
+
+    `run_id`·`agent_version_id` 는 감사(spec 2.7)와 판정(D-6)의 신분입니다.
+    """
+
+    run_id: UUID
+    agent_version_id: UUID
+    server: McpServerRef
+    tool_name: str
+    arguments: dict[str, Any] = field(default_factory=dict)

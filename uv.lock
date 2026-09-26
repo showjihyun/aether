@@ -100,12 +100,14 @@ name = "aether-mcp"
 version = "0.0.0"
 source = { editable = "packages/mcp" }
 dependencies = [
+    { name = "aether-policy" },
     { name = "mcp" },
     { name = "psycopg", extra = ["binary"] },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "aether-policy", editable = "packages/policy" },
     { name = "mcp", specifier = "==2.2.0" },
     { name = "psycopg", extras = ["binary"] },
 ]

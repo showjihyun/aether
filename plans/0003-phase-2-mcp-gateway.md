@@ -9,6 +9,7 @@
 | 작성일 | 2026-09-25 |
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-25 (리뷰 F-1 ~ F-7 반영본. spec 0003 개정 1 [실질] 도 이 승인으로 확정) |
+| 개정 | 2 — 2026-09-26. P2-2b 의 범위에 MCP 클라이언트 어댑터의 호출 상한을 더했습니다 — 처음 구현이 주입된 시계의 델타로 **사후 판정**만 했고, 그것은 상한이 아닙니다(멈춘 호출을 끊지 못합니다). 주 세션이 그 단위 안에서 범위 확대를 승인했습니다 |
 | 개정 | 1 — 2026-09-26. P2-1 실행이 찾은 사실로 H-1 의 범위를 줄였습니다: `.importlinter` 의 AR-6·AR-9 가 이미 SDK 누출과 다른 패키지의 `mcp` import 를 막고 있습니다. P2-1 의 "구조 테스트로 자체 판정" 전제는 틀렸습니다 |
 
 spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-13)은 반복하지 않습니다. 이 문서는 일곱 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`), **M** 주 세션(`docs/`·backlog·spec·plan), **H** 사람(보호 파일).
@@ -73,7 +74,7 @@ P2-4 를 P2-2b 앞에 둔 것과 P2-2 를 2a·2b 로 쪼갠 것이 backlog 번�
 
 | 항목 | 내용 |
 | --- | --- |
-| 만드는 것 | `packages/mcp/.../ports/inbound/call_tool.py` · `application/usecases/call_tool.py`(판정 → 호출 → 감사, D-9) · `domain/errors.py`(`ToolCallDenied`, `ToolCallFailed`, `ToolNotFound`) · 연결 수명 관리(spec 2.5) |
+| 만드는 것 | `packages/mcp/.../ports/inbound/call_tool.py` · `application/usecases/call_tool.py`(판정 → 호출 → 감사, D-9) · `domain/errors.py`(`ToolCallDenied`, `ToolCallFailed`, `ToolNotFound`) · 연결 수명 관리(spec 2.5) · **그리고 `adapters/outbound/mcp_client/{stdio,http}.py` 의 호출 상한**(개정 2: spec 2.9 의 `AETHER_MCP_CALL_TIMEOUT_MS` 는 사후 판정이 아니라 강제여야 하고, 강제는 async 호출이 있는 어댑터에서만 가능합니다 — `asyncio.wait_for`) |
 | 판정 | `api-unit`: deny 시 `McpClient.call` spy 0회 + 감사 1건(R-4). 성공·실패·거부 세 경우 각 감사 1건(R-3). 감사 실패가 호출 결과를 바꾸지 않음(D-10). 서버 1개 연결 실패 시 그 도구만 빠지고 나머지는 동작(spec 2.5). `api-integration`: **Gateway 를 직접** 3회 불러 감사 3행 — 이 단위에는 Gateway 를 지나는 Run 경로가 아직 없습니다(리뷰 F-3). Run 경유 판정은 P2-3 으로 이월 |
 | 주의 | 진입점은 이 유스케이스 **하나**입니다. 테스트용 우회 함수도 만들지 않습니다 |
 

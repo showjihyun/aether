@@ -1,7 +1,11 @@
-"""spec 0003 2.2, D-1: `McpClient` 포트를 streamable HTTP 전송으로 구현합니다.
+"""spec 0003 2.2, D-1, 2.9: `McpClient` 포트를 streamable HTTP 전송으로 구현합니다.
 
 `mcp` SDK import 는 이 파일 안에만 있습니다(AR-6, AR-9). 호출마다 새로 연결합니다
 — 연결 재사용은 spec 2.5(P2-2·P2-6)의 몫입니다.
+
+`call` 은 `AETHER_MCP_CALL_TIMEOUT_MS`(spec 2.9, P2-2b)를 실제로 강제합니다 —
+`asyncio.wait_for` 로 도구 호출 1회를 감싸고, 넘으면 (builtin) `TimeoutError` 를
+그대로 올립니다. `stdio.py` 와 같은 방식입니다.
 """
 
 from __future__ import annotations
@@ -14,9 +18,14 @@ from mcp import Client
 from aether_mcp.adapters.outbound.mcp_client._content import extract_text
 from aether_mcp.domain.tools import McpServerRef, Tool, ToolResult
 
+_DEFAULT_CALL_TIMEOUT_MS = 30_000
+
 
 class HttpMcpClient:
     """`McpClient` 포트 구현. `McpServerRef.transport == "http"` 만 받습니다."""
+
+    def __init__(self, call_timeout_ms: int = _DEFAULT_CALL_TIMEOUT_MS) -> None:
+        self._call_timeout_ms = call_timeout_ms
 
     def discover(self, server: McpServerRef) -> tuple[Tool, ...]:
         return asyncio.run(self._discover(server))
@@ -40,7 +49,9 @@ class HttpMcpClient:
         self, server: McpServerRef, tool_name: str, arguments: dict[str, Any]
     ) -> ToolResult:
         async with Client(_url(server)) as client:
-            result = await client.call_tool(tool_name, arguments)
+            result = await asyncio.wait_for(
+                client.call_tool(tool_name, arguments), timeout=self._call_timeout_ms / 1000
+            )
             return ToolResult(content=extract_text(result), is_error=result.is_error)
 
 
