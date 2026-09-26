@@ -45,6 +45,16 @@ forbidden_modules =
     aether_mcp
     aether_context
 
+[importlinter:contract:ar12-mcp-sees-policy-inbound-ports-only]
+name = AR-12 mcp -> policy: inbound ports only
+type = forbidden
+source_modules =
+    aether_mcp
+forbidden_modules =
+    aether_policy.adapters
+    aether_policy.application.usecases
+    aether_policy.application.ports.outbound
+
 [importlinter:contract:ar5-llm-sdk-only-in-model-gateway]
 name = AR-5 LLM SDKs and LLM HTTP only inside aether_runtime.adapters.outbound.model_gateway
 type = forbidden
