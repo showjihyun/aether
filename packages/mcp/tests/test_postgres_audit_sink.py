@@ -118,15 +118,20 @@ def test_data_role_can_select_but_not_write_control_tool_permissions(
     admin_connection_factory: Callable[[], psycopg.Connection],
     data_connection_factory: Callable[[], psycopg.Connection],
 ) -> None:
-    """spec D-15, C-7: `aether_data` 는 `control.tool_permissions` 를 SELECT 만."""
+    """spec D-15, C-7, 개정 4: `aether_data` 는 `control.tool_permissions` 를 SELECT 만.
+
+    PK 는 (agent_version_id, server_name, tool_name)(spec 개정 4) — `server_name` 이
+    NOT NULL 이라 INSERT 문에도 함께 넣습니다.
+    """
     admin_conn = admin_connection_factory()
     try:
         version_id, _run_id = _insert_agent_version_and_run(admin_conn)
         with admin_conn.cursor() as cur:
             cur.execute(
-                "INSERT INTO control.tool_permissions (agent_version_id, tool_name, decision) "
-                "VALUES (%s, %s, %s)",
-                (version_id, "echo", "allow"),
+                "INSERT INTO control.tool_permissions "
+                "(agent_version_id, server_name, tool_name, decision) "
+                "VALUES (%s, %s, %s, %s)",
+                (version_id, "echo-server", "echo", "allow"),
             )
         admin_conn.commit()
     finally:
@@ -147,9 +152,10 @@ def test_data_role_can_select_but_not_write_control_tool_permissions(
         with pytest.raises(psycopg.errors.InsufficientPrivilege):
             with data_conn.cursor() as cur:
                 cur.execute(
-                    "INSERT INTO control.tool_permissions (agent_version_id, tool_name, decision) "
-                    "VALUES (%s, %s, %s)",
-                    (version_id, "fail", "deny"),
+                    "INSERT INTO control.tool_permissions "
+                    "(agent_version_id, server_name, tool_name, decision) "
+                    "VALUES (%s, %s, %s, %s)",
+                    (version_id, "echo-server", "fail", "deny"),
                 )
         data_conn.rollback()
     finally:

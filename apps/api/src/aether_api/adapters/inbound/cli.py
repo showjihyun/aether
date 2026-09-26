@@ -10,6 +10,14 @@ inbound 포트 `IssueApiKey` **타입**만 봅니다(AR-12) — 유스케이스 
 (`adapters/inbound/http/agents.py`)의 `GET /agents/{id}/versions/{version}` 과
 `GET /agents` 와 같은 포트에 붙은 두 번째 inbound 어댑터입니다(architecture.md 3.1
 "방향과 신뢰 경계").
+
+`permissions_set`(🔒 spec 0003 2.14, D-14, P2-4)은 inbound 포트 `SetToolPermission`
+**타입**만 봅니다(AR-12) — `aether-api permissions allow|deny --agent-id --version
+--server --tool` 서브커맨드가 부릅니다. `agents_get_version` 과 같은 분리를 따라
+Agent·Version 이 없으면 같은 오류 코드를 stderr 에 쓰고 종료 코드 1 로 끝냅니다.
+`Decision`(`aether_policy.domain.decision`) 은 값 타입이라 도메인 규칙을 들여오지
+않습니다(AR-4 는 `aether_policy` 가 다른 패키지를 모르는 것만 요구합니다 — 반대
+방향은 제한이 없습니다).
 """
 
 from __future__ import annotations
@@ -20,11 +28,13 @@ import sys
 from typing import Any
 from uuid import UUID
 
+from aether_policy.domain.decision import Decision
 from aether_runtime.domain.events import PAYLOAD_MODELS, RunEvent
 from fastapi import FastAPI
 
 from aether_api.application.ports.inbound.agents import GetAgentVersion, ListAgents
 from aether_api.application.ports.inbound.issue_api_key import IssueApiKey
+from aether_api.application.ports.inbound.set_tool_permission import SetToolPermission
 from aether_api.domain.agent import AgentNotFound, AgentVersionNotFound
 
 _EVENTS_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
@@ -61,6 +71,21 @@ def build_parser() -> argparse.ArgumentParser:
     )
     list_parser.add_argument("--cursor", default=None, help="이전 응답의 next_cursor")
     list_parser.add_argument("--name", default=None, help="이름 부분 일치(대소문자 구분 없음) 필터")
+
+    permissions_parser = subparsers.add_parser(
+        "permissions", help="🔒 MCP 도구 호출 허용 목록(control.tool_permissions) 선언"
+    )
+    permissions_subparsers = permissions_parser.add_subparsers(
+        dest="permissions_command", required=True
+    )
+    for decision in ("allow", "deny"):
+        decision_parser = permissions_subparsers.add_parser(
+            decision, help=f"(agent_version, server, tool) 에 {decision} 선언"
+        )
+        decision_parser.add_argument("--agent-id", required=True, type=UUID, help="Agent 의 UUID")
+        decision_parser.add_argument("--version", required=True, type=int, help="버전 번호")
+        decision_parser.add_argument("--server", required=True, help="MCP Server 이름")
+        decision_parser.add_argument("--tool", required=True, help="도구 이름(정확히 일치)")
 
     return parser
 
@@ -172,3 +197,32 @@ def agents_list(
         "next_cursor": page.next_cursor,
     }
     sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+
+
+def permissions_set(
+    set_tool_permission: SetToolPermission,
+    agent_id: UUID,
+    version: int,
+    server: str,
+    tool: str,
+    decision: Decision,
+) -> None:
+    """🔒 `(agent_id, version, server, tool)` 에 `decision` 을 선언합니다(spec 2.14, D-14).
+
+    `agents_get_version` 과 같은 분리 — Agent 나 버전이 없으면 같은 오류 코드를 stderr 에
+    쓰고 종료 코드 1 로 끝냅니다. 스택트레이스를 그대로 토하지 않습니다. 성공하면 stdout
+    에는 아무것도 쓰지 않고 stderr 에 확인 메시지만 남깁니다 — 비밀값이나 정의처럼 stdout
+    으로 파이프될 원문이 없습니다.
+    """
+    try:
+        set_tool_permission(agent_id, version, server, tool, decision)
+    except AgentNotFound:
+        sys.stderr.write("error: agent_not_found\n")
+        raise SystemExit(1) from None
+    except AgentVersionNotFound:
+        sys.stderr.write("error: agent_version_not_found\n")
+        raise SystemExit(1) from None
+
+    sys.stderr.write(
+        f"agent_id={agent_id} version={version} server={server} tool={tool} decision={decision}\n"
+    )

@@ -45,7 +45,11 @@ _DATA_ROLE = "aether_data"
 
 def upgrade() -> None:
     # control.tool_permissions -- 허용 목록의 선언(spec 2.7). 기본값 deny 를 코드가
-    # 판정하고, 이 표는 allow/deny 로 명시된 행만 담습니다(D-14 의 CLI 가 씁니다).
+    # 판정하고, 이 표는 allow/deny 로 명시된 행만 담습니다(D-14 의 CLI 가 씁니다). PK 는
+    # (agent_version_id, server_name, tool_name) 셋의 복합키입니다(spec 개정 4) — MCP 에는
+    # 전역 도구 이름공간이 없어 서버가 다르면 같은 이름의 도구가 겹칠 수 있고, server_name
+    # 이 PK 에 없으면 "Filesystem 의 read 는 허용, PostgreSQL 의 read 는 금지" 를 표현할 수
+    # 없습니다. 감사 표가 이미 server_name 을 담으므로 판정의 신분 기준도 같아야 합니다.
     op.create_table(
         "tool_permissions",
         sa.Column(
@@ -54,6 +58,7 @@ def upgrade() -> None:
             sa.ForeignKey("control.agent_versions.id"),
             primary_key=True,
         ),
+        sa.Column("server_name", sa.Text(), nullable=False, primary_key=True),
         sa.Column("tool_name", sa.Text(), primary_key=True),
         sa.Column("decision", sa.Text(), nullable=False),
         sa.Column(

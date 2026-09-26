@@ -84,7 +84,7 @@ apps/worker ──► aether_runtime.application (ExecuteRun, Planner/Executor)
 
 `CallToolUseCase.__call__(call: ToolCall) -> ToolResult` 한 곳입니다.
 
-1. **판정**: `PermissionJudge(subject=agent_version_id, resource=tool_name)` → allow / deny. **호출마다** 묻습니다(D-6).
+1. **판정**: `PermissionJudge(subject=agent_version_id, resource=(server_name, tool_name))` → allow / deny(개정 4). **호출마다** 묻습니다(D-6).
 2. deny 면 MCP 클라이언트를 부르지 않고 감사 1건을 남기고 `ToolCallDenied` 를 올립니다.
 3. allow 면 `McpClient.call(...)`. 예외는 `ToolCallFailed` 로 감싸되 원인 메시지는 감사에만 남깁니다.
 4. **감사**: 성공·실패·거부 **세 경우 모두** 1건. 감사 기록 실패는 호출 결과를 바꾸지 않지만 로그와 span 에 남습니다 — 기록이 없으면 그 호출은 사후에 존재하지 않은 것이 되므로, 연속 실패는 Phase 9 의 판단 대상으로 남깁니다(C-3).
@@ -124,7 +124,7 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 
 감사표는 **append-only** 입니다(개정 3) — `aether_data` 에 `INSERT`·`SELECT` 만 주고 `UPDATE`·`DELETE` 는 주지 않습니다. 기록을 쓰는 주체가 자기 기록을 지울 수 있으면 사후 추적이 성립하지 않습니다. `control.agent_versions` 의 불변 트리거(P0-8)와 같은 취급입니다.
 
-정책 표는 `control.tool_permissions`(`agent_version_id`, `tool_name`, `decision`)입니다 — 선언이므로 `control` 입니다. `packages/policy` 는 이 표를 자기 outbound 포트로만 읽습니다(AR-4).
+정책 표는 `control.tool_permissions`(`agent_version_id`, **`server_name`**, `tool_name`, `decision`)이고 PK 는 그 셋의 복합키입니다(개정 4) — MCP 에는 전역 도구 이름공간이 없어 한 Agent Version 에 두 서버가 바인딩되면 같은 이름의 도구가 겹칠 수 있습니다. `server_name` 이 없으면 "Filesystem 의 `read` 는 허용, PostgreSQL 의 `read` 는 금지" 를 표현할 수 없고 allow 한 줄이 의도보다 넓게 열립니다. 감사 기록이 이미 `server_name` 을 남기므로 판정의 신분 기준도 같아야 합니다 — 선언이므로 `control` 입니다. `packages/policy` 는 이 표를 자기 outbound 포트로만 읽습니다(AR-4).
 
 ### 2.8 감사 조회 (열린 질문 3)
 
@@ -201,7 +201,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | D-3 | 감사는 이번 Phase 에 **기록만**. 조회 API·보존 정책은 Phase 9. 표 증가 속도를 `smoke` 에서 1회 실측해 기록 | intent OQ 3 | 2.8, C-2 |
 | D-4 | `smoke` 에는 **Filesystem 하나**. HTTP·PostgreSQL 은 `api-integration`. 단계 수는 늘리지 않음 | intent OQ 4 | 2.10, R-12 |
 | D-5 | P1-4 의 내부 도구 둘(시계·계산기)은 **저장소 안 MCP Server 로 이전**. 기존 시나리오 테스트가 Gateway 경유로 그대로 판정 | intent OQ 5 | 2.3, R-6 |
-| D-6 | 권한 판정은 **호출마다**. Run 단위 캐시 없음 | intent OQ 6 (🔒) | 2.4, C-4 |
+| D-6 | 권한 판정은 **호출마다**. Run 단위 캐시 없음. 판정의 자원 신분은 **(`server_name`, `tool_name`)** 이고 이름은 정확히 일치합니다 — 정규화도 와일드카드도 없습니다(개정 4) | intent OQ 6 (🔒) | 2.4, C-4 |
 | D-7 | PostgreSQL MCP Server 는 **저장소 안의 read-only 구현**. 참조 구현이 archive 되었고(2026-09-25 확인) 커뮤니티 구현은 신뢰 경계 때문에 쓰지 않음. **backlog P2-5 의 "PostgreSQL MCP Server" 문구를 이 결정으로 갱신** | 외부 사실 확인 | 2.3, C-6 |
 | D-8 | 참조 서버(npm)는 **이미지 빌드 시점에 넣습니다**. 실행 시 `npx` 로 내려받지 않습니다 | DP-4, 공급망 | 2.3, C-5 |
 | D-9 | Gateway 는 유스케이스 하나(`CallToolUseCase`)이고 순서는 판정 → 호출 → 감사. 세 결과(성공·실패·거부) 모두 감사 1건 | — | 2.4, R-3, R-4 |
@@ -209,7 +209,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | D-11 | 연결은 Run 수명에 묶입니다. 서버 1개 실패는 그 도구만 제거하고 Run 은 계속. 재연결은 호출당 1회 | — | 2.5 |
 | D-12 | 감사에 인자·결과 **본문을 넣지 않습니다** — 크기와 종류만. 결과는 `AETHER_MCP_MAX_RESULT_BYTES` 로 자릅니다 | R-11, DLP 는 Phase 10 | 2.7, 2.9 |
 | D-13 | `.importlinter` 변경은 P2-2b 병합 뒤 **한 번**, 사람이 커밋. 내용은 **`aether_mcp` → `aether_policy.adapters` 금지 계약 추가 하나**입니다 — AR-6 좁히기는 취소(개정 2: 기존 AR-6 이 다른 패키지 전부의 `mcp` import 를, AR-9 가 `aether_mcp.domain`·`application` 의 SDK import 를 이미 금지합니다) | CC, EI-2, 개정 2 | 2.11 |
-| D-14 | 정책 표에 행을 넣는 경로는 **CLI 서브커맨드**(`aether-api permissions allow --agent-version --tool`)입니다. HTTP 경로는 늘리지 않습니다. 관리 API·UI 는 Phase 9 | 개정 1 (리뷰 F-1) | 2.14 |
+| D-14 | 정책 표에 행을 넣는 경로는 **CLI 서브커맨드**(`aether-api permissions allow|deny --agent-id <uuid> --version <n> --server <name> --tool <name>`, 개정 4)입니다. HTTP 경로는 늘리지 않습니다. 관리 API·UI 는 Phase 9 | 개정 1 (리뷰 F-1) | 2.14 |
 | D-15 | 마이그레이션 0003 이 `aether_data` 에 `control.tool_permissions` **SELECT** 를 부여합니다. 그 확대는 `test_plane_roles.py` 의 판정에 들어가고 P2-4 의 🔒 검토 대상입니다 | 개정 1 (리뷰 F-2) | 2.7 |
 | D-16 | 도구 이름의 **생성 시 정적 검증을 없앱니다** — 도구는 Discovery 에서 오고 api 는 어떤 서버가 붙을지 모릅니다. 없는 도구는 Run 시점에 `ToolNotFound` 로 감사에 남습니다. spec 0002 D-3 의 `BUILTIN_TOOL_NAMES` 검증 부분을 **[실질] 개정** | 개정 1 (리뷰 F-5) | 2.15 |
 
@@ -243,6 +243,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | 개정 | 내용 |
 | --- | --- |
 | 초안 | 2026-09-25. intent 0003 의 열린 질문 6건을 D-1 ~ D-6 으로 고정하고, 외부 사실 확인에서 나온 D-7·D-8 을 더했습니다 |
+| 개정 4 | 2026-09-26. **P2-4 착수 전 제안에서 찾은 구멍** — 감사는 `server_name` 을 남기는데 판정의 키에는 없었습니다. MCP 에 전역 도구 이름공간이 없으므로 같은 이름의 도구가 서버마다 있을 수 있고, 그러면 allow 가 의도보다 넓게 열립니다. 정책 표의 PK 를 `(agent_version_id, server_name, tool_name)` 으로 확장하고(마이그레이션 0003 을 직접 수정 — 아직 어디에도 배포되지 않았습니다) CLI 에 `--server` 를 더합니다. 사람 결정 2026-09-26 |
 | 개정 3 | 2026-09-26. **P2-2a 리뷰**에서 감사표를 append-only 로 조였습니다 — `GRANT ALL PRIVILEGES` 였던 것을 `INSERT, SELECT` 로. 조이기 전 테스트가 `DID NOT RAISE InsufficientPrivilege` 로 실패해 권한이 넓었다는 것이 실측으로 확인되었습니다. `control.tool_permissions` 의 PK 는 `(agent_version_id, tool_name)` 복합키이고, 이 가정이 P2-4 의 CLI upsert 설계와 맞는지는 그 단위의 🔒 검토에서 확인합니다 |
 | 개정 2 | 2026-09-26. **P2-1 실행이 찾은 사실**로 D-13 의 범위를 줄였습니다 — `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 는 `aether_api`·`aether_worker`·`aether_runtime` 을 포함한 여덟 패키지에서 `mcp` 를 이미 금지하고, `ar9-core-is-framework-free` 는 `aether_mcp.domain`·`application` 에서 `mcp` 를 이미 금지합니다(위반 주입으로 확인). 그래서 R-2 는 계약 **추가**가 아니라 **발화 확인**으로 판정하고, H-1 은 policy 계약 하나만 더합니다 |
 | 개정 1 | 2026-09-25. **plan 0003 리뷰(F-1 ~ F-7)가 찾은 구멍 셋**을 D-14 ~ D-16 으로 메웠습니다 — 정책 표 쓰기 경로가 없어 기본 deny 아래 R-7 이 불가능했던 것(F-1), `aether_data` 에 `control.tool_permissions` SELECT 가 없던 것(F-2), 도구 이름 검증이 Discovery 로 바뀌며 자리를 잃은 것(F-5, spec 0002 D-3 **[실질] 개정**). R-3·R-4 의 integration 판정 시점을 P2-3 이후로 정정했습니다(F-3) |

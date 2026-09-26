@@ -1,0 +1,29 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-26-001
+date: 2026-09-26
+status: candidate
+symptom: verify 가 소요를 벽시계로 재므로 실행 중 머신이 절전에 들어가면 단계 소요가 실제 계산 시간과 무관해진다. smoke 단계가 27,130,216 ms(약 7.5시간)로 기록되었지만 같은 스크립트를 독립 시계로 단독 실행하면 68초다. 게이트는 그 실행을 pass 로 집계했다 — 시간 예산(spec 0001 D-12, 합계 600,000 ms)을 판정하는 단계가 아예 없다
+evidence: |
+  2026-09-25~26 P2-4 라운드. `.harness/verify.json` 의 smoke 단계 duration_ms = 27130216, 합계 27308740.
+  smoke 자신의 요약도 "27108s" 로 같은 값을 적었다 — verify 와 smoke.sh 가 같은 벽시계를 쓴다.
+  같은 트리에서 `scripts/smoke.sh --bench` 를 독립 시계로 단독 실행: 68초(스크립트 자체 요약 46s).
+  같은 세션의 다른 verify 실행들은 smoke 가 59초였다.
+  절전의 근거: 같은 라운드에서 구현 위임 세션이 21:14 에 시작해 05:19 에 끝났다고 기록되었다(7.7시간).
+  사람이 자리를 비운 밤 시간대이고, 그 구간에 실제 계산이 7시간 진행된 흔적은 어디에도 없다.
+  처음에는 실행자가 `python3` 이 Windows 에서 Microsoft Store 리다이렉터 스텁으로 잡혀 멈춘 것으로
+  추정했으나, 위 단독 측정으로 그 추정은 근거를 잃었다 — 원인은 멈춤이 아니라 측정 구간에 절전이 든 것이다.
+root_cause: 하네스가 단계 소요를 벽시계 차이로만 재고, 그 값이 타당한 범위인지도 검사하지 않는다. 그래서 (1) 절전·최대 절전이 든 실행의 숫자는 성능 판단에 쓸 수 없고 (2) 그 숫자로 예산을 판정하는 단계도 없어 위반이 pass 로 남는다. 두 번째가 더 크다 — 재는 것과 판정하는 것이 분리되어 있다
+fix: 이번에는 원인을 단독 측정으로 좁혀 기록만 했다. 게이트 결과(18/18 pass)는 바뀌지 않는다 — 모든 단계가 실제로 통과했다
+recurrence_risk: medium
+harness_element: HE-3
+proposed_harness_change: "(사람 결정) (1) verify 에 시간 예산 판정을 더한다 — 합계가 `HARNESS_VERIFY_BUDGET_MS`(기본 600,000)를 넘으면 **선택 실패**로 기록한다. 필수 실패로 하지 않는 이유는 느린 머신에서 게이트가 막히는 비용이 더 크기 때문이다. 임계값은 사람이 소유한다(EI-2). (2) 절전이 든 실행을 성능 근거로 쓰지 않도록, 단계 소요가 그 단계의 이전 실행 대비 10배를 넘으면 `.harness/verify.json` 에 `wall_clock_suspect: true` 를 남기고 (1)의 판정에서 제외한다. 비교 기준선은 이미 있는 `.harness/baseline-eval.json` 이 아니라 verify 자신의 직전 결과를 쓴다. (3) smoke·bench 의 요약 문구도 같은 표시를 따른다 — `{{성능_기준}}` 판정(spec 0002 D-8)이 절전 든 실행의 숫자를 쓰면 기준값이 오염된다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: 제안 적용 뒤 verify 2회(정상 1회, 예산 초과를 흉내낸 1회).
+  기준: 예산 안의 실행은 선택 실패 0건. `HARNESS_VERIFY_BUDGET_MS` 를 작게 준 실행은 선택 실패 1건이고
+  필수 실패는 0건으로 유지된다. 직전 대비 10배가 넘는 단계가 있는 실행에서는 `wall_clock_suspect: true`
+  가 남고 그 실행이 예산 위반으로 집계되지 않는다. `scripts/check-bench.sh` 의 재측정 논리(2026-09-22-001)와
+  중복 판정이 생기지 않는지도 확인한다.
+owner: unassigned
+expires: 2026-12-26
