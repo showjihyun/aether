@@ -36,7 +36,8 @@ from aether_runtime.adapters.outbound.redis.event_sink import RedisEventSink
 from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNotifier
 from aether_runtime.adapters.outbound.system_clock import SystemClock
 from aether_runtime.adapters.outbound.telemetry.noop_tracer import NoopTracer
-from aether_runtime.application.ports.outbound.model_gateway import ModelResponse
+from aether_runtime.application.ports.outbound.model_gateway import ModelResponse, ToolSchema
+from aether_runtime.application.ports.outbound.tool_gateway import ToolNotFound
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.events import EventType, RunEvent
 from aether_runtime.domain.tools import ToolCall, ToolResult
@@ -265,17 +266,28 @@ class _GatedClockTool:
         return ToolResult(content="12:00:00")
 
 
-class _SingleToolRegistry:
+class _SingleToolGateway:
+    """spec 0003 2.1: `ToolGateway` 포트의 최소 구현 — `_GatedClockTool` 하나만 압니다."""
+
     def __init__(self, tool: _GatedClockTool) -> None:
         self._tool = tool
 
-    def get(self, name: str) -> _GatedClockTool:
-        if name != self._tool.name:
-            raise KeyError(name)
-        return self._tool
+    def discover(self) -> tuple[ToolSchema, ...]:
+        return (
+            ToolSchema(
+                name=self._tool.name,
+                description=self._tool.description,
+                input_schema=self._tool.input_schema,
+            ),
+        )
 
-    def names(self) -> frozenset[str]:
-        return frozenset({self._tool.name})
+    def call(
+        self, run_id: object, agent_version_id: object, name: str, arguments: dict[str, Any]
+    ) -> ToolResult:
+        del run_id, agent_version_id
+        if name != self._tool.name:
+            raise ToolNotFound(name)
+        return self._tool.run(arguments)
 
 
 def _build_gated_handler(
@@ -295,7 +307,7 @@ def _build_gated_handler(
                 ModelResponse(text="final answer.", finish_reason="stop"),
             ]
         ),
-        _SingleToolRegistry(gated_tool),
+        _SingleToolGateway(gated_tool),
         RedisEventSink(redis_client),
         RedisStatusNotifier(redis_client),
         NoopTracer(),

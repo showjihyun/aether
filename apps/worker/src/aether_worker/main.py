@@ -22,6 +22,13 @@ from types import FrameType
 from typing import NoReturn
 
 import psycopg
+from aether_mcp.adapters.outbound.audit_sink.postgres import PostgresAuditSink
+from aether_mcp.adapters.outbound.mcp_client.stdio import StdioMcpClient
+from aether_mcp.application.usecases.call_tool import CallToolUseCase
+from aether_mcp.application.usecases.discover_tools import DiscoverToolsUseCase
+from aether_mcp.domain.tools import McpServerRef
+from aether_policy.adapters.outbound.permission_table.postgres import PostgresPermissionTable
+from aether_policy.application.usecases.judge_tool_call import JudgeToolCallUseCase
 from aether_runtime.adapters.outbound.db.run_declaration_reader import (
     PostgresRunDeclarationReader,
 )
@@ -35,8 +42,9 @@ from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNo
 from aether_runtime.adapters.outbound.system_clock import SystemClock
 from aether_runtime.adapters.outbound.telemetry.otel_tracer import OtelTracer
 from aether_runtime.adapters.outbound.threaded_lease_keeper import ThreadedLeaseKeeper
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
+from aether_runtime.adapters.outbound.tool_gateway.mcp import McpToolGateway
 from aether_runtime.application.ports.outbound.model_gateway import ModelGateway
+from aether_runtime.application.ports.outbound.tool_gateway import ToolGateway
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from redis import Redis
 
@@ -118,6 +126,33 @@ def _build_model_gateway(settings: Settings) -> ModelGateway:
     )
 
 
+def _build_tool_gateway(
+    settings: Settings, connect: Callable[[], psycopg.Connection]
+) -> ToolGateway:
+    """spec 0003 2.1, D-5, D-9: Gateway 유스케이스(판정 → 호출 → 감사)를 조립하고
+    runtime 의 `ToolGateway` 포트로 감쌉니다.
+
+    바인딩(`AgentDefinition.mcp_servers`)은 아직 없습니다(P2-6) — 그때까지는
+    `settings.mcp_builtin_server_script`(저장소 안 builtin 서버) 하나로 고정합니다.
+    `StdioMcpClient` 조립은 `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 에 둔
+    `ignore_imports` 예외(`aether_worker.main -> aether_mcp.adapters.outbound.
+    mcp_client.stdio`, 사람 결정 2026-09-27) 아래에서만 허용됩니다 — 이 함수
+    밖에서는 그 모듈을 import 하지 않습니다.
+    """
+    server = McpServerRef(
+        name="builtin",
+        transport="stdio",
+        command=sys.executable,
+        args=(settings.mcp_builtin_server_script,),
+    )
+    client = StdioMcpClient(call_timeout_ms=settings.mcp_call_timeout_ms)
+    judge = JudgeToolCallUseCase(PostgresPermissionTable(connect))
+    audit = PostgresAuditSink(connect)
+    call_tool = CallToolUseCase(judge=judge, client=client, audit=audit)
+    discover_tools = DiscoverToolsUseCase(client=client)
+    return McpToolGateway(call_tool=call_tool, discover_tools=discover_tools, server=server)
+
+
 def _build_production_handler(settings: Settings, client: Redis) -> HandleRunRequested:
     """PostgreSQL·model gateway·Redis 이벤트/상태 어댑터로 `ExecuteRunUseCase` 를
     조립하고, `HandleRunRequestedUseCase` 로 감쌉니다(spec 0002 2.1)."""
@@ -129,7 +164,7 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
         PostgresRunStateStore(connect),
         PostgresRunDeclarationReader(connect),
         _build_model_gateway(settings),
-        InMemoryToolRegistry(SystemClock()),
+        _build_tool_gateway(settings, connect),
         RedisEventSink(
             client, maxlen=settings.events_maxlen, ttl_seconds=settings.events_ttl_seconds
         ),

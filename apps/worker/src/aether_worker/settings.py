@@ -93,3 +93,14 @@ class Settings(BaseSettings):
 
     worker_heartbeat_seconds: float = 5.0
     """spec 0002 2.14, R-13. 이 간격마다 heartbeat 키를 갱신합니다(TTL 은 이 값의 3배)."""
+
+    mcp_builtin_server_script: str = "tools/mcp-servers/builtin/server.py"
+    """spec 0003 2.1, D-5 (P2-3 임시 배선). `AgentDefinition.mcp_servers` 바인딩은
+    아직 없습니다(P2-6) — 그때까지 모든 Run 은 이 스크립트 하나(저장소 안 builtin
+    서버, 시계·계산기)를 stdio 로 연결합니다. 배포 이미지의 작업 디렉터리 기준
+    상대 경로이거나 절대 경로입니다."""
+
+    mcp_call_timeout_ms: int = 30_000
+    """spec 0003 2.9, D-9. `StdioMcpClient.call` 이 도구 호출 1회를 이 시간(ms)
+    안에서 강제합니다(`asyncio.wait_for`) — 넘으면 `TimeoutError` 가 `ToolCallFailed`
+    로 감싸집니다(감사에 `error_kind` 로 남음)."""

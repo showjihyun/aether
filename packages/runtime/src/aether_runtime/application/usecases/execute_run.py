@@ -75,7 +75,11 @@ from aether_runtime.application.ports.outbound.status_notifier import (
     StatusMessage,
     StatusNotifier,
 )
-from aether_runtime.application.ports.outbound.tools import ToolRegistry
+from aether_runtime.application.ports.outbound.tool_gateway import (
+    ToolCallDenied,
+    ToolGateway,
+    ToolNotFound,
+)
 from aether_runtime.application.ports.outbound.tracer import Tracer
 from aether_runtime.domain.agent import AgentDefinition, Backoff, Policy
 from aether_runtime.domain.events import (
@@ -165,7 +169,7 @@ class ExecuteRunUseCase:
         store: RunStateStore,
         declarations: RunDeclarationReader,
         gateway: ModelGateway,
-        tools: ToolRegistry,
+        tools: ToolGateway,
         events: EventSink,
         notifier: StatusNotifier,
         tracer: Tracer,
@@ -283,20 +287,13 @@ class ExecuteRunUseCase:
                 Message(role="user", content=declaration.input),
             ]
 
-        try:
-            tool_schemas = [self._tool_schema(name) for name in definition.tools]
-        except KeyError:
-            return self._finalize(
-                run_id,
-                local_status,
-                RunStatus.FAILED,
-                seq,
-                messages,
-                step,
-                tasks,
-                started_at,
-                failure_reason=FailureReason.UNKNOWN_TOOL,
-            )
+        # spec 0003 2.15, D-16: 생성 시 정적 검증이 없으므로 여기서도 이름의 존재를
+        # 미리 확인하지 않습니다 — Discovery 로 실제 내놓는 스키마만 모델에게
+        # 알려주고, `definition.tools` 에는 있지만 어느 서버도 내놓지 않는 이름은
+        # 모델에게 보이지 않을 뿐입니다. 모델이 그래도 그 이름을 부르면(허용
+        # 집합 통과 뒤) Gateway 가 호출 시점에 `ToolNotFound` 로 판정합니다.
+        available = {schema.name: schema for schema in self._tools.discover()}
+        tool_schemas = [available[name] for name in definition.tools if name in available]
 
         while True:
             fresh_declaration = self._declarations.declaration(run_id)
@@ -537,6 +534,7 @@ class ExecuteRunUseCase:
             for call in response.tool_calls:
                 tool_outcome = self._run_tool_call(
                     run_id=run_id,
+                    agent_version_id=declaration.agent_version_id,
                     task_id=task_id,
                     call=call,
                     base_attrs=base_attrs,
@@ -580,6 +578,7 @@ class ExecuteRunUseCase:
         self,
         *,
         run_id: UUID,
+        agent_version_id: UUID,
         task_id: str,
         call: ToolCall,
         base_attrs: dict[str, str],
@@ -602,29 +601,13 @@ class ExecuteRunUseCase:
         )
 
         with self._tracer.span("tool.run", {**base_attrs, "aether.tool.name": call.name}):
-            try:
-                tool = self._tools.get(call.name)
-            except KeyError:
-                return _StepOutcome(
-                    finished=self._finalize(
-                        run_id,
-                        local_status,
-                        RunStatus.FAILED,
-                        seq,
-                        messages,
-                        step,
-                        tasks,
-                        started_at,
-                        failure_reason=FailureReason.UNKNOWN_TOOL,
-                    )
-                )
-
             result = None
             attempts = policy.tool_retries + 1
             for attempt in range(1, attempts + 1):
-                # 검사 지점 (b), spec 0002 2.8 [편집 예정]: 도구 호출 직전. 도구
-                # 자체에는 타임아웃을 강제하지 않습니다(프로세스 내부 함수) —
-                # 호출 직전 잔여만 검사합니다(설계 결정 5).
+                # 검사 지점 (b), spec 0002 2.8 [편집 예정]: 도구 호출 직전. Gateway
+                # 호출 자체에는 타임아웃을 강제하지 않습니다(그것은 spec 0003 2.9,
+                # `McpClient` 어댑터의 몫입니다) — 호출 직전 잔여만 검사합니다
+                # (설계 결정 5).
                 remaining = self._remaining_seconds(started_at, policy.timeout_seconds)
                 if remaining <= 0:
                     return _StepOutcome(
@@ -640,8 +623,36 @@ class ExecuteRunUseCase:
                         )
                     )
                 try:
-                    result = self._guarded_call(run_id, lambda: tool.run(call.arguments))
-                except Exception as error:  # noqa: BLE001 -- 도구 예외는 전부 tool_error 로 흡수(2.8)
+                    result = self._guarded_call(
+                        run_id,
+                        lambda: self._tools.call(
+                            run_id, agent_version_id, call.name, call.arguments
+                        ),
+                    )
+                except (ToolNotFound, ToolCallDenied) as error:
+                    # spec 0003 2.5, 2.15, D-16, R-4: 없는 도구·거부된 도구는
+                    # 결정적입니다(모델 4xx 와 같은 취급) — 재시도하지 않고 즉시
+                    # 종결합니다. 감사 1건은 `ToolGateway`(Gateway 유스케이스, D-9)
+                    # 가 그 판정 전에 이미 남겼습니다.
+                    reason = (
+                        FailureReason.TOOL_DENIED
+                        if isinstance(error, ToolCallDenied)
+                        else FailureReason.UNKNOWN_TOOL
+                    )
+                    return _StepOutcome(
+                        finished=self._finalize(
+                            run_id,
+                            local_status,
+                            RunStatus.FAILED,
+                            seq,
+                            messages,
+                            step,
+                            tasks,
+                            started_at,
+                            failure_reason=reason,
+                        )
+                    )
+                except Exception as error:  # noqa: BLE001 -- 그 밖 실패는 전부 tool_error 로 흡수(2.8)
                     if isinstance(error, LeaseHeld):
                         raise
                     if attempt == attempts:
@@ -714,12 +725,6 @@ class ExecuteRunUseCase:
             Message(role="tool", tool_call_id=call.id, content=render_observation(observation))
         )
         return _StepOutcome(seq=seq)
-
-    def _tool_schema(self, name: str) -> ToolSchema:
-        tool = self._tools.get(name)
-        return ToolSchema(
-            name=tool.name, description=tool.description, input_schema=tool.input_schema
-        )
 
     # -- 시간 예산·lease 유지 ----------------------------------------------------
 

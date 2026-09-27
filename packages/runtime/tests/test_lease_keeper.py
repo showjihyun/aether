@@ -15,14 +15,13 @@ from uuid import UUID, uuid4
 
 import pytest
 from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
 from aether_runtime.application.ports.outbound.model_gateway import ModelResponse
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
 from aether_runtime.application.ports.outbound.run_state_store import RunStateStore
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import LeaseHeld, RunState, RunStatus
-from aether_runtime.domain.tools import ToolCall
+from aether_runtime.domain.tools import ToolCall, ToolResult
 
 from packages.runtime.tests.fakes import (
     FakeClock,
@@ -31,8 +30,19 @@ from packages.runtime.tests.fakes import (
     FakeRunDeclarationReader,
     FakeRunStateStore,
     FakeStatusNotifier,
+    FakeTool,
+    FakeToolGateway,
     InMemoryTracer,
 )
+
+
+def _calculator_gateway() -> FakeToolGateway:
+    """spec 0003 2.1: 계산기 하나만 아는 `ToolGateway` fake — 이 파일의
+    도구 시나리오는 결과 내용 대신 흐름(취소·lease·trace)을 봅니다."""
+    return FakeToolGateway(
+        {"calculator": FakeTool(name="calculator", result=ToolResult(content="2"))}
+    )
+
 
 _OWNER = "worker-test"
 
@@ -80,7 +90,7 @@ def test_lease_lost_during_model_call_raises_lease_held_without_committing() -> 
         store,
         reader,
         gateway,
-        InMemoryToolRegistry(clock),
+        _calculator_gateway(),
         events,
         notifier,
         tracer,
@@ -124,7 +134,7 @@ def test_lease_lost_during_tool_call_raises_lease_held_without_committing() -> N
         store,
         reader,
         gateway,
-        InMemoryToolRegistry(clock),
+        _calculator_gateway(),
         events,
         notifier,
         tracer,
@@ -214,7 +224,7 @@ def test_renew_lease_returning_false_at_step_end_raises_lease_held_before_saving
         store,
         reader,
         gateway,
-        InMemoryToolRegistry(clock),
+        _calculator_gateway(),
         events,
         notifier,
         tracer,
@@ -245,7 +255,7 @@ def test_lease_not_lost_behaves_as_before() -> None:
         store,
         reader,
         gateway,
-        InMemoryToolRegistry(clock),
+        _calculator_gateway(),
         events,
         notifier,
         tracer,

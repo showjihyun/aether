@@ -775,6 +775,7 @@
         "enum": [
           "model_error",
           "tool_error",
+          "tool_denied",
           "max_steps_exceeded",
           "unknown_tool",
           "definition_invalid",

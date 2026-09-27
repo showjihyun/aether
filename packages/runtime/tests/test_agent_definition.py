@@ -1,5 +1,9 @@
 """spec 0002 2.3: `AgentDefinition` 검증 규칙 전부 — `schema_version` 아닌 값, 빈
-`system_prompt`, `BUILTIN_TOOL_NAMES` 밖 도구, 범위 밖 정책 값.
+`system_prompt`, 중복 도구 이름, 범위 밖 정책 값.
+
+spec 0003 2.15, D-16: 도구 이름의 존재 검증(구 `BUILTIN_TOOL_NAMES`)은 생성 시점에
+없습니다 — 임의 이름이 통과하고 Run 시점에 `ToolNotFound` 로 판정됩니다
+(`packages/runtime/tests/test_execute_run.py` 가 그 경로를 판정).
 """
 
 from __future__ import annotations
@@ -69,9 +73,12 @@ def test_rejects_blank_system_prompt(blank: str) -> None:
         AgentDefinition.model_validate(_minimal(system_prompt=blank))
 
 
-def test_rejects_tool_outside_builtin_tool_names() -> None:
-    with pytest.raises(ValidationError):
-        AgentDefinition.model_validate(_minimal(tools=["clock", "web_search"]))
+def test_accepts_arbitrary_tool_names_without_static_validation() -> None:
+    """spec 0003 2.15, D-16: 생성 시 어떤 서버가 붙을지 모르므로 임의 이름을 받습니다
+    — 존재 여부는 Run 시점 Discovery/`ToolNotFound` 가 판정합니다."""
+    definition = AgentDefinition.model_validate(_minimal(tools=["clock", "web_search"]))
+
+    assert definition.tools == ["clock", "web_search"]
 
 
 def test_rejects_duplicate_tools() -> None:

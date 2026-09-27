@@ -205,18 +205,21 @@ def test_get_missing_version_is_404(client: TestClient, auth_headers: dict[str, 
     assert response.json() == {"detail": "agent_version_not_found"}
 
 
-def test_create_with_unknown_tool_is_422(client: TestClient, auth_headers: dict[str, str]) -> None:
-    """spec 0002 2.3: `tools` 는 `BUILTIN_TOOL_NAMES` 밖이면 422."""
+def test_create_with_unknown_tool_name_is_accepted_and_validated_at_run_time(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """spec 0003 2.15, D-16 (spec 0002 D-3 [실질] 개정): 도구 이름의 생성 시 정적
+    검증은 없습니다 — 임의 이름이 201 로 통과합니다. 존재 여부는 Run 시점 Discovery/
+    `ToolNotFound` 가 판정합니다(`packages/runtime/tests/test_execute_run.py` 참조)."""
     response = client.post(
         "/agents",
         json={
-            "name": f"bad-tool-{uuid4()}",
+            "name": f"unknown-tool-{uuid4()}",
             "definition": _definition_payload(tools=["not-a-real-tool"]),
         },
         headers=auth_headers,
     )
-    assert response.status_code == 422
-    assert isinstance(response.json()["detail"], list)
+    assert response.status_code == 201, response.text
 
 
 def test_create_with_wrong_schema_version_is_422(

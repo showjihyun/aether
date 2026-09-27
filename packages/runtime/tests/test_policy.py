@@ -16,14 +16,15 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
 from aether_runtime.application.ports.outbound.model_gateway import (
     ModelError,
     ModelGateway,
     ModelRequest,
     ModelResponse,
+    ToolSchema,
 )
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
+from aether_runtime.application.ports.outbound.tool_gateway import ToolNotFound
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunState, RunStatus
@@ -36,7 +37,7 @@ from packages.runtime.tests.fakes import (
     FakeRunStateStore,
     FakeStatusNotifier,
     FakeTool,
-    FakeToolRegistry,
+    FakeToolGateway,
     InMemoryTracer,
 )
 
@@ -90,11 +91,12 @@ def _usecase(
     notifier: FakeStatusNotifier,
     tools: Any = None,
 ) -> ExecuteRunUseCase:
+    default_tools = FakeToolGateway({"calculator": FakeTool(name="calculator")})
     return ExecuteRunUseCase(
         store,
         reader,
         gateway,
-        tools if tools is not None else InMemoryToolRegistry(clock),
+        tools if tools is not None else default_tools,
         events,
         notifier,
         InMemoryTracer(),
@@ -108,20 +110,30 @@ def _last_status_payload(events: FakeEventSink) -> dict[str, Any]:
     return status_events[-1].payload
 
 
-class _SingleToolRegistry:
-    """`ToolRegistry` 포트 최소 구현 — 도구 하나만 압니다(test_run_end_to_end.py 와
-    같은 패턴)."""
+class _SingleToolGateway:
+    """`ToolGateway` 포트 최소 구현 — 도구 하나만 압니다(spec 0003 2.1,
+    test_run_end_to_end.py 와 같은 패턴)."""
 
     def __init__(self, tool: Any) -> None:
         self._tool = tool
 
-    def get(self, name: str) -> Any:
-        if name != self._tool.name:
-            raise KeyError(name)
-        return self._tool
+    def discover(self) -> tuple[ToolSchema, ...]:
+        return (
+            ToolSchema(
+                name=self._tool.name,
+                description=self._tool.description,
+                input_schema=self._tool.input_schema,
+            ),
+        )
 
-    def names(self) -> frozenset[str]:
-        return frozenset({self._tool.name})
+    def call(
+        self, run_id: UUID, agent_version_id: UUID, name: str, arguments: dict[str, Any]
+    ) -> ToolResult:
+        del run_id, agent_version_id
+        if name != self._tool.name:
+            raise ToolNotFound(name)
+        result: ToolResult = self._tool.run(arguments)
+        return result
 
 
 @dataclass
@@ -368,7 +380,7 @@ def test_tool_exception_retried_once_then_succeeds() -> None:
         store=store,
         events=events,
         notifier=notifier,
-        tools=_SingleToolRegistry(tool),
+        tools=_SingleToolGateway(tool),
     )
 
     status = usecase(run_id)
@@ -403,7 +415,7 @@ def test_tool_exception_exhausts_retries_and_fails_with_reason() -> None:
         store=store,
         events=events,
         notifier=notifier,
-        tools=_SingleToolRegistry(tool),
+        tools=_SingleToolGateway(tool),
     )
 
     status = usecase(run_id)
@@ -424,7 +436,7 @@ def test_tool_result_is_error_is_not_retried_and_reaches_the_model_as_observatio
     events = FakeEventSink()
     notifier = FakeStatusNotifier()
     tool = FakeTool(name="calculator", result=ToolResult(content="bad expr", is_error=True))
-    registry = FakeToolRegistry({"calculator": tool})
+    gateway_tools = FakeToolGateway({"calculator": tool})
     gateway = FakeModelGateway(
         [
             ModelResponse(
@@ -442,7 +454,7 @@ def test_tool_result_is_error_is_not_retried_and_reaches_the_model_as_observatio
         store=store,
         events=events,
         notifier=notifier,
-        tools=registry,
+        tools=gateway_tools,
     )
 
     status = usecase(run_id)
@@ -484,7 +496,7 @@ def test_tool_advancing_clock_past_deadline_times_out_at_next_step_start() -> No
         store=store,
         events=events,
         notifier=notifier,
-        tools=_SingleToolRegistry(tool),
+        tools=_SingleToolGateway(tool),
     )
 
     status = usecase(run_id)
@@ -523,7 +535,7 @@ def test_model_call_receives_remaining_budget_as_timeout_seconds() -> None:
         store=store,
         events=events,
         notifier=notifier,
-        tools=_SingleToolRegistry(tool),
+        tools=_SingleToolGateway(tool),
     )
 
     status = usecase(run_id)

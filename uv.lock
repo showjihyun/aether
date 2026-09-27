@@ -133,6 +133,7 @@ name = "aether-runtime"
 version = "0.0.0"
 source = { editable = "packages/runtime" }
 dependencies = [
+    { name = "aether-mcp" },
     { name = "httpx" },
     { name = "opentelemetry-sdk" },
     { name = "psycopg", extra = ["binary"] },
@@ -142,6 +143,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aether-mcp", editable = "packages/mcp" },
     { name = "httpx" },
     { name = "opentelemetry-sdk", specifier = ">=1.44.0" },
     { name = "psycopg", extras = ["binary"] },
@@ -154,6 +156,8 @@ name = "aether-worker"
 version = "0.0.0"
 source = { editable = "apps/worker" }
 dependencies = [
+    { name = "aether-mcp" },
+    { name = "aether-policy" },
     { name = "aether-runtime" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
@@ -164,6 +168,8 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aether-mcp", editable = "packages/mcp" },
+    { name = "aether-policy", editable = "packages/policy" },
     { name = "aether-runtime", editable = "packages/runtime" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.44.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.44.0" },

@@ -1,15 +1,15 @@
-"""spec 0002 2.1, 2.6, D-5: 도구 값 타입 — 지금부터 MCP tool 과 같은 모양입니다.
+"""spec 0002 2.1, 2.6, D-5: 도구 값 타입 — MCP tool 과 같은 모양입니다.
 
-`BUILTIN_TOOL_NAMES` 는 api 가 `definition.tools` 를 검증할 때 쓰는 유일한 근거입니다
-— api 는 어댑터(레지스트리)를 모르므로 이 상수로만 검증합니다(2.3).
+spec 0003 2.15, D-16(spec 0002 D-3 [실질] 개정): 도구 이름의 생성 시 정적 검증은
+없앴습니다 — 도구는 Discovery 에서 오고, api 는 Agent 생성 시점에 어떤 MCP Server 가
+붙을지 모릅니다. 그래서 `BUILTIN_TOOL_NAMES` 는 더 이상 없습니다. 없는 도구는 Run
+시점에 `ToolGateway.call` 이 `ToolNotFound` 로 실패시키고 감사에 남습니다.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-
-BUILTIN_TOOL_NAMES: frozenset[str] = frozenset({"clock", "calculator"})
 
 
 @dataclass(frozen=True)

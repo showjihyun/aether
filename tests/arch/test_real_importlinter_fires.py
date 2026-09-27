@@ -155,6 +155,46 @@ def test_policy_import_of_mcp_domain_is_rejected_ar4(tmp_path: Path) -> None:
     assert "AR-4" in output, output
 
 
+def test_runtime_import_of_mcp_sdk_is_rejected_ar6(tmp_path: Path) -> None:
+    """spec 0003 R-2 (P2-3): `ar6-mcp-client-only-in-mcp` 는 `aether_runtime` 을
+    포함한 여덟 패키지에서 `mcp` SDK 를 이미 금지합니다(개정 2) — 이 단위가 그
+    계약을 실제로 쓰는 첫 코드(`McpToolGateway`)를 추가하므로, 위반이 실제로
+    발화하는지 여기서 판정합니다(fixture 가 아니라 복사된 실제 src)."""
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "packages" / "runtime" / "src" / "aether_runtime" / "_bad.py"
+    bad_module.write_text("import mcp\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "AR-6" in output, output
+
+
+def test_mcp_import_of_policy_adapters_is_rejected_ar12(tmp_path: Path) -> None:
+    """spec 0003 2.1, 2.11 (H-1): `ar12-mcp-sees-policy-inbound-ports-only` —
+    `aether_mcp` 는 `aether_policy` 의 inbound 포트 타입만 보고, `aether_policy.
+    adapters`(구현)는 보지 않습니다. H-1(P2-2b 병합 뒤, P2-3 착수 전)이 더한
+    계약이 실제로 발화하는지 여기서 판정합니다."""
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "packages" / "mcp" / "src" / "aether_mcp" / "_bad.py"
+    bad_module.write_text(
+        "import aether_policy.adapters.outbound.permission_table.postgres\n", encoding="utf-8"
+    )
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "AR-12" in output, output
+
+
 def test_real_importlinter_contract_bodies_declare_the_expected_forbidden_modules() -> None:
     """spec 개정 2: 실제 파일의 contract 본문 단언.
 
