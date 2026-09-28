@@ -61,6 +61,12 @@ pytestmark = pytest.mark.integration
 class _ClockOnlyToolGateway:
     """spec 0003 2.1: `ToolGateway` 포트 최소 구현 — `clock` 하나만 내놓습니다."""
 
+    def bind(self, mcp_servers: tuple[object, ...]) -> None:
+        del mcp_servers
+
+    def close(self) -> None:
+        pass
+
     def discover(self) -> tuple[ToolSchema, ...]:
         return (ToolSchema(name="clock", description="clock", input_schema={}),)
 

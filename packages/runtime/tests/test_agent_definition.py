@@ -125,3 +125,43 @@ def test_accepts_backoff_max_seconds_equal_to_base_seconds() -> None:
     )
 
     assert definition.policy.backoff.max_seconds == 2.0
+
+
+def test_mcp_servers_defaults_to_empty_list() -> None:
+    """spec 0003 2.6, D-2: `mcp_servers` 의 기본값은 빈 목록 — 바인딩이 없으면
+    Run 은 도구 없이 실행됩니다(spec 2.5)."""
+    definition = AgentDefinition.model_validate(_minimal())
+
+    assert definition.mcp_servers == []
+
+
+def test_mcp_servers_accepts_bindings() -> None:
+    """spec 0003 2.6: `{name, transport, ref}` 셋만 담습니다 — 자격증명·절대 URL 은
+    여기 없습니다(R-11), 배포 설정이 `ref` 를 실제 값으로 풉니다(2.9)."""
+    definition = AgentDefinition.model_validate(
+        _minimal(
+            mcp_servers=[
+                {"name": "filesystem", "transport": "stdio", "ref": "filesystem"},
+                {"name": "postgres", "transport": "http", "ref": "postgres-readonly"},
+            ]
+        )
+    )
+
+    assert [binding.name for binding in definition.mcp_servers] == ["filesystem", "postgres"]
+    assert definition.mcp_servers[0].transport == "stdio"
+    assert definition.mcp_servers[1].transport == "http"
+    assert definition.mcp_servers[1].ref == "postgres-readonly"
+
+
+def test_mcp_servers_rejects_unknown_transport() -> None:
+    with pytest.raises(ValidationError):
+        AgentDefinition.model_validate(
+            _minimal(mcp_servers=[{"name": "filesystem", "transport": "sse", "ref": "filesystem"}])
+        )
+
+
+def test_mcp_servers_binding_requires_ref() -> None:
+    with pytest.raises(ValidationError):
+        AgentDefinition.model_validate(
+            _minimal(mcp_servers=[{"name": "filesystem", "transport": "stdio"}])
+        )

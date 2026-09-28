@@ -47,6 +47,18 @@ def test_mcp_defaults_and_call_timeout_env_override(monkeypatch: pytest.MonkeyPa
     assert overridden.mcp_call_timeout_ms == 5000
 
 
+def test_mcp_servers_env_defaults_to_empty_string(monkeypatch: pytest.MonkeyPatch) -> None:
+    """spec 0003 2.9 (P2-6): `AETHER_MCP_SERVERS` 기본값은 비어 있음."""
+    monkeypatch.delenv("AETHER_MCP_SERVERS", raising=False)
+    settings = Settings()
+
+    assert settings.mcp_servers == ""
+
+    monkeypatch.setenv("AETHER_MCP_SERVERS", "filesystem=stdio:npx -y server-fs /data")
+    overridden = Settings()
+    assert overridden.mcp_servers == "filesystem=stdio:npx -y server-fs /data"
+
+
 def test_model_adapter_rejects_an_invalid_value(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AETHER_MODEL_ADAPTER", "not-a-real-adapter")
 

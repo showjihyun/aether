@@ -13,10 +13,13 @@ test_composition_only_in_main.py`).
 from __future__ import annotations
 
 import logging
+import os
+import re
+import shlex
 import signal
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from threading import Event, Thread
 from types import FrameType
 from typing import NoReturn
@@ -126,31 +129,90 @@ def _build_model_gateway(settings: Settings) -> ModelGateway:
     )
 
 
+_ENV_VAR_REF_RE = re.compile(r"\$\{(\w+)\}")
+
+
+def _expand_env_refs(target: str, env: Mapping[str, str]) -> str:
+    """spec 0003 2.9, R-11: `${VAR}` 참조를 `env` 값으로 치환합니다. 없는 변수는
+    빈 문자열로 풉니다 — 자격증명 원문은 `AETHER_MCP_SERVERS` 안에만 있고, 치환된
+    값은 로그·감사·이벤트에 넣지 않습니다(호출자의 책임, 이 함수는 문자열만 만듭니다)."""
+    return _ENV_VAR_REF_RE.sub(lambda match: env.get(match.group(1), ""), target)
+
+
+def _resolve_mcp_servers(
+    raw: str, *, env: Mapping[str, str] | None = None
+) -> dict[str, McpServerRef]:
+    """spec 0003 2.9, D-2 (P2-6): `AETHER_MCP_SERVERS`(`name=transport:target` 목록,
+    `;` 로 구분)를 `ref -> McpServerRef` 표로 풉니다. `AgentDefinition.mcp_servers`
+    의 `ref` 가 이 표의 키입니다(spec 2.6) — `McpToolGateway.bind()` 가 찾지 못하는
+    `ref` 는 조용히 드롭합니다(그 몫은 여기가 아니라 어댑터, spec 2.5).
+
+    stdio 의 target 은 `command arg1 arg2 ...`(`shlex.split`), http 의 target 은
+    URL 문자열입니다. 알 수 없는 transport 는 `ValueError` — 배포 설정 오류이므로
+    조용히 넘기지 않고 worker 시작을 막습니다.
+    """
+    resolved_env = os.environ if env is None else env
+    table: dict[str, McpServerRef] = {}
+    for raw_entry in raw.split(";"):
+        entry = raw_entry.strip()
+        if not entry:
+            continue
+        name, _, rest = entry.partition("=")
+        transport, _, raw_target = rest.partition(":")
+        name = name.strip()
+        transport = transport.strip()
+        target = _expand_env_refs(raw_target.strip(), resolved_env)
+        if transport == "stdio":
+            parts = shlex.split(target)
+            table[name] = McpServerRef(
+                name=name, transport="stdio", command=parts[0], args=tuple(parts[1:])
+            )
+        elif transport == "http":
+            table[name] = McpServerRef(name=name, transport="http", url=target)
+        else:
+            raise ValueError(
+                f"AETHER_MCP_SERVERS: unknown transport {transport!r} in entry {entry!r}"
+            )
+    return table
+
+
 def _build_tool_gateway(
     settings: Settings, connect: Callable[[], psycopg.Connection]
 ) -> ToolGateway:
-    """spec 0003 2.1, D-5, D-9: Gateway 유스케이스(판정 → 호출 → 감사)를 조립하고
-    runtime 의 `ToolGateway` 포트로 감쌉니다.
+    """spec 0003 2.1, 2.5, 2.6, 2.9, D-5, D-9 (P2-6): Gateway 유스케이스(판정 →
+    호출 → 감사)를 조립하고 runtime 의 `ToolGateway` 포트로 감쌉니다.
 
-    바인딩(`AgentDefinition.mcp_servers`)은 아직 없습니다(P2-6) — 그때까지는
-    `settings.mcp_builtin_server_script`(저장소 안 builtin 서버) 하나로 고정합니다.
+    `server_table` 은 저장소 안 builtin 서버(`settings.mcp_builtin_server_script`)
+    를 기본으로 항상 담고, `AETHER_MCP_SERVERS`(spec 2.9)에 같은 키("builtin")가
+    있으면 그것으로 덮어씁니다 — builtin 서버도 이 표를 거쳐 들어오게 하기
+    위해서입니다(고정 배선을 없앰). `bind()`/`discover()`/`call()` 이 실제로 어느
+    서버에 연결할지는 Run 마다 `ExecuteRunUseCase` 가 `AgentDefinition.mcp_servers`
+    로 정합니다(spec 2.5) — 이 함수는 worker 프로세스 수명 동안 한 번만 조립되는
+    표와 어댑터를 준비할 뿐입니다.
+
     `StdioMcpClient` 조립은 `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 에 둔
     `ignore_imports` 예외(`aether_worker.main -> aether_mcp.adapters.outbound.
     mcp_client.stdio`, 사람 결정 2026-09-27) 아래에서만 허용됩니다 — 이 함수
     밖에서는 그 모듈을 import 하지 않습니다.
     """
-    server = McpServerRef(
-        name="builtin",
-        transport="stdio",
-        command=sys.executable,
-        args=(settings.mcp_builtin_server_script,),
-    )
+    server_table: dict[str, McpServerRef] = {
+        "builtin": McpServerRef(
+            name="builtin",
+            transport="stdio",
+            command=sys.executable,
+            args=(settings.mcp_builtin_server_script,),
+        ),
+    }
+    server_table.update(_resolve_mcp_servers(settings.mcp_servers))
+
     client = StdioMcpClient(call_timeout_ms=settings.mcp_call_timeout_ms)
     judge = JudgeToolCallUseCase(PostgresPermissionTable(connect))
     audit = PostgresAuditSink(connect)
     call_tool = CallToolUseCase(judge=judge, client=client, audit=audit)
     discover_tools = DiscoverToolsUseCase(client=client)
-    return McpToolGateway(call_tool=call_tool, discover_tools=discover_tools, server=server)
+    return McpToolGateway(
+        call_tool=call_tool, discover_tools=discover_tools, server_table=server_table
+    )
 
 
 def _build_production_handler(settings: Settings, client: Redis) -> HandleRunRequested:

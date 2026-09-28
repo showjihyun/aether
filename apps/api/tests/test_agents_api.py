@@ -222,6 +222,43 @@ def test_create_with_unknown_tool_name_is_accepted_and_validated_at_run_time(
     assert response.status_code == 201, response.text
 
 
+def test_update_only_mcp_servers_bumps_version_and_keeps_version_1_definition_immutable(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """spec 0003 R-9, 2.6, D-2 (P2-6): 바인딩 변경은 `definition` 변경이므로 기존
+    `PUT /agents/{id}` 가 그대로 새 Version 을 만듭니다 — 새 HTTP 경로는 없습니다.
+    Version 1 의 `definition`(`mcp_servers` 없음)은 이후에도 그대로입니다(spec 0002
+    D-9 불변 규칙)."""
+    name = f"mcp-binding-{uuid4()}"
+    create_response = client.post(
+        "/agents",
+        json={"name": name, "definition": _definition_payload()},
+        headers=auth_headers,
+    )
+    assert create_response.status_code == 201, create_response.text
+    agent_id = create_response.json()["id"]
+
+    bound_definition = _definition_payload(
+        mcp_servers=[{"name": "filesystem", "transport": "stdio", "ref": "filesystem"}]
+    )
+    put_response = client.put(
+        f"/agents/{agent_id}",
+        json={"definition": bound_definition},
+        headers=auth_headers,
+    )
+    assert put_response.status_code == 200, put_response.text
+    updated = put_response.json()
+    assert updated["current_version"] == 2
+    assert updated["definition"]["mcp_servers"] == [
+        {"name": "filesystem", "transport": "stdio", "ref": "filesystem"}
+    ]
+
+    version_1_response = client.get(f"/agents/{agent_id}/versions/1", headers=auth_headers)
+    assert version_1_response.status_code == 200
+    version_1 = version_1_response.json()
+    assert version_1["definition"]["mcp_servers"] == []
+
+
 def test_create_with_wrong_schema_version_is_422(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:

@@ -1,0 +1,29 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-28-001
+date: 2026-09-28
+status: candidate
+symptom: outbound 포트(Protocol)에 메서드를 하나 더하면 그 포트를 구현한 fake 전부를 기계적으로 고쳐야 하고, 그 보정이 한 단위의 반복 예산을 넘긴다. P2-6 에서 ToolGateway 에 bind·close 를 더하자 fake 10곳이 깨졌고(39 failed) 반복이 9~10회로 예산 8회를 한 번 넘겼다
+evidence: |
+  2026-09-28 P2-6. 실행자 보고: `uv run pytest -q -m 'not integration'` 이 39 failed,
+  전부 `AttributeError: 'FakeToolGateway'/'_SingleToolGateway'/... object has no attribute 'bind'`.
+  고쳐야 했던 fake 는 packages/runtime/tests/fakes.py 와 test_execute_run.py·test_policy.py·
+  test_tool_gateway_mcp_adapter.py, apps/api/tests/test_run_end_to_end.py·test_run_events_sse.py·
+  test_run_failure_projection.py·test_trace_propagation.py·test_agents_api.py, apps/worker/tests 의
+  두 파일 — 같은 포트의 fake 가 최소 10곳에 흩어져 있다.
+  실행자는 예산 초과를 스스로 신고했고, 각 반복의 red 원인이 서로 달라 '같은 실패 3회' 중단
+  조건에는 걸리지 않았다고 적었다. 즉 중단 규칙이 잡지 못하는 종류의 초과다.
+  같은 부류의 앞선 사례: P1-2a 가 공용 fixture 를 tests/support/ 로 모은 이유가 이것이었고
+  (plan 0002 2절), 그때 모은 것은 fixture 였고 fake 는 모으지 않았다.
+root_cause: 포트의 fake 가 여러 테스트 파일에 복제되어 있다. 포트는 계약이므로 그 계약이 바뀌면 구현이 전부 따라와야 하는데, 복제된 fake 는 '구현' 이 열 곳이라는 뜻이다. tests/support/ 라는 공용 자리가 이미 있는데 fake 는 거기로 가지 않았다
+fix: 이번에는 기계적으로 열 곳을 고쳤다. 게이트는 그것을 잡아 주었다(39 failed → 전부 green) — 문제는 정확성이 아니라 비용이다
+recurrence_risk: high
+harness_element: HE-6
+proposed_harness_change: "(사람 결정) (1) outbound 포트의 fake 를 tests/support/ 아래 한 곳으로 모은다 — 포트 하나당 fake 하나. 테스트는 그것을 import 해 쓰고, 시나리오별 차이는 생성 인자로 준다. (2) 구조 테스트를 하나 더한다: 같은 포트 이름을 구현하는 클래스가 tests/support/ 밖에 둘 이상 있으면 실패. (3) plan 작성 때 '포트 확장' 이 들어간 단위는 파급 범위(그 포트의 fake 수)를 미리 세어 예산에 반영한다 — P2-6 의 plan 절은 bind·close 를 아예 예상하지 못했다"
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  대상: 제안 적용 뒤 포트 하나에 메서드를 1개 더하는 변경 1회(실험으로 되돌림).
+  기준: 고쳐야 하는 fake 파일이 1곳. 구조 테스트가 tests/support/ 밖의 중복 fake 를 실패로 잡는다.
+  기존 테스트 수가 줄지 않는다(fake 를 모으면서 시나리오를 잃지 않았는지).
+owner: unassigned
+expires: 2026-12-28

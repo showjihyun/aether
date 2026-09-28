@@ -100,6 +100,14 @@ class Settings(BaseSettings):
     서버, 시계·계산기)를 stdio 로 연결합니다. 배포 이미지의 작업 디렉터리 기준
     상대 경로이거나 절대 경로입니다."""
 
+    mcp_servers: str = ""
+    """spec 0003 2.9, D-2 (P2-6). `name=transport:target` 목록(`;` 로 구분) —
+    `AgentDefinition.mcp_servers` 의 `ref` 를 실제 명령·URL 로 푸는 표(worker 가
+    소유). 비어 있으면 저장소 안 builtin 서버만 씁니다(`main._build_tool_gateway`
+    가 항상 `builtin` 하나를 기본으로 넣고, 이 값의 같은 키가 있으면 덮어씁니다).
+    자격증명은 target 안의 `${VAR}` 참조로만 넣습니다 — 이 문자열 자체는 로그에
+    남기지 않습니다(R-11)."""
+
     mcp_call_timeout_ms: int = 30_000
     """spec 0003 2.9, D-9. `StdioMcpClient.call` 이 도구 호출 1회를 이 시간(ms)
     안에서 강제합니다(`asyncio.wait_for`) — 넘으면 `TimeoutError` 가 `ToolCallFailed`

@@ -1,7 +1,8 @@
-"""spec 0003 2.1, 2.9, D-5, D-9 (사람 결정 2026-09-27, AR-6 `ignore_imports`):
+"""spec 0003 2.1, 2.5, 2.9, D-5, D-9 (사람 결정 2026-09-27, AR-6 `ignore_imports`):
 `aether_worker.main._build_tool_gateway` 가 실제로 조립되는지 — 판정(PostgreSQL) →
 호출(실제 stdio 서브프로세스, 저장소 안 builtin 서버) → 감사(PostgreSQL) 전 구간을
-실제로 지나 도구 하나를 부릅니다.
+실제로 지나 도구 하나를 부릅니다. `bind()` 로 "builtin" 하나에 바인딩합니다(P2-6) —
+그 서버는 `_build_tool_gateway` 가 기본으로 넣는 표의 항목입니다.
 
 `.importlinter` 의 AR-6 예외(`aether_worker.main -> aether_mcp.adapters.outbound.
 mcp_client.stdio`)가 이 조립 함수 **하나**에만 열려 있으므로, 이 테스트는 그
@@ -18,6 +19,7 @@ from uuid import UUID
 
 import psycopg
 import pytest
+from aether_runtime.domain.agent import McpServerBinding
 from aether_worker.main import _build_tool_gateway
 from aether_worker.settings import Settings
 
@@ -80,6 +82,7 @@ def test_build_tool_gateway_discovers_and_calls_the_builtin_server(
 
     settings = Settings()
     gateway = _build_tool_gateway(settings, data_connection_factory)
+    gateway.bind((McpServerBinding(name="builtin", transport="stdio", ref="builtin"),))
 
     schemas = gateway.discover()
     assert {schema.name for schema in schemas} == {"clock", "calculator"}
