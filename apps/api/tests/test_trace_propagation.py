@@ -40,10 +40,9 @@ from aether_runtime.adapters.outbound.redis.event_sink import RedisEventSink
 from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNotifier
 from aether_runtime.adapters.outbound.system_clock import SystemClock
 from aether_runtime.adapters.outbound.telemetry.otel_tracer import OtelTracer
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
-from aether_runtime.application.ports.outbound.model_gateway import ModelResponse
+from aether_runtime.application.ports.outbound.model_gateway import ModelResponse, ToolSchema
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
-from aether_runtime.domain.tools import ToolCall
+from aether_runtime.domain.tools import ToolCall, ToolResult
 from aether_worker.adapters.outbound.otel_trace_context import OtelTraceContext
 from aether_worker.application.usecases.handle_run_requested import HandleRunRequestedUseCase
 from aether_worker.main import serve as worker_serve
@@ -57,6 +56,22 @@ from redis import Redis
 from tests.support.waiting import wait_until
 
 pytestmark = pytest.mark.integration
+
+
+class _ClockOnlyToolGateway:
+    """spec 0003 2.1: `ToolGateway` 포트 최소 구현 — `clock` 하나만 내놓습니다."""
+
+    def discover(self) -> tuple[ToolSchema, ...]:
+        return (ToolSchema(name="clock", description="clock", input_schema={}),)
+
+    def call(
+        self, run_id: object, agent_version_id: object, name: str, arguments: dict[str, object]
+    ) -> ToolResult:
+        del run_id, agent_version_id, arguments
+        if name != "clock":
+            raise AssertionError(f"unexpected tool call: {name}")
+        return ToolResult(content=SystemClock().now().isoformat())
+
 
 _WORKER_READY_TIMEOUT = 10.0
 _JOIN_TIMEOUT = 10.0
@@ -114,7 +129,7 @@ def test_trace_id_propagates_from_api_request_span_through_worker_run_span(
                 ModelResponse(text="final answer.", finish_reason="stop"),
             ]
         ),
-        InMemoryToolRegistry(SystemClock()),
+        _ClockOnlyToolGateway(),
         RedisEventSink(redis_client),
         RedisStatusNotifier(redis_client),
         OtelTracer(provider),

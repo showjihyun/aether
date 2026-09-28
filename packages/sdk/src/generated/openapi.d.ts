@@ -311,7 +311,7 @@ export interface components {
          * FailureReason
          * @enum {string}
          */
-        FailureReason: "model_error" | "tool_error" | "max_steps_exceeded" | "unknown_tool" | "definition_invalid" | "internal";
+        FailureReason: "model_error" | "tool_error" | "tool_denied" | "max_steps_exceeded" | "unknown_tool" | "definition_invalid" | "internal";
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */

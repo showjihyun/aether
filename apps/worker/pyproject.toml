@@ -5,6 +5,8 @@ description = ""
 requires-python = ">=3.12"
 dependencies = [
     "aether-runtime",
+    "aether-mcp",
+    "aether-policy",
     "opentelemetry-exporter-otlp-proto-http>=1.44.0",
     "opentelemetry-sdk>=1.44.0",
     "psycopg[binary]>=3.3.5",
@@ -24,3 +26,5 @@ packages = ["src/aether_worker"]
 
 [tool.uv.sources]
 aether-runtime = { workspace = true }
+aether-mcp = { workspace = true }
+aether-policy = { workspace = true }

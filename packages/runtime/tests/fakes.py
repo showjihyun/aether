@@ -12,8 +12,8 @@ DB 를 보는 것과 같은 모양으로 "새 store 인스턴스가 같은 RunSt
 검증할 수 있습니다(mvp-backlog P1-2b 완료 판정).
 
 `FakeEventSink`·`FakeStatusNotifier`·`FakeRunDeclarationReader`·`InMemoryTracer`·
-`FakeTool`·`FakeToolRegistry` 는 P1-4(`ExecuteRun`)의 outbound 포트 fake 입니다(AR-9 —
-유스케이스 테스트는 컨테이너 없이 돕니다).
+`FakeTool`·`FakeToolGateway` 는 `ExecuteRun`(P1-4, spec 0003 2.1 로 `ToolGateway` 로
+교체)의 outbound 포트 fake 입니다(AR-9 — 유스케이스 테스트는 컨테이너 없이 돕니다).
 
 `FakeLeaseKeeper` 는 `LeaseKeeper` 포트의 결정적 fake 입니다(spec 0002 C-13, P1-7) —
 몇 번째 `keep()` 호출에서 lease 를 잃는지를 `lost_on_keep` 으로 미리 정해 둘 수
@@ -32,8 +32,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from aether_runtime.application.ports.outbound.model_gateway import ToolSchema
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
 from aether_runtime.application.ports.outbound.status_notifier import StatusMessage
+from aether_runtime.application.ports.outbound.tool_gateway import ToolCallDenied, ToolNotFound
 from aether_runtime.domain.events import RunEvent
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunState, RunStatus
@@ -277,9 +279,11 @@ class InMemoryTracer:
 
 @dataclass
 class FakeTool:
-    """`Tool` 포트를 만족하는 결정적 테스트 도구 — 정확한 도구 파싱(계산기 등)은
-    `test_tools.py` 가 따로 증명하므로, 루프 테스트는 이 fake 로 도구 내용과 무관하게
-    호출·결과·`is_error`·긴 응답(잘림 테스트)만 통제합니다."""
+    """도구 하나의 결정적 fake — 정확한 도구 파싱(계산기 등)은
+    `packages/mcp/tests/test_builtin_mcp_server.py` 가 실제 MCP Server 로 증명하므로,
+    루프 테스트는 이 fake 로 도구 내용과 무관하게 호출·결과·`is_error`·긴 응답(잘림
+    테스트)만 통제합니다. `FakeToolGateway` 가 이름 -> `FakeTool` 매핑을 감싸
+    `ToolGateway` 포트로 노출합니다."""
 
     name: str
     description: str = "fake tool"
@@ -295,17 +299,40 @@ class FakeTool:
         return self.result
 
 
-class FakeToolRegistry:
-    """`ToolRegistry` 포트의 인메모리 구현 — `get` 은 없는 이름에 `KeyError`."""
+class FakeToolGateway:
+    """spec 0003 2.1: `ToolGateway`(outbound) 포트의 인메모리 구현 — 이름 -> 도구
+    (`.name`·`.description`·`.input_schema`·`.run(arguments)` 를 가진 아무 객체,
+    보통 `FakeTool`) 매핑을 감쌉니다.
 
-    def __init__(self, tools: Mapping[str, FakeTool]) -> None:
-        self._tools = dict(tools)
+    `denied` 에 있는 이름은 `ToolCallDenied`(R-4), 매핑에 없는 이름은 `ToolNotFound`
+    (spec 2.15, D-16)를 올립니다 — 그 밖은 그대로 `tool.run(arguments)` 위임이므로
+    도구가 던진 예외(`RuntimeError` 등)는 그대로 전파되어 재시도 대상(TOOL_ERROR)이
+    됩니다."""
 
-    def get(self, name: str) -> FakeTool:
-        return self._tools[name]
+    def __init__(
+        self, tools: Mapping[str, Any] | None = None, *, denied: frozenset[str] = frozenset()
+    ) -> None:
+        self._tools = dict(tools) if tools else {}
+        self._denied = denied
+        self.calls: list[tuple[str, dict[str, Any]]] = []
 
-    def names(self) -> frozenset[str]:
-        return frozenset(self._tools)
+    def discover(self) -> tuple[ToolSchema, ...]:
+        return tuple(
+            ToolSchema(name=tool.name, description=tool.description, input_schema=tool.input_schema)
+            for tool in self._tools.values()
+        )
+
+    def call(
+        self, run_id: UUID, agent_version_id: UUID, name: str, arguments: dict[str, Any]
+    ) -> ToolResult:
+        del run_id, agent_version_id
+        self.calls.append((name, dict(arguments)))
+        if name in self._denied:
+            raise ToolCallDenied(name)
+        if name not in self._tools:
+            raise ToolNotFound(name)
+        result: ToolResult = self._tools[name].run(arguments)
+        return result
 
 
 @dataclass

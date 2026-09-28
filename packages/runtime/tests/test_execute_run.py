@@ -11,14 +11,17 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
-from aether_runtime.application.ports.outbound.model_gateway import ModelError, ModelResponse
+from aether_runtime.application.ports.outbound.model_gateway import (
+    ModelError,
+    ModelResponse,
+    ToolSchema,
+)
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
-from aether_runtime.application.ports.outbound.tools import ToolRegistry
+from aether_runtime.application.ports.outbound.tool_gateway import ToolGateway, ToolNotFound
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunStatus
-from aether_runtime.domain.tools import ToolCall
+from aether_runtime.domain.tools import ToolCall, ToolResult
 
 from packages.runtime.tests.fakes import (
     FakeClock,
@@ -27,7 +30,7 @@ from packages.runtime.tests.fakes import (
     FakeRunStateStore,
     FakeStatusNotifier,
     FakeTool,
-    FakeToolRegistry,
+    FakeToolGateway,
     InMemoryTracer,
 )
 
@@ -98,13 +101,14 @@ def _usecase(
     notifier: FakeStatusNotifier,
     tracer: InMemoryTracer,
     clock: FakeClock,
-    tools: ToolRegistry | None = None,
+    tools: ToolGateway | None = None,
 ) -> ExecuteRunUseCase:
+    default_tools = FakeToolGateway({"calculator": FakeTool(name="calculator")})
     return ExecuteRunUseCase(
         store=store,
         declarations=reader,
         gateway=gateway,
-        tools=tools if tools is not None else InMemoryToolRegistry(clock),
+        tools=tools if tools is not None else default_tools,
         events=events,
         notifier=notifier,
         tracer=tracer,
@@ -158,6 +162,9 @@ def test_scenario_with_tool_call_succeeds_and_observation_is_a_tool_message() ->
         notifier=notifier,
         tracer=tracer,
         clock=clock,
+        tools=FakeToolGateway(
+            {"calculator": FakeTool(name="calculator", result=ToolResult(content="4"))}
+        ),
     )
 
     status = usecase(run_id)
@@ -208,8 +215,8 @@ def test_max_steps_exceeded_fails_with_reason() -> None:
 
 
 def test_unknown_tool_call_fails_with_reason() -> None:
-    """spec 0002 2.8: 정의가 레지스트리에 없는 도구를 요구 → `failed(unknown_tool)` —
-    api 의 `AgentDefinition` 검증을 지나쳤다는 전제로, worker 가 런타임에 막습니다."""
+    """spec 0002 2.8: 정의가 허용하지 않은(`definition.tools` 밖) 도구를 모델이
+    부르면 → `failed(unknown_tool)` — Gateway 에 닿기 전에 막힙니다."""
     clock, store, reader, events, notifier, tracer, run_id, _ = _harness()
     gateway = FakeModelGateway(
         [
@@ -219,6 +226,7 @@ def test_unknown_tool_call_fails_with_reason() -> None:
             )
         ]
     )
+    tools = FakeToolGateway()
     usecase = _usecase(
         gateway=gateway,
         store=store,
@@ -227,19 +235,21 @@ def test_unknown_tool_call_fails_with_reason() -> None:
         notifier=notifier,
         tracer=tracer,
         clock=clock,
+        tools=tools,
     )
 
     status = usecase(run_id)
 
     assert status == RunStatus.FAILED
+    assert tools.calls == []
     final_status_events = [e for e in events.published if e.type == "run.status"]
     assert final_status_events[-1].payload["failure_reason"] == FailureReason.UNKNOWN_TOOL.value
 
 
 def test_tool_call_outside_definition_tools_fails_and_is_not_executed() -> None:
-    """리뷰 C, spec 0002 2.6·2.8: 허용 집합은 **`definition.tools`** 입니다 — 레지스트리에
-    등록되어 있어도 정의가 허용하지 않은 도구를 모델이 부르면 `unknown_tool` 이고,
-    그 도구는 실행되지 않습니다."""
+    """리뷰 C, spec 0002 2.6·2.8: 허용 집합은 **`definition.tools`** 입니다 — Gateway 가
+    내놓아도 정의가 허용하지 않은 도구를 모델이 부르면 `unknown_tool` 이고, 그 도구는
+    실행되지 않습니다(Gateway 에 닿지 않습니다)."""
     clock, store, reader, events, notifier, tracer, run_id, _ = _harness(
         definition=_definition(tools=["clock"])
     )
@@ -254,7 +264,7 @@ def test_tool_call_outside_definition_tools_fails_and_is_not_executed() -> None:
         ]
     )
     calculator = FakeTool(name="calculator")
-    registry = FakeToolRegistry({"clock": FakeTool(name="clock"), "calculator": calculator})
+    tools = FakeToolGateway({"clock": FakeTool(name="clock"), "calculator": calculator})
     usecase = _usecase(
         gateway=gateway,
         store=store,
@@ -263,7 +273,7 @@ def test_tool_call_outside_definition_tools_fails_and_is_not_executed() -> None:
         notifier=notifier,
         tracer=tracer,
         clock=clock,
-        tools=registry,
+        tools=tools,
     )
 
     status = usecase(run_id)
@@ -272,6 +282,79 @@ def test_tool_call_outside_definition_tools_fails_and_is_not_executed() -> None:
     assert calculator.calls == []
     final_status_events = [e for e in events.published if e.type == "run.status"]
     assert final_status_events[-1].payload["failure_reason"] == FailureReason.UNKNOWN_TOOL.value
+
+
+def test_tool_call_allowed_but_not_found_at_gateway_fails_with_unknown_tool() -> None:
+    """spec 0003 2.15, D-16 (spec 0002 D-3 [실질] 개정): 생성 시 정적 검증이 없으므로
+    `definition.tools` 는 임의 이름을 담을 수 있습니다 — 그 이름이 허용 집합은
+    통과하지만 어느 바인딩된 서버도 내놓지 않으면, Gateway 호출이 `ToolNotFound` 를
+    올리고 그 시점에(재시도 없이) `failed(unknown_tool)` 로 끝납니다."""
+    clock, store, reader, events, notifier, tracer, run_id, _ = _harness(
+        definition=_definition(tools=["search"])
+    )
+    gateway = FakeModelGateway(
+        [
+            ModelResponse(
+                tool_calls=[ToolCall(id="call_1", name="search", arguments={})],
+                finish_reason="tool_calls",
+            )
+        ]
+    )
+    tools = FakeToolGateway()  # "search" 를 내놓지 않음 -- 호출 시 ToolNotFound
+    usecase = _usecase(
+        gateway=gateway,
+        store=store,
+        reader=reader,
+        events=events,
+        notifier=notifier,
+        tracer=tracer,
+        clock=clock,
+        tools=tools,
+    )
+
+    status = usecase(run_id)
+
+    assert status == RunStatus.FAILED
+    final_status_events = [e for e in events.published if e.type == "run.status"]
+    assert final_status_events[-1].payload["failure_reason"] == FailureReason.UNKNOWN_TOOL.value
+
+
+def test_tool_call_denied_fails_with_reason_without_retry() -> None:
+    """spec 0003 R-4: `ToolGateway.call` 이 `ToolCallDenied` 를 올리면 재시도 없이
+    즉시 `failed(tool_denied)` 로 끝납니다(정책 판정은 결정적 — 모델 4xx 와 같은
+    취급)."""
+    clock, store, reader, events, notifier, tracer, run_id, _ = _harness(
+        definition=_definition(tools=["calculator"])
+    )
+    gateway = FakeModelGateway(
+        [
+            ModelResponse(
+                tool_calls=[
+                    ToolCall(id="call_1", name="calculator", arguments={"expression": "1+1"})
+                ],
+                finish_reason="tool_calls",
+            )
+        ]
+    )
+    tools = FakeToolGateway(
+        {"calculator": FakeTool(name="calculator")}, denied=frozenset({"calculator"})
+    )
+    usecase = _usecase(
+        gateway=gateway,
+        store=store,
+        reader=reader,
+        events=events,
+        notifier=notifier,
+        tracer=tracer,
+        clock=clock,
+        tools=tools,
+    )
+
+    status = usecase(run_id)
+
+    assert status == RunStatus.FAILED
+    final_status_events = [e for e in events.published if e.type == "run.status"]
+    assert final_status_events[-1].payload["failure_reason"] == FailureReason.TOOL_DENIED.value
 
 
 def test_definition_invalid_fails_with_reason() -> None:
@@ -341,40 +424,31 @@ def test_cancel_observed_between_steps_yields_cancelled() -> None:
         ]
     )
 
-    class _CancelAfterFirstStepTools:
-        """첫 도구 호출이 끝나는 시점에 취소를 관측시키는 계산기 래퍼."""
-
-        name = "calculator"
-        description = "wrapped calculator"
-        input_schema: dict[str, Any] = {}
+    class _CancelAfterFirstCallGateway:
+        """`calculator` 호출이 끝나는 시점에 취소를 관측시키는 `ToolGateway` fake."""
 
         def __init__(
-            self, inner: Any, reader: FakeRunDeclarationReader, run_id: UUID, clock: FakeClock
+            self, reader: FakeRunDeclarationReader, run_id: UUID, clock: FakeClock
         ) -> None:
-            self._inner = inner
             self._reader = reader
             self._run_id = run_id
             self._clock = clock
+            self.calls: list[tuple[str, dict[str, Any]]] = []
 
-        def run(self, arguments: dict[str, Any]) -> Any:
-            result = self._inner.run(arguments)
+        def discover(self) -> tuple[ToolSchema, ...]:
+            return (ToolSchema(name="calculator", description="", input_schema={}),)
+
+        def call(
+            self, run_id: UUID, agent_version_id: UUID, name: str, arguments: dict[str, Any]
+        ) -> ToolResult:
+            del run_id, agent_version_id
+            if name != "calculator":
+                raise ToolNotFound(name)
+            self.calls.append((name, dict(arguments)))
+            result = ToolResult(content="2")
             self._reader.set_cancel_requested(self._run_id, self._clock.now())
             return result
 
-    class _Registry:
-        def __init__(self, tool: Any) -> None:
-            self._tool = tool
-
-        def get(self, name: str) -> Any:
-            if name != "calculator":
-                raise KeyError(name)
-            return self._tool
-
-        def names(self) -> frozenset[str]:
-            return frozenset({"calculator"})
-
-    base_registry = InMemoryToolRegistry(clock)
-    wrapped = _CancelAfterFirstStepTools(base_registry.get("calculator"), reader, run_id, clock)
     usecase = _usecase(
         gateway=gateway,
         store=store,
@@ -383,7 +457,7 @@ def test_cancel_observed_between_steps_yields_cancelled() -> None:
         notifier=notifier,
         tracer=tracer,
         clock=clock,
-        tools=_Registry(wrapped),
+        tools=_CancelAfterFirstCallGateway(reader, run_id, clock),
     )
 
     status = usecase(run_id)

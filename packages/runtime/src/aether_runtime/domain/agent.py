@@ -11,8 +11,6 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from aether_runtime.domain.tools import BUILTIN_TOOL_NAMES
-
 
 class ModelRef(BaseModel):
     """`model.id` 가 `null` 이면 배포 설정 `AETHER_MODEL_ID` 를 씁니다."""
@@ -59,10 +57,10 @@ class AgentDefinition(BaseModel):
 
     @field_validator("tools")
     @classmethod
-    def _tools_known_and_unique(cls, value: list[str]) -> list[str]:
+    def _tools_unique(cls, value: list[str]) -> list[str]:
+        """spec 0003 2.15, D-16: 이름의 존재 여부는 더 이상 여기서 검증하지 않습니다
+        — 도구는 Discovery 에서 오고, 없는 이름은 Run 시점에 `ToolNotFound` 로
+        실패합니다. 중복만 여전히 여기서 막습니다(정의 자체의 결함)."""
         if len(value) != len(set(value)):
             raise ValueError("tools must not contain duplicates")
-        unknown = sorted(set(value) - BUILTIN_TOOL_NAMES)
-        if unknown:
-            raise ValueError(f"unknown tools (outside BUILTIN_TOOL_NAMES): {unknown}")
         return value

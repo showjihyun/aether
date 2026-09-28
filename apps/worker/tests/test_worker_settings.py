@@ -35,6 +35,18 @@ def test_model_and_worker_defaults() -> None:
     assert settings.worker_heartbeat_seconds == 5.0
 
 
+def test_mcp_defaults_and_call_timeout_env_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """spec 0003 2.1, 2.9, D-5, D-9: builtin 서버 경로 기본값과
+    `AETHER_MCP_CALL_TIMEOUT_MS` 환경변수 override."""
+    settings = Settings()
+    assert settings.mcp_builtin_server_script == "tools/mcp-servers/builtin/server.py"
+    assert settings.mcp_call_timeout_ms == 30_000
+
+    monkeypatch.setenv("AETHER_MCP_CALL_TIMEOUT_MS", "5000")
+    overridden = Settings()
+    assert overridden.mcp_call_timeout_ms == 5000
+
+
 def test_model_adapter_rejects_an_invalid_value(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("AETHER_MODEL_ADAPTER", "not-a-real-adapter")
 

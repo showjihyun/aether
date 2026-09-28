@@ -41,8 +41,7 @@ from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
 from aether_runtime.adapters.outbound.redis.event_sink import RedisEventSink
 from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNotifier
 from aether_runtime.adapters.outbound.telemetry.noop_tracer import NoopTracer
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
-from aether_runtime.application.ports.outbound.model_gateway import ModelError
+from aether_runtime.application.ports.outbound.model_gateway import ModelError, ToolSchema
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_worker.adapters.outbound.noop_trace_context import NoopTraceContext
 from aether_worker.application.ports.inbound.handle_run_requested import HandleRunRequested
@@ -78,6 +77,17 @@ class _ImmediateClock:
         self.sleeps.append(seconds)
 
 
+class _EmptyToolGateway:
+    """spec 0003 2.1: `ToolGateway` 포트 최소 구현 — 이 시나리오는 도구를 부르지
+    않으므로 `discover()` 만 비어 있으면 충분합니다."""
+
+    def discover(self) -> tuple[ToolSchema, ...]:
+        return ()
+
+    def call(self, run_id: Any, agent_version_id: Any, name: str, arguments: dict[str, Any]) -> Any:
+        raise AssertionError("이 시나리오는 도구를 부르지 않습니다")
+
+
 def _issue_key(api_settings: Settings, label: str) -> str:
     store = PostgresApiKeyStore(lambda: psycopg.connect(api_settings.psycopg_dsn))
     issued = IssueApiKeyUseCase(store)(label)
@@ -94,7 +104,7 @@ def _build_retry_exhausted_handler(
         PostgresRunStateStore(data_connection_factory),
         PostgresRunDeclarationReader(data_connection_factory),
         gateway,
-        InMemoryToolRegistry(clock),
+        _EmptyToolGateway(),
         RedisEventSink(redis_client),
         RedisStatusNotifier(redis_client),
         NoopTracer(),

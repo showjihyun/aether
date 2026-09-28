@@ -96,6 +96,13 @@ source_modules =
     aether_evaluation
 forbidden_modules =
     mcp
+ignore_imports =
+    aether_worker.main -> aether_mcp.adapters.outbound.mcp_client.stdio
+unmatched_ignore_imports_alerting = error
+# spec 0003 2.1 — 조립은 worker 의 main 이 합니다. 이 계약은 전이 import 까지 잡으므로
+# 조립 지점 하나를 예외로 둡니다(AR-5 의 model_gateway.** -> httpx 와 같은 모양,
+# 사람 결정 2026-09-27, P2-3 실측). 다른 경로는 그대로 막힙니다 — http 전송을 조립하게
+# 되면 그 줄을 따로 추가합니다(matched 되지 않는 ignore 는 error 입니다).
 
 [importlinter:contract:ar7-control-does-not-call-data]
 name = AR-7 api must not import worker, nor runtime execution layers

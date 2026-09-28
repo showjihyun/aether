@@ -13,13 +13,12 @@ from uuid import UUID, uuid4
 
 import pytest
 from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
 from aether_runtime.application.ports.outbound.model_gateway import ModelResponse
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.run import LeaseHeld, Message, RunState, RunStatus
 from aether_runtime.domain.task import Task
-from aether_runtime.domain.tools import ToolCall
+from aether_runtime.domain.tools import ToolCall, ToolResult
 
 from packages.runtime.tests.fakes import (
     FakeClock,
@@ -27,8 +26,19 @@ from packages.runtime.tests.fakes import (
     FakeRunDeclarationReader,
     FakeRunStateStore,
     FakeStatusNotifier,
+    FakeTool,
+    FakeToolGateway,
     InMemoryTracer,
 )
+
+
+def _calculator_gateway() -> FakeToolGateway:
+    """spec 0003 2.1: 계산기 하나만 아는 `ToolGateway` fake — 이 파일의
+    도구 시나리오는 결과 내용 대신 흐름(취소·lease·trace)을 봅니다."""
+    return FakeToolGateway(
+        {"calculator": FakeTool(name="calculator", result=ToolResult(content="2"))}
+    )
+
 
 _SYSTEM_PROMPT = "You are a helpful test agent."
 
@@ -73,7 +83,7 @@ def test_notifier_failure_after_terminal_commit_is_republished_with_same_seq() -
         store=store,
         declarations=reader,
         gateway=baseline_gateway,
-        tools=InMemoryToolRegistry(clock),
+        tools=_calculator_gateway(),
         events=baseline_events,
         notifier=baseline_notifier,
         tracer=baseline_tracer,
@@ -100,7 +110,7 @@ def test_notifier_failure_after_terminal_commit_is_republished_with_same_seq() -
         store=store_b,
         declarations=reader_b,
         gateway=gateway_b,
-        tools=InMemoryToolRegistry(clock_b),
+        tools=_calculator_gateway(),
         events=events_b,
         notifier=notifier_b,
         tracer=tracer_b,
@@ -127,7 +137,7 @@ def test_notifier_failure_after_terminal_commit_is_republished_with_same_seq() -
         store=store_b,
         declarations=reader_b,
         gateway=gateway_b,
-        tools=InMemoryToolRegistry(clock_b),
+        tools=_calculator_gateway(),
         events=events_b,
         notifier=notifier_b2,
         tracer=tracer_b,
@@ -166,7 +176,7 @@ def test_set_status_failure_after_state_saved_is_completed_and_republished_on_re
         store=store,
         declarations=reader,
         gateway=gateway,
-        tools=InMemoryToolRegistry(clock),
+        tools=_calculator_gateway(),
         events=events,
         notifier=notifier,
         tracer=tracer,
@@ -191,7 +201,7 @@ def test_set_status_failure_after_state_saved_is_completed_and_republished_on_re
         store=store,
         declarations=reader,
         gateway=gateway,
-        tools=InMemoryToolRegistry(clock),
+        tools=_calculator_gateway(),
         events=events,
         notifier=notifier,
         tracer=tracer,
@@ -261,7 +271,7 @@ def test_running_with_expired_lease_resumes_from_stored_state_instead_of_restart
         store=store,
         declarations=reader,
         gateway=gateway,
-        tools=InMemoryToolRegistry(clock),
+        tools=_calculator_gateway(),
         events=events,
         notifier=notifier,
         tracer=tracer,
@@ -294,7 +304,7 @@ def test_running_with_valid_lease_raises_lease_held() -> None:
         store=store,
         declarations=reader,
         gateway=FakeModelGateway([]),
-        tools=InMemoryToolRegistry(clock),
+        tools=_calculator_gateway(),
         events=FakeEventSink(),
         notifier=FakeStatusNotifier(),
         tracer=InMemoryTracer(),

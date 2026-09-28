@@ -9,12 +9,11 @@ from typing import Any
 from uuid import uuid4
 
 from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
-from aether_runtime.adapters.outbound.tools.registry import InMemoryToolRegistry
 from aether_runtime.application.ports.outbound.model_gateway import ModelResponse
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.run import RunStatus
-from aether_runtime.domain.tools import ToolCall
+from aether_runtime.domain.tools import ToolCall, ToolResult
 
 from packages.runtime.tests.fakes import (
     FakeClock,
@@ -22,8 +21,19 @@ from packages.runtime.tests.fakes import (
     FakeRunDeclarationReader,
     FakeRunStateStore,
     FakeStatusNotifier,
+    FakeTool,
+    FakeToolGateway,
     InMemoryTracer,
 )
+
+
+def _calculator_gateway() -> FakeToolGateway:
+    """spec 0003 2.1: 계산기 하나만 아는 `ToolGateway` fake — 이 파일의
+    도구 시나리오는 결과 내용 대신 흐름(취소·lease·trace)을 봅니다."""
+    return FakeToolGateway(
+        {"calculator": FakeTool(name="calculator", result=ToolResult(content="2"))}
+    )
+
 
 _PROMPT_INPUT = "2 더하기 2 를 계산기로 계산해줘"
 _FINAL_TEXT = "답은 4 입니다."
@@ -68,7 +78,7 @@ def test_span_tree_is_run_task_model_and_tool_with_string_attributes_and_no_prom
         store=store,
         declarations=reader,
         gateway=gateway,
-        tools=InMemoryToolRegistry(clock),
+        tools=_calculator_gateway(),
         events=FakeEventSink(),
         notifier=FakeStatusNotifier(),
         tracer=tracer,
