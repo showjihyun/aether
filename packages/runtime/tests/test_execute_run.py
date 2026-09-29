@@ -435,6 +435,12 @@ def test_cancel_observed_between_steps_yields_cancelled() -> None:
             self._clock = clock
             self.calls: list[tuple[str, dict[str, Any]]] = []
 
+        def bind(self, mcp_servers: tuple[Any, ...]) -> None:
+            del mcp_servers
+
+        def close(self) -> None:
+            pass
+
         def discover(self) -> tuple[ToolSchema, ...]:
             return (ToolSchema(name="calculator", description="", input_schema={}),)
 

@@ -136,11 +136,13 @@ McpServerBinding: {"name": str, "transport": "stdio" | "http", "ref": str}
 
 | 변수 | 기본 | 누가 읽는가 |
 | --- | --- | --- |
-| `AETHER_MCP_SERVERS` | (비어 있음) | worker. `name=transport:target` 목록. `definition` 의 `ref` 를 실제 명령·URL 로 푸는 표입니다 |
+| `AETHER_MCP_SERVERS` | (비어 있음) | worker. `name=transport:target` 목록이고 항목 구분자는 `;` 입니다(개정 5). stdio 의 `target` 은 `shlex.split` 으로 명령과 인자로 쪼개고, http 의 `target` 은 URL 입니다. 자격증명은 `${VAR}` 참조로만 적고 worker 가 환경에서 치환합니다 — 없는 변수는 빈 문자열입니다. `definition` 의 `ref` 를 실제 명령·URL 로 푸는 표입니다 |
 | `AETHER_MCP_CALL_TIMEOUT_MS` | `30000` | worker. 도구 호출 1회의 상한. Run 타임아웃(spec 0002 2.8)보다 작아야 합니다 |
 | `AETHER_MCP_MAX_RESULT_BYTES` | `262144` | worker. 넘으면 잘라내고 감사에 원래 크기를 남깁니다 — 모델 입력이 무한정 커지는 것을 막습니다 |
 
 자격증명은 `AETHER_MCP_SERVERS` 의 target 안에 환경변수 참조로만 들어갑니다. 값 자체를 로그·감사·이벤트에 넣지 않습니다(R-11).
+
+이번 Phase 의 조립에서 **HTTP 전송은 아직 실제로 연결되지 않습니다**(개정 5). `.importlinter` 의 AR-6 예외가 `aether_worker.main -> aether_mcp.adapters.outbound.mcp_client.stdio` 하나뿐이라(P2-3 결정) worker 는 stdio 클라이언트만 조립합니다. http 로 선언된 서버는 연결 실패로 흡수되어 그 서버의 도구만 Discovery 에서 빠집니다(2.5 와 같은 낙하 경로). **P2-5 가 참조 HTTP 서버를 붙일 때 예외 한 줄(`... -> ...mcp_client.http`)이 더 필요합니다** — 보호 파일 변경이므로 그 단위의 사람 손입니다.
 
 ### 2.10 검증 단계 (열린 질문 4)
 
@@ -243,6 +245,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | 개정 | 내용 |
 | --- | --- |
 | 초안 | 2026-09-25. intent 0003 의 열린 질문 6건을 D-1 ~ D-6 으로 고정하고, 외부 사실 확인에서 나온 D-7·D-8 을 더했습니다 |
+| 개정 5 | 2026-09-28. **P2-6 실행이 정한 것을 문서로 고정**했습니다 — `AETHER_MCP_SERVERS` 의 문법(`;` 구분, stdio 는 `shlex.split`, http 는 URL, `${VAR}` 치환)은 spec 이 비워 둔 자리였고 구현이 정했습니다. 그리고 이번 조립에서 HTTP 전송이 실제로 연결되지 않는다는 한계와, 그것을 풀려면 P2-5 에서 AR-6 예외 한 줄이 더 필요하다는 것을 2.9 에 적었습니다 |
 | 개정 4 | 2026-09-26. **P2-4 착수 전 제안에서 찾은 구멍** — 감사는 `server_name` 을 남기는데 판정의 키에는 없었습니다. MCP 에 전역 도구 이름공간이 없으므로 같은 이름의 도구가 서버마다 있을 수 있고, 그러면 allow 가 의도보다 넓게 열립니다. 정책 표의 PK 를 `(agent_version_id, server_name, tool_name)` 으로 확장하고(마이그레이션 0003 을 직접 수정 — 아직 어디에도 배포되지 않았습니다) CLI 에 `--server` 를 더합니다. 사람 결정 2026-09-26 |
 | 개정 3 | 2026-09-26. **P2-2a 리뷰**에서 감사표를 append-only 로 조였습니다 — `GRANT ALL PRIVILEGES` 였던 것을 `INSERT, SELECT` 로. 조이기 전 테스트가 `DID NOT RAISE InsufficientPrivilege` 로 실패해 권한이 넓었다는 것이 실측으로 확인되었습니다. `control.tool_permissions` 의 PK 는 `(agent_version_id, tool_name)` 복합키이고, 이 가정이 P2-4 의 CLI upsert 설계와 맞는지는 그 단위의 🔒 검토에서 확인합니다 |
 | 개정 2 | 2026-09-26. **P2-1 실행이 찾은 사실**로 D-13 의 범위를 줄였습니다 — `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 는 `aether_api`·`aether_worker`·`aether_runtime` 을 포함한 여덟 패키지에서 `mcp` 를 이미 금지하고, `ar9-core-is-framework-free` 는 `aether_mcp.domain`·`application` 에서 `mcp` 를 이미 금지합니다(위반 주입으로 확인). 그래서 R-2 는 계약 **추가**가 아니라 **발화 확인**으로 판정하고, H-1 은 policy 계약 하나만 더합니다 |

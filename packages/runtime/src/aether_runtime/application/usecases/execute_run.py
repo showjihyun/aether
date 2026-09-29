@@ -292,9 +292,41 @@ class ExecuteRunUseCase:
         # 알려주고, `definition.tools` 에는 있지만 어느 서버도 내놓지 않는 이름은
         # 모델에게 보이지 않을 뿐입니다. 모델이 그래도 그 이름을 부르면(허용
         # 집합 통과 뒤) Gateway 가 호출 시점에 `ToolNotFound` 로 판정합니다.
-        available = {schema.name: schema for schema in self._tools.discover()}
-        tool_schemas = [available[name] for name in definition.tools if name in available]
+        # spec 0003 2.5, P2-6: `bind()` 가 이 Run 이 연결할 서버 집합을 정합니다 —
+        # `discover()`·`call()` 보다 먼저, Run 마다 정확히 한 번입니다. `close()` 는
+        # 이 Run 이 어떻게 끝나든(성공·실패·취소·타임아웃) `finally` 에서 불립니다.
+        self._tools.bind(tuple(definition.mcp_servers))
+        try:
+            available = {schema.name: schema for schema in self._tools.discover()}
+            tool_schemas = [available[name] for name in definition.tools if name in available]
+            return self._run_loop(
+                run_id,
+                declaration,
+                definition,
+                tool_schemas,
+                local_status,
+                messages,
+                step,
+                tasks,
+                seq,
+                started_at,
+            )
+        finally:
+            self._tools.close()
 
+    def _run_loop(
+        self,
+        run_id: UUID,
+        declaration: RunDeclaration,
+        definition: AgentDefinition,
+        tool_schemas: list[ToolSchema],
+        local_status: RunStatus,
+        messages: list[Message],
+        step: int,
+        tasks: list[Task],
+        seq: int,
+        started_at: datetime | None,
+    ) -> RunStatus:
         while True:
             fresh_declaration = self._declarations.declaration(run_id)
             if fresh_declaration is not None and fresh_declaration.cancel_requested_at is not None:

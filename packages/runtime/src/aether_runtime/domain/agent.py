@@ -39,6 +39,19 @@ class Policy(BaseModel):
     backoff: Backoff = Field(default_factory=Backoff)
 
 
+class McpServerBinding(BaseModel):
+    """spec 0003 2.6, D-2: MCP Server 하나에 대한 바인딩 — `AgentDefinition` 의 필드로만
+    존재합니다(새 테이블 없음). `ref` 는 배포가 소유합니다 — stdio 면 compose 가 아는
+    서버 이름, http 면 내부 URL 키입니다. **자격증명이나 절대 URL 을 여기 넣지
+    않습니다**(R-11) — 실제 값은 `AETHER_MCP_SERVERS`(spec 2.9)로 worker 가 풉니다.
+    `name` 은 감사·정책 표의 `server_name` 과 같은 신분이고(spec 2.7 개정 4), 배포마다
+    바뀌는 `ref` 와 달리 Agent 작성자가 고정합니다."""
+
+    name: str
+    transport: Literal["stdio", "http"]
+    ref: str
+
+
 class AgentDefinition(BaseModel):
     """`schema_version` 을 올리는 것은 파괴적 변경 판정 대상입니다(DP-1)."""
 
@@ -47,6 +60,9 @@ class AgentDefinition(BaseModel):
     model: ModelRef = Field(default_factory=ModelRef)
     tools: list[str] = Field(default_factory=list)
     policy: Policy = Field(default_factory=Policy)
+    mcp_servers: list[McpServerBinding] = Field(default_factory=list)
+    """spec 0003 2.6, D-2: 이 Agent Version 이 Run 시작 시 연결할 서버들(spec 2.5).
+    기본값 빈 목록 — 바인딩이 비어 있으면 도구 없이 실행됩니다."""
 
     @field_validator("system_prompt")
     @classmethod

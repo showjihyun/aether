@@ -126,7 +126,9 @@ def _build_gateway(
     audit = PostgresAuditSink(data_connection_factory)
     call_tool = CallToolUseCase(judge=judge, client=client, audit=audit)
     discover_tools = DiscoverToolsUseCase(client=client)
-    gateway = McpToolGateway(call_tool=call_tool, discover_tools=discover_tools, server=_SERVER)
+    gateway = McpToolGateway(
+        call_tool=call_tool, discover_tools=discover_tools, server_table={"echo": _SERVER}
+    )
     return gateway, client
 
 
@@ -136,6 +138,9 @@ def _definition() -> dict[str, Any]:
         "system_prompt": "You are a helper.",
         "tools": ["echo"],
         "policy": {"timeout_seconds": 120, "max_steps": 8, "model_retries": 0, "tool_retries": 0},
+        # spec 0003 2.6, D-2 (P2-6): 바인딩이 있어야 Run 이 서버에 연결합니다 —
+        # `name` 이 감사·정책의 신분(spec 2.7 개정 4), `ref` 가 `server_table` 의 키.
+        "mcp_servers": [{"name": "echo", "transport": "stdio", "ref": "echo"}],
     }
 
 
@@ -267,3 +272,71 @@ def test_run_with_denied_tool_permission_fails_with_tool_denied(
 
     assert len(rows) == 1
     assert rows[0] == ("deny", "denied")
+
+
+def test_run_calling_a_tool_no_bound_server_offers_audits_against_a_sentinel_not_echo(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+    data_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0003 2.5 (코디네이터 지적 2026-09-28): `definition.tools` 에는 있지만
+    바인딩된 서버(`echo`) 가 내놓지 않는 이름을 모델이 부르면, 감사는 `echo` 가
+    아니라 표지(`(unbound)`)로 남아야 합니다 — `echo` 는 이 호출을 요청받은 적이
+    없습니다. 실제 `PostgresPermissionTable`(기본값 deny) + 실제 `PostgresAuditSink`
+    로 끝까지 지나 `data.tool_call_audit` 행을 직접 확인합니다."""
+    admin_conn = admin_connection_factory()
+    try:
+        version_id, run_id = _insert_agent_version_and_run(admin_conn)
+        _insert_permission(admin_conn, version_id, "echo", "echo", "allow")
+    finally:
+        admin_conn.close()
+
+    gateway, client = _build_gateway(data_connection_factory)
+    clock = FakeClock()
+    store = FakeRunStateStore(clock)
+    definition = _definition()
+    definition["tools"] = ["missing_tool"]
+    reader = FakeRunDeclarationReader(
+        {run_id: RunDeclaration(run_id=run_id, agent_version_id=version_id, input="hi")},
+        {version_id: definition},
+    )
+    model_gateway = FakeModelGateway(
+        [
+            ModelResponse(
+                tool_calls=[ToolCall(id="call_1", name="missing_tool", arguments={})],
+                finish_reason="tool_calls",
+            )
+        ]
+    )
+    events = FakeEventSink()
+    usecase = ExecuteRunUseCase(
+        store,
+        reader,
+        model_gateway,
+        gateway,
+        events,
+        FakeStatusNotifier(),
+        InMemoryTracer(),
+        clock,
+        owner="p2-6-sentinel-worker",
+    )
+
+    status = usecase(run_id)
+
+    assert status == RunStatus.FAILED
+    assert client.calls == []  # 어느 실제 서버로도 라우팅되지 않았습니다
+    final_status_events = [e for e in events.published if e.type == "run.status"]
+    assert final_status_events[-1].payload["failure_reason"] == FailureReason.UNKNOWN_TOOL.value
+
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT server_name, decision, outcome FROM data.tool_call_audit WHERE run_id = %s",
+                (run_id,),
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    assert len(rows) == 1
+    assert rows[0] == ("(unbound)", "deny", "denied")

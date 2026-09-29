@@ -534,6 +534,13 @@
           },
           "policy": {
             "$ref": "#/components/schemas/Policy"
+          },
+          "mcp_servers": {
+            "items": {
+              "$ref": "#/components/schemas/McpServerBinding"
+            },
+            "type": "array",
+            "title": "Mcp Servers"
           }
         },
         "type": "object",
@@ -847,6 +854,34 @@
         ],
         "title": "ListAgentsResponse",
         "description": "`GET /agents` 의 성공 응답."
+      },
+      "McpServerBinding": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "transport": {
+            "type": "string",
+            "enum": [
+              "stdio",
+              "http"
+            ],
+            "title": "Transport"
+          },
+          "ref": {
+            "type": "string",
+            "title": "Ref"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "transport",
+          "ref"
+        ],
+        "title": "McpServerBinding",
+        "description": "spec 0003 2.6, D-2: MCP Server 하나에 대한 바인딩 — `AgentDefinition` 의 필드로만\n존재합니다(새 테이블 없음). `ref` 는 배포가 소유합니다 — stdio 면 compose 가 아는\n서버 이름, http 면 내부 URL 키입니다. **자격증명이나 절대 URL 을 여기 넣지\n않습니다**(R-11) — 실제 값은 `AETHER_MCP_SERVERS`(spec 2.9)로 worker 가 풉니다.\n`name` 은 감사·정책 표의 `server_name` 과 같은 신분이고(spec 2.7 개정 4), 배포마다\n바뀌는 `ref` 와 달리 Agent 작성자가 고정합니다."
       },
       "ModelRef": {
         "properties": {

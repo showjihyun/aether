@@ -315,6 +315,18 @@ class FakeToolGateway:
         self._tools = dict(tools) if tools else {}
         self._denied = denied
         self.calls: list[tuple[str, dict[str, Any]]] = []
+        self.bound: tuple[Any, ...] | None = None
+        self.closed = False
+
+    def bind(self, mcp_servers: tuple[Any, ...]) -> None:
+        """spec 0003 2.5, P2-6: 이 fake 는 바인딩과 무관하게 생성자의 `tools` 를
+        그대로 내놓습니다 — 이 파일이 판정하는 것은 루프 동작이지 바인딩 라우팅이
+        아니므로(그것은 `test_tool_gateway_mcp_adapter.py` 의 몫), 호출된 사실만
+        기록합니다."""
+        self.bound = mcp_servers
+
+    def close(self) -> None:
+        self.closed = True
 
     def discover(self) -> tuple[ToolSchema, ...]:
         return tuple(

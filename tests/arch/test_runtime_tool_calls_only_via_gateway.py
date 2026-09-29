@@ -24,7 +24,9 @@ _FORBIDDEN_NAMES = (
     "CalculatorTool",
 )
 
-_ALLOWED_TOOLS_ATTR_METHODS = {"discover", "call"}
+_ALLOWED_TOOLS_ATTR_METHODS = {"discover", "call", "bind", "close"}
+"""spec 0003 2.5, P2-6: `bind()`/`close()` 는 `ToolGateway` 포트에 P2-6 이 더한
+Run 수명 메서드입니다(바인딩된 서버 집합을 정하고, Run 종결마다 정리)."""
 
 
 def _defined_or_referenced_names(tree: ast.Module) -> set[str]:

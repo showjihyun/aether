@@ -272,6 +272,12 @@ class _SingleToolGateway:
     def __init__(self, tool: _GatedClockTool) -> None:
         self._tool = tool
 
+    def bind(self, mcp_servers: tuple[Any, ...]) -> None:
+        del mcp_servers
+
+    def close(self) -> None:
+        pass
+
     def discover(self) -> tuple[ToolSchema, ...]:
         return (
             ToolSchema(

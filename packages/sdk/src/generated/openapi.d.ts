@@ -162,6 +162,8 @@ export interface components {
             /** Tools */
             tools?: string[];
             policy?: components["schemas"]["Policy"];
+            /** Mcp Servers */
+            mcp_servers?: components["schemas"]["McpServerBinding"][];
         };
         /**
          * AgentDetailResponse
@@ -338,6 +340,26 @@ export interface components {
             items: components["schemas"]["AgentSummary"][];
             /** Next Cursor */
             next_cursor?: string | null;
+        };
+        /**
+         * McpServerBinding
+         * @description spec 0003 2.6, D-2: MCP Server 하나에 대한 바인딩 — `AgentDefinition` 의 필드로만
+         *     존재합니다(새 테이블 없음). `ref` 는 배포가 소유합니다 — stdio 면 compose 가 아는
+         *     서버 이름, http 면 내부 URL 키입니다. **자격증명이나 절대 URL 을 여기 넣지
+         *     않습니다**(R-11) — 실제 값은 `AETHER_MCP_SERVERS`(spec 2.9)로 worker 가 풉니다.
+         *     `name` 은 감사·정책 표의 `server_name` 과 같은 신분이고(spec 2.7 개정 4), 배포마다
+         *     바뀌는 `ref` 와 달리 Agent 작성자가 고정합니다.
+         */
+        McpServerBinding: {
+            /** Name */
+            name: string;
+            /**
+             * Transport
+             * @enum {string}
+             */
+            transport: "stdio" | "http";
+            /** Ref */
+            ref: string;
         };
         /**
          * ModelRef

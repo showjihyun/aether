@@ -81,6 +81,12 @@ class _EmptyToolGateway:
     """spec 0003 2.1: `ToolGateway` 포트 최소 구현 — 이 시나리오는 도구를 부르지
     않으므로 `discover()` 만 비어 있으면 충분합니다."""
 
+    def bind(self, mcp_servers: tuple[Any, ...]) -> None:
+        del mcp_servers
+
+    def close(self) -> None:
+        pass
+
     def discover(self) -> tuple[ToolSchema, ...]:
         return ()
 

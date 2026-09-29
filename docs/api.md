@@ -38,6 +38,7 @@
   "system_prompt": "You are …",
   "model": { "id": null },
   "tools": ["clock", "calculator"],
+  "mcp_servers": [{ "name": "builtin", "transport": "stdio", "ref": "builtin" }],
   "policy": {
     "timeout_seconds": 120,
     "max_steps": 8,
@@ -53,7 +54,8 @@
 | `schema_version` | `1` 만. 올리는 것은 파괴적 변경 판정 대상 |
 | `system_prompt` | 비어 있지 않음 |
 | `model.id` | 문자열 또는 `null`(배포 설정 `AETHER_MODEL_ID`). 어댑터 종류·thinking 은 정의가 아니라 배포 설정 |
-| `tools` | 중복 없음, 전부 내장 도구 이름(`clock`, `calculator`) 안 — 밖이면 `422` |
+| `tools` | 중복 없음. **이름의 존재 여부는 생성 시 검증하지 않습니다**(spec 0003 D-16) — 도구는 Discovery 에서 오고 api 는 생성 시점에 어떤 MCP Server 가 무엇을 내놓는지 알 수 없습니다. 없는 이름은 Run 시점에 `ToolNotFound` 로 실패하고 감사에 남습니다 |
+| `mcp_servers` | 목록, 기본 `[]`. 각 항목은 `{ name, transport: "stdio"｜"http", ref }` 입니다. **자격증명이나 절대 URL 을 넣지 않습니다** — `ref` 는 배포 설정 `AETHER_MCP_SERVERS` 가 실제 명령·URL 로 푸는 키입니다(spec 0003 2.6·2.9, D-2). 바인딩 변경은 `definition` 변경이므로 기존 `PUT /agents/{id}` 가 그대로 새 Version 을 만듭니다. 빈 목록이면 Run 은 도구 없이 실행됩니다 |
 | `policy` | `timeout_seconds` 1~3600, `max_steps` 1~64, `model_retries`·`tool_retries` 0~10, `backoff.base_seconds` > 0, `max_seconds ≥ base_seconds` |
 
 ## 4. Run (P1-5b)
