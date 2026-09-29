@@ -22,14 +22,15 @@ import time
 from collections.abc import Callable, Mapping
 from threading import Event, Thread
 from types import FrameType
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import psycopg
 from aether_mcp.adapters.outbound.audit_sink.postgres import PostgresAuditSink
+from aether_mcp.adapters.outbound.mcp_client.http import HttpMcpClient
 from aether_mcp.adapters.outbound.mcp_client.stdio import StdioMcpClient
 from aether_mcp.application.usecases.call_tool import CallToolUseCase
 from aether_mcp.application.usecases.discover_tools import DiscoverToolsUseCase
-from aether_mcp.domain.tools import McpServerRef
+from aether_mcp.domain.tools import McpServerRef, Tool, ToolResult
 from aether_policy.adapters.outbound.permission_table.postgres import PostgresPermissionTable
 from aether_policy.application.usecases.judge_tool_call import JudgeToolCallUseCase
 from aether_runtime.adapters.outbound.db.run_declaration_reader import (
@@ -130,6 +131,7 @@ def _build_model_gateway(settings: Settings) -> ModelGateway:
 
 
 _ENV_VAR_REF_RE = re.compile(r"\$\{(\w+)\}")
+_ENV_ASSIGNMENT_TOKEN_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
 
 
 def _expand_env_refs(target: str, env: Mapping[str, str]) -> str:
@@ -147,9 +149,16 @@ def _resolve_mcp_servers(
     의 `ref` 가 이 표의 키입니다(spec 2.6) — `McpToolGateway.bind()` 가 찾지 못하는
     `ref` 는 조용히 드롭합니다(그 몫은 여기가 아니라 어댑터, spec 2.5).
 
-    stdio 의 target 은 `command arg1 arg2 ...`(`shlex.split`), http 의 target 은
-    URL 문자열입니다. 알 수 없는 transport 는 `ValueError` — 배포 설정 오류이므로
-    조용히 넘기지 않고 worker 시작을 막습니다.
+    stdio 의 target 은 `[KEY=VALUE ...] command arg1 arg2 ...`(`shlex.split` 뒤
+    **선행** `KEY=VALUE` 모양 토큰들을 그 서버 프로세스의 env 로 떼어내고, 첫
+    비일치 토큰부터 명령·인자입니다, spec 2.9 개정 6 — P2-5 2단계, 1단계 보고
+    불일치 2번). http 의 target 은 URL 문자열입니다. 알 수 없는 transport 는
+    `ValueError` — 배포 설정 오류이므로 조용히 넘기지 않고 worker 시작을 막습니다.
+
+    `${VAR}` 치환(R-11)은 `KEY=VALUE` 를 나누기 **전에** target 전체에 적용합니다
+    — 그래서 `AETHER_POSTGRES_READONLY_URL=${DSN}` 처럼 값 쪽에 참조를 그대로 써도
+    풀린 값만 `McpServerRef.env` 에 남고, 치환 전 원문(`${DSN}` 자체)은 이 함수
+    바깥으로 나가지 않습니다.
     """
     resolved_env = os.environ if env is None else env
     table: dict[str, McpServerRef] = {}
@@ -164,8 +173,21 @@ def _resolve_mcp_servers(
         target = _expand_env_refs(raw_target.strip(), resolved_env)
         if transport == "stdio":
             parts = shlex.split(target)
+            server_env: dict[str, str] = {}
+            while parts:
+                match = _ENV_ASSIGNMENT_TOKEN_RE.match(parts[0])
+                if match is None:
+                    break
+                server_env[match.group(1)] = match.group(2)
+                parts.pop(0)
+            if not parts:
+                raise ValueError(f"AETHER_MCP_SERVERS: missing command in entry {entry!r}")
             table[name] = McpServerRef(
-                name=name, transport="stdio", command=parts[0], args=tuple(parts[1:])
+                name=name,
+                transport="stdio",
+                command=parts[0],
+                args=tuple(parts[1:]),
+                env=server_env or None,
             )
         elif transport == "http":
             table[name] = McpServerRef(name=name, transport="http", url=target)
@@ -174,6 +196,33 @@ def _resolve_mcp_servers(
                 f"AETHER_MCP_SERVERS: unknown transport {transport!r} in entry {entry!r}"
             )
     return table
+
+
+class _TransportRoutingMcpClient:
+    """spec 0003 2.2, 2.9 (plan 0003 P2-5 2단계): `McpServerRef.transport` 에 따라
+    실제로 부를 클라이언트(`StdioMcpClient`/`HttpMcpClient`)를 고릅니다.
+
+    반드시 이 파일(`aether_worker.main`) 안에 있어야 합니다 — `.importlinter` 의
+    `ar6-mcp-client-only-in-mcp` 예외가 `aether_worker.main -> ...mcp_client.stdio`
+    ·`aether_worker.main -> ...mcp_client.http` 정확히 이 두 줄만 허용합니다(사람
+    결정, 보호 파일). 이 클래스를 다른 모듈로 옮기면 그 모듈이 새 import 경로가
+    되어 예외와 맞지 않고 `lint-imports` 가 "No matches for ignored import" 로
+    실패합니다. `CallToolUseCase`·`DiscoverToolsUseCase` 는 이 인스턴스 하나를
+    `McpClient`(outbound 포트)로 받아 — 포트 쪽에서는 stdio 인지 http 인지 모릅니다.
+    """
+
+    def __init__(self, *, stdio: StdioMcpClient, http: HttpMcpClient) -> None:
+        self._stdio = stdio
+        self._http = http
+
+    def discover(self, server: McpServerRef) -> tuple[Tool, ...]:
+        return self._client_for(server).discover(server)
+
+    def call(self, server: McpServerRef, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
+        return self._client_for(server).call(server, tool_name, arguments)
+
+    def _client_for(self, server: McpServerRef) -> StdioMcpClient | HttpMcpClient:
+        return self._http if server.transport == "http" else self._stdio
 
 
 def _build_tool_gateway(
@@ -190,10 +239,13 @@ def _build_tool_gateway(
     로 정합니다(spec 2.5) — 이 함수는 worker 프로세스 수명 동안 한 번만 조립되는
     표와 어댑터를 준비할 뿐입니다.
 
-    `StdioMcpClient` 조립은 `.importlinter` 의 `ar6-mcp-client-only-in-mcp` 에 둔
-    `ignore_imports` 예외(`aether_worker.main -> aether_mcp.adapters.outbound.
-    mcp_client.stdio`, 사람 결정 2026-09-27) 아래에서만 허용됩니다 — 이 함수
-    밖에서는 그 모듈을 import 하지 않습니다.
+    `StdioMcpClient`·`HttpMcpClient` 조립은 `.importlinter` 의
+    `ar6-mcp-client-only-in-mcp` 에 둔 `ignore_imports` 예외(`aether_worker.main ->
+    aether_mcp.adapters.outbound.mcp_client.stdio`·`...mcp_client.http`, 사람 결정
+    2026-09-27·2026-09-29) 아래에서만 허용됩니다 — 이 함수 밖에서는 그 모듈들을
+    import 하지 않습니다. 실제로 어느 쪽을 쓸지는 `_TransportRoutingMcpClient`
+    (spec 2.2, P2-5 2단계)가 `McpServerRef.transport` 마다 고릅니다 — HTTP 전송은
+    이번 단위로 실제로 연결됩니다(spec 2.9 개정 5의 한계가 풀림).
     """
     server_table: dict[str, McpServerRef] = {
         "builtin": McpServerRef(
@@ -205,7 +257,10 @@ def _build_tool_gateway(
     }
     server_table.update(_resolve_mcp_servers(settings.mcp_servers))
 
-    client = StdioMcpClient(call_timeout_ms=settings.mcp_call_timeout_ms)
+    client = _TransportRoutingMcpClient(
+        stdio=StdioMcpClient(call_timeout_ms=settings.mcp_call_timeout_ms),
+        http=HttpMcpClient(call_timeout_ms=settings.mcp_call_timeout_ms),
+    )
     judge = JudgeToolCallUseCase(PostgresPermissionTable(connect))
     audit = PostgresAuditSink(connect)
     call_tool = CallToolUseCase(judge=judge, client=client, audit=audit)

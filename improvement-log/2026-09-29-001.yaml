@@ -1,0 +1,44 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-09-29-001
+date: 2026-09-29
+status: candidate
+symptom: plan 0003 P2-5 1단계(spec 2.10, D-3)가 요구한 smoke·api-integration 실측과
+  data.tool_call_audit 표 증가를 기록할 자리가 verify 출력 안에는 없었다 — 숫자는
+  실행할 때마다 나오지만 어디에도 남지 않으면 Phase 9 의 보존 정책 입력이 되지
+  못한다.
+evidence: 2026-09-29 실행(P2-5 1단계, TESTCONTAINERS_RYUK_DISABLED=true
+  ./harness/scripts/verify.sh, .harness/verify.json). 전체 18 단계 합계
+  372934ms(예산 600000ms). smoke(--bench 포함) 92218ms(예산 240000ms), 그 중
+  R-7 도구 호출 시나리오(scripts/smoke.sh 의 scenario_tool)만 떼어 잰
+  별도 실행(--bench 없이)에서 전체 73초. api-integration(uv run pytest -q -m
+  integration) 45138ms, 121 passed. data.tool_call_audit: smoke 한 번의
+  scenario_tool 실행으로 행 0 -> 1(+1), pg_total_relation_size 16384 ->
+  32768 bytes(+16384, 8kB 페이지 1장 — 빈 표의 기본 할당을 포함한 값이라 행 1건당
+  실비용은 아니다). worker 이미지 크기(D-8, Filesystem MCP Server 빌드 시 주입)
+  942MB(uv workspace 전체 + Node 22 런타임 + npm 패키지, docker images
+  --format '{{.Size}}' 실측) — Node 스테이지 추가 전 대비 델타는 별도로 재지
+  않았다(베이스라인 이미지를 보존하지 않음, 다음에 측정할 때는 --no-cache
+  전후로 비교할 것).
+root_cause: harness.config 의 smoke·api-integration 단계는 통과/실패만 판정하고
+  소요·표 증가 같은 실측값을 구조적으로 남기지 않는다 — spec 0003 D-3·C-2 가
+  요구하는 "표가 커지는 속도를 1회 실측해 기록"은 verify 출력이 아니라 사람이
+  로그를 읽고 옮겨 적는 방식에 기대고 있었다.
+fix: 이번에는 scripts/smoke.sh 자체가 data.tool_call_audit 의 실행 전/후 행 수·
+  바이트를 psql 로 재서 stderr 에 한 줄로 남기게 했다(구현자 보고에도 옮겨
+  적음). verify.json 의 각 단계 duration_ms 는 이미 기록되므로 smoke·
+  api-integration 소요는 거기서 그대로 읽을 수 있다.
+recurrence_risk: medium
+harness_element: HE-9
+proposed_harness_change: smoke 가 stderr 에 남기는 data.tool_call_audit
+  행수/바이트 한 줄을 verify.json 의 smoke 단계 메타데이터(예: `steps[].extra`
+  같은 구조화 필드)로도 남기는 것을 검토 — 사람이 로그를 스크롤해 찾지 않아도
+  Phase 9 의 보존 정책 논의 때 .harness/verify.json 만 보고 표 증가 추세를
+  비교할 수 있게 한다. 지금은 제안일 뿐이고 harness.config·verify.sh 는
+  건드리지 않았다.
+preferred_enforcement: script
+trust: untrusted
+regression_check: 다음 P2-5 관련 단위(2단계, HTTP 전송)나 Phase 9 착수 때
+  scripts/smoke.sh 의 audit 행수/바이트 로그 줄이 여전히 출력되는지, 그리고
+  verify.json 합계가 600000ms·smoke 가 240000ms 를 넘지 않는지 재확인한다.
+owner: unassigned
+expires: none

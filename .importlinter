@@ -98,6 +98,7 @@ forbidden_modules =
     mcp
 ignore_imports =
     aether_worker.main -> aether_mcp.adapters.outbound.mcp_client.stdio
+    aether_worker.main -> aether_mcp.adapters.outbound.mcp_client.http
 unmatched_ignore_imports_alerting = error
 # spec 0003 2.1 — 조립은 worker 의 main 이 합니다. 이 계약은 전이 import 까지 잡으므로
 # 조립 지점 하나를 예외로 둡니다(AR-5 의 model_gateway.** -> httpx 와 같은 모양,

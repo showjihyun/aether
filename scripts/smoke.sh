@@ -149,6 +149,35 @@ if [ "$TRACE_FOUND" -ne 1 ]; then
   exit 1
 fi
 
+# spec 2.8, D-3, C-2: 이번 Phase 에는 감사 조회 API 가 없으므로 "남았는가" 는 이
+# psql 실측이 유일한 확인입니다 — postgres 컨테이너 안에서 자기 자신에게 붙습니다.
+_audit_sql() {
+  "${COMPOSE[@]}" exec -T postgres sh -c \
+    "PGPASSWORD=\"\$POSTGRES_PASSWORD\" psql -U \"\$POSTGRES_USER\" -d \"\$POSTGRES_DB\" -tAc \"$1\"" \
+    | tr -d '\r\n'
+}
+
+echo "smoke: running tool scenario (Filesystem MCP Server: allow -> run -> read -> succeeded)..." >&2
+BEFORE_AUDIT_COUNT="$(_audit_sql 'SELECT count(*) FROM data.tool_call_audit')"
+BEFORE_AUDIT_BYTES="$(_audit_sql "SELECT pg_total_relation_size('data.tool_call_audit')")"
+
+# spec 0003 R-7: `permissions allow` 없이는 기본값 deny 라 반드시 거부됩니다(D-14,
+# plan 0003 리뷰 F-1). smoke_client.py 의 `scenario_tool` 이 그 CLI 를 이 컨테이너
+# 안에서 직접 부릅니다.
+TOOL_SCENARIO_JSON="$("${COMPOSE[@]}" exec -T -e SMOKE_API_KEY api python - scenario_tool \
+  <"$CLIENT_SCRIPT")"
+TOOL_RUN_ID="$(printf '%s' "$TOOL_SCENARIO_JSON" | "$HOST_PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["run_id"])')"
+TOOL_STATUS="$(printf '%s' "$TOOL_SCENARIO_JSON" | "$HOST_PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+if [ "$TOOL_STATUS" != "succeeded" ]; then
+  echo "smoke: tool scenario ended as ${TOOL_STATUS} (run=${TOOL_RUN_ID}) — expected succeeded" >&2
+  exit 1
+fi
+
+AFTER_AUDIT_COUNT="$(_audit_sql 'SELECT count(*) FROM data.tool_call_audit')"
+AFTER_AUDIT_BYTES="$(_audit_sql "SELECT pg_total_relation_size('data.tool_call_audit')")"
+
+echo "smoke: data.tool_call_audit rows ${BEFORE_AUDIT_COUNT} -> ${AFTER_AUDIT_COUNT} (+$((AFTER_AUDIT_COUNT - BEFORE_AUDIT_COUNT))), bytes ${BEFORE_AUDIT_BYTES} -> ${AFTER_AUDIT_BYTES} (+$((AFTER_AUDIT_BYTES - BEFORE_AUDIT_BYTES)))" >&2
+
 ELAPSED=$SECONDS
 
 if [ "$BENCH" -eq 1 ]; then
@@ -180,5 +209,5 @@ PY
   echo "smoke: bench written to ${BENCH_OUT}" >&2
 fi
 
-echo "smoke: pass (run=${RUN_ID}, trace=${TRACE_ID}, ${ELAPSED}s)"
+echo "smoke: pass (run=${RUN_ID}, trace=${TRACE_ID}, tool_run=${TOOL_RUN_ID}, ${ELAPSED}s)"
 exit 0

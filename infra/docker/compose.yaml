@@ -107,6 +107,30 @@ services:
       AETHER_MODEL_ID: ${AETHER_MODEL_ID:-qwen3.8:27b}
       AETHER_MODEL_API_KEY: ${AETHER_MODEL_API_KEY:-}
       AETHER_MODEL_THINKING: ${AETHER_MODEL_THINKING:-false}
+      # P2-5 2단계, spec 2.9 개정 6: postgres-readonly MCP 서버(아래
+      # AETHER_MCP_SERVERS 기본값)가 `AETHER_POSTGRES_READONLY_URL` 을 만들 때 쓰는
+      # 재료입니다. worker **프로세스 자신의** env 로 넣어 두면(compose 의 `$$` 로
+      # 이스케이프한 참조), `_resolve_mcp_servers` 의 `${VAR}` 치환이 worker
+      # 시작 시점에 이 값으로 풉니다 — compose 파싱 시점에 이미 다 풀어 버리면
+      # (이스케이프하지 않은 `${AETHER_DATA_PASSWORD}`) 원문 자격증명이
+      # `docker compose config` 출력에 그대로 보여 R-11 의 지연 치환 의도가
+      # 없어집니다.
+      AETHER_DATA_PASSWORD: ${AETHER_DATA_PASSWORD}
+      # spec 0003 2.3, 2.9, D-8 (P2-5 1단계): Filesystem MCP Server 가 기본으로
+      # available 합니다 — 이미지 빌드 시점에 넣은 참조 서버(worker.Dockerfile)를
+      # 실제 경로로 직접 실행합니다(`npx` 로 내려받지 않음). 허용 디렉터리는 이미지
+      # 안의 `/srv/mcp-filesystem` 하나로 좁힙니다.
+      #
+      # spec 0003 2.9 개정 6 (P2-5 2단계): PostgreSQL(우리 구현, D-7)도 같은 표에
+      # `;` 로 이어 배선합니다 — stdio target 의 **선행** `KEY=VALUE` 토큰(들)은
+      # 명령이 아니라 그 서버 프로세스의 env 로 갑니다(`_resolve_mcp_servers`).
+      # 자격증명(`AETHER_DATA_PASSWORD`)은 `$${...}` 로 escape 해 compose 가 아니라
+      # worker 런타임이 풀게 합니다(R-11, 위 설명 참고) — `POSTGRES_DB` 는 비밀이
+      # 아니므로 compose 가 그대로 풀어도 됩니다. `AETHER_MCP_SERVERS` 를 명시하면
+      # 이 기본값을 완전히 덮어씁니다(`_resolve_mcp_servers` 는 파싱만 — 병합하지
+      # 않습니다).
+      AETHER_MCP_SERVERS: >-
+        ${AETHER_MCP_SERVERS:-filesystem=stdio:node /usr/local/lib/node_modules/@modelcontextprotocol/server-filesystem/dist/index.js /srv/mcp-filesystem;postgres=stdio:AETHER_POSTGRES_READONLY_URL=postgresql://aether_data:$${AETHER_DATA_PASSWORD}@postgres:5432/${POSTGRES_DB} python tools/mcp-servers/postgres-readonly/server.py}
       # spec 0002 2.9, 2.15, D-7 (P1-8). `depends_on` 에 collector 를 넣지 않으므로
       # 없어도(또는 아직 안 떠도) worker 부팅은 막히지 않습니다(DP-4).
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
