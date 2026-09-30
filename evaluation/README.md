@@ -31,6 +31,8 @@
 
 ## 지금 이 세트의 상태
 
+**2026-09-30: REP-6 이 실행 가능해졌습니다** — Phase 2(intent 0003)가 `packages/mcp` 를 채웠으므로 "정리할 코드" 가 실재합니다. 그래서 이 세트의 8건 전부가 실행 가능합니다. REP-6 의 첫 판정은 `runs/` 가 소유합니다.
+
 **AD-2 기준선을 한 번 실행했습니다(2026-09-17, 하네스 `d85effa`).** 실행 가능한 7건(REP-6 제외) 중 pass 4 · not-run 3 · fail 0 입니다. 판정과 한계는 [runs/README.md](runs/README.md) "현재 상태" 가 소유합니다. not-run 3건(REP-1 · REP-4 · REP-8)은 입력이 Phase 1 이후 계약과 맞지 않아서였고, 입력을 다시 써(improvement log `2026-09-17-002`, PR #33) 같은 날 다시 실행했습니다. 지금 이 세트의 비교 기준선은 REP-1 · 2 · 3 · 5 · 7 pass, REP-4 · 8 fail 입니다.
 
 이 세트의 출처도 정직하게 적어 둡니다. 번들 템플릿의 실패 모드를 aether 도메인으로 옮긴 것이지, aether 에서 관측된 실패에서 나온 것이 아닙니다. 그러므로 지금은 **도입 시 기본 세트**이고, 여기에 task 를 더할 때는 [../harness/evaluation/README.md](../harness/evaluation/README.md) 7.1 을 따라 근거가 되는 improvement log id 를 먼저 요구합니다.
