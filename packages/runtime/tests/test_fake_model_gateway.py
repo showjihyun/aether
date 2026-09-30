@@ -129,6 +129,40 @@ def test_echo_returns_the_last_user_message_with_no_tool_calls() -> None:
     assert response.finish_reason == "stop"
 
 
+def test_echo_calls_a_tool_when_last_user_message_uses_the_tool_call_marker() -> None:
+    """spec 0003 R-7 (plan 0003 P2-5): `smoke` 는 실제 모델 없이(fake) Filesystem
+    도구 호출을 결정적으로 일으켜야 합니다 — `echo()` 는 마지막 `user` 메시지가
+    `TOOL_CALL <name> <json-args>` 형식이면 도구 호출 응답을 돌려줍니다. 마커가
+    없는 기존 텍스트 echo 동작(P1-5a)은 그대로입니다."""
+    gateway = FakeModelGateway.echo()
+
+    response = gateway.complete(_request('TOOL_CALL read_text_file {"path": "/data/x.txt"}'))
+
+    assert response.finish_reason == "tool_calls"
+    assert len(response.tool_calls) == 1
+    call = response.tool_calls[0]
+    assert call.name == "read_text_file"
+    assert call.arguments == {"path": "/data/x.txt"}
+
+
+def test_echo_returns_tool_result_as_final_text_after_a_tool_message() -> None:
+    """spec 0003 R-7: 도구 호출 뒤 `role: tool` 메시지가 붙으면(spec 0002 2.6) 그
+    내용을 최종 텍스트로 돌려주어 Run 이 `succeeded` 로 끝날 수 있게 합니다."""
+    gateway = FakeModelGateway.echo()
+    request = ModelRequest(
+        messages=[
+            Message(role="user", content="TOOL_CALL echo {}"),
+            Message(role="tool", tool_call_id="call_1", content="file contents here"),
+        ]
+    )
+
+    response = gateway.complete(request)
+
+    assert response.finish_reason == "stop"
+    assert response.text == "file contents here"
+    assert response.tool_calls == []
+
+
 def test_embed_is_deterministic_and_has_eight_dimensions() -> None:
     """spec 0002 2.5: `embed` 는 결정적 벡터(길이 8, 문자열 해시 기반)를 냅니다."""
     gateway = FakeModelGateway([])

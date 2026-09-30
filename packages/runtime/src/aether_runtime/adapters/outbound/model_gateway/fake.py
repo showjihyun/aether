@@ -10,11 +10,23 @@
 그 응답을 계속 돌려주고, `echo()` 는 마지막 `user` 메시지를 그대로 돌려주는(도구
 호출 없음) 동적 기본 응답입니다 — compose 의 `AETHER_MODEL_ADAPTER=fake` 가 실제
 모델 없이도 무한히 `succeeded` 로 끝나는 Run 을 만들 수 있게 합니다(P1-5a).
+
+spec 0003 R-7, plan 0003 P2-5: `smoke` 는 실제 모델 없이 Filesystem MCP 도구
+호출을 **결정적으로** 일으켜야 하지만, compose 의 model gateway 는 프로세스
+수명 동안 `echo()` 하나로 고정되어 Run 마다 다른 스크립트를 주입할 수 없습니다
+(worker `main._build_model_gateway`, spec 2.15 D-1). 그래서 `echo()` 자체에
+아주 작은 결정적 프로토콜을 더합니다 — 마지막 `user` 메시지가
+`TOOL_CALL <name> <json-arguments>` 로 시작하면 그 도구를 호출하는 응답을 내고,
+그 뒤 `role: tool` 메시지(spec 0002 2.6)가 오면 그 내용을 최종 텍스트로 돌려줘
+Run 이 `succeeded` 로 끝나게 합니다. 마커가 없는 기존 입력은 그대로 텍스트
+echo 입니다(P1-5a 의 동작 불변) — 일반 텍스트 Run 과 같은 프로세스·같은
+gateway 를 공유해도 서로 간섭하지 않습니다.
 """
 
 from __future__ import annotations
 
 import hashlib
+import json
 from collections import deque
 from collections.abc import Iterator, Sequence
 
@@ -24,8 +36,10 @@ from aether_runtime.application.ports.outbound.model_gateway import (
     ModelRequest,
     ModelResponse,
 )
+from aether_runtime.domain.tools import ToolCall
 
 _EMBEDDING_DIMENSIONS = 8
+_TOOL_CALL_MARKER = "TOOL_CALL "
 
 
 def _hash_vector(text: str, dimensions: int = _EMBEDDING_DIMENSIONS) -> list[float]:
@@ -66,6 +80,10 @@ class FakeModelGateway:
                 raise item
             return item
         if self._echo:
+            last_message = request.messages[-1] if request.messages else None
+            if last_message is not None and last_message.role == "tool":
+                # spec 0003 R-7: 도구 결과가 왔으니 그 내용을 최종 답으로 마감합니다.
+                return ModelResponse(text=last_message.content, finish_reason="stop")
             last_user = next(
                 (
                     message.content
@@ -74,6 +92,13 @@ class FakeModelGateway:
                 ),
                 "",
             )
+            if last_user.startswith(_TOOL_CALL_MARKER):
+                name, _, raw_arguments = last_user.removeprefix(_TOOL_CALL_MARKER).partition(" ")
+                arguments = json.loads(raw_arguments) if raw_arguments.strip() else {}
+                return ModelResponse(
+                    tool_calls=[ToolCall(id="call_1", name=name, arguments=arguments)],
+                    finish_reason="tool_calls",
+                )
             return ModelResponse(text=last_user, finish_reason="stop")
         if self._default is not None:
             return self._default

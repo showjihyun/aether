@@ -152,9 +152,13 @@ AR-8 은 import-linter `layers` 계약 하나(`containers` 로 전 패키지), A
 
 Phase 1 까지 끝났습니다(2026-09-16). `apps/{api,web,worker}`·`infra/docker` 와 **`packages/runtime`** 이 동작합니다 — runtime 에는 Run 상태 기계·lease·`RunStateStore`, model gateway(fake·OpenAI-호환), Planner/Executor 루프와 내장 도구, 이벤트 8종, OTel `Tracer` 가 3.1 의 배치대로 들어 있습니다. api 는 인증·Agent Registry·Run 선언과 투영·SSE 를, worker 는 소비·실행·heartbeat 를 맡습니다.
 
-아직 빈 껍데기인 것: `packages/{workflow,context,memory,mcp,policy,evaluation}` — 각각 Phase 2 이후입니다.
+Phase 2 에서 **`packages/mcp` 와 `packages/policy` 가 채워졌습니다**(intent 0003) — mcp 에는 MCP 클라이언트(stdio·http)·Tool Discovery·Gateway 유스케이스(판정 → 호출 → 감사)·감사 싱크가, policy 에는 (Agent Version, 서버, 도구) → allow/deny 판정 함수와 정책 표 어댑터가 들어 있습니다. 도구는 저장소 안의 MCP Server(`tools/mcp-servers/`)와 참조 서버로 옵니다.
 
-AR-1 ~ AR-12 는 전부 기계 판정입니다 — AR-1 은 `.dependency-cruiser.cjs`, AR-2 ~ AR-9·AR-11·AR-12 는 `.importlinter`(AR-5 는 `httpx` 까지 금지하고 ignore 는 model gateway 한 곳, AR-7 은 api 가 `aether_runtime.domain` 만 보게), AR-10 은 `tests/arch/test_composition_only_in_main.py`. 실제로 발화하는지는 `tests/arch/test_real_importlinter_fires.py` 가 실제 설정에 위반을 주입해 확인합니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
+아직 빈 껍데기인 것: `packages/{workflow,context,memory,evaluation}` — 각각 Phase 3 이후입니다.
+
+**참조 MCP 서버의 버전은 사람이 봅니다.** `@modelcontextprotocol/server-filesystem` 같은 npm 참조 서버는 이미지 빌드 시점에 버전을 고정해 넣습니다(`infra/docker/worker.Dockerfile`, spec 0003 D-8 — 실행 시 `npx` 로 내려받지 않습니다. Air-Gapped 요구이자 공급망 문제입니다). 그 버전은 Dependabot 감시 밖이므로 사람이 주기적으로 확인해 갱신합니다(spec 0003 C-5).
+
+AR-1 ~ AR-12 는 전부 기계 판정입니다 — AR-1 은 `.dependency-cruiser.cjs`, AR-2 ~ AR-9·AR-11·AR-12 는 `.importlinter`(AR-5 는 `httpx` 까지 금지하고 ignore 는 model gateway 한 곳, AR-6 의 ignore 는 worker 의 조립 지점 둘(stdio·http 클라이언트), AR-7 은 api 가 `aether_runtime.domain` 만 보게), AR-10 은 `tests/arch/test_composition_only_in_main.py`. 실제로 발화하는지는 `tests/arch/test_real_importlinter_fires.py` 가 실제 설정에 위반을 주입해 확인합니다(EL-6). 문서와 코드가 다르면 한쪽을 조용히 고르지 않고 불일치를 보고합니다.
 
 ## 관련 문서
 
