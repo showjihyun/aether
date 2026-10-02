@@ -7,7 +7,7 @@ dependencies = [
     "aether-runtime",
     "aether-mcp",
     "aether-policy",
-    "opentelemetry-exporter-otlp-proto-http>=1.44.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.45.0",
     "opentelemetry-sdk>=1.44.0",
     "psycopg[binary]>=3.3.5",
     "pydantic-settings>=2.15.0",
