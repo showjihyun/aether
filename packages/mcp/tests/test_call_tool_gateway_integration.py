@@ -14,27 +14,17 @@ import json
 import uuid
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
 
 import psycopg
 import pytest
 from aether_mcp.adapters.outbound.audit_sink.postgres import PostgresAuditSink
 from aether_mcp.application.usecases.call_tool import CallToolUseCase
-from aether_mcp.domain.tools import McpServerRef, Tool, ToolCall, ToolResult
+from aether_mcp.domain.tools import McpServerRef, Tool, ToolCall
 from aether_policy.domain.decision import Decision
 
+from tests.support.mcp_fakes import FakeMcpClient
+
 pytestmark = pytest.mark.integration
-
-
-@dataclass
-class FakeMcpClient:
-    tools: tuple[Tool, ...]
-
-    def discover(self, server: McpServerRef) -> tuple[Tool, ...]:
-        return self.tools
-
-    def call(self, server: McpServerRef, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
-        return ToolResult(content="ok")
 
 
 @dataclass
@@ -90,7 +80,7 @@ def test_gateway_called_three_times_produces_three_audit_rows(
         admin_conn.close()
 
     server = McpServerRef(name="echo", transport="stdio", command="python", args=("server.py",))
-    client = FakeMcpClient(tools=(Tool(name="echo", description=""),))
+    client = FakeMcpClient(tools_by_server={server.name: (Tool(name="echo", description=""),)})
     audit = PostgresAuditSink(connect=data_connection_factory)
     judge = AllowJudge()
     gateway = CallToolUseCase(judge=judge, client=client, audit=audit)

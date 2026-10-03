@@ -21,6 +21,8 @@ from aether_mcp.domain.errors import ToolCallDenied, ToolCallFailed, ToolNotFoun
 from aether_mcp.domain.tools import McpServerRef, Tool, ToolCall, ToolResult
 from aether_policy.domain.decision import Decision
 
+from tests.support.mcp_fakes import FakeMcpClient
+
 
 @dataclass
 class FakeJudge:
@@ -30,28 +32,6 @@ class FakeJudge:
     def __call__(self, agent_version_id: UUID, server_name: str, tool_name: str) -> Decision:
         self.calls.append((agent_version_id, server_name, tool_name))
         return self.decision
-
-
-@dataclass
-class FakeMcpClient:
-    tools_by_server: dict[str, tuple[Tool, ...]] = field(default_factory=dict)
-    fail_discover_servers: set[str] = field(default_factory=set)
-    call_results: dict[str, ToolResult] = field(default_factory=dict)
-    call_exceptions: dict[str, Exception] = field(default_factory=dict)
-    discover_calls: list[str] = field(default_factory=list)
-    call_calls: list[tuple[str, str]] = field(default_factory=list)
-
-    def discover(self, server: McpServerRef) -> tuple[Tool, ...]:
-        self.discover_calls.append(server.name)
-        if server.name in self.fail_discover_servers:
-            raise ConnectionError(f"cannot connect to {server.name}")
-        return self.tools_by_server.get(server.name, ())
-
-    def call(self, server: McpServerRef, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
-        self.call_calls.append((server.name, tool_name))
-        if server.name in self.call_exceptions:
-            raise self.call_exceptions[server.name]
-        return self.call_results.get(server.name, ToolResult(content="ok"))
 
 
 @dataclass

@@ -38,8 +38,7 @@ from aether_runtime.adapters.outbound.redis.event_sink import RedisEventSink
 from aether_runtime.adapters.outbound.redis.status_notifier import RedisStatusNotifier
 from aether_runtime.adapters.outbound.system_clock import SystemClock
 from aether_runtime.adapters.outbound.telemetry.noop_tracer import NoopTracer
-from aether_runtime.application.ports.outbound.model_gateway import ModelResponse, ToolSchema
-from aether_runtime.application.ports.outbound.tool_gateway import ToolNotFound
+from aether_runtime.application.ports.outbound.model_gateway import ModelResponse
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_runtime.domain.tools import ToolCall, ToolResult
 from aether_worker.adapters.outbound.noop_trace_context import NoopTraceContext
@@ -50,6 +49,7 @@ from aether_worker.settings import Settings as WorkerSettings
 from fastapi.testclient import TestClient
 from redis import Redis
 
+from tests.support.mcp_fakes import _SingleToolGateway
 from tests.support.pg import DATA_PASSWORD, DATA_ROLE
 from tests.support.waiting import wait_until
 
@@ -153,36 +153,6 @@ class _GatedClockTool:
         self.reached.set()
         self.gate.wait()
         return ToolResult(content="12:00:00")
-
-
-class _SingleToolGateway:
-    """spec 0003 2.1: `ToolGateway` 포트의 최소 구현 — `_GatedClockTool` 하나만 압니다."""
-
-    def __init__(self, tool: _GatedClockTool) -> None:
-        self._tool = tool
-
-    def bind(self, mcp_servers: tuple[Any, ...]) -> None:
-        del mcp_servers
-
-    def close(self) -> None:
-        pass
-
-    def discover(self) -> tuple[ToolSchema, ...]:
-        return (
-            ToolSchema(
-                name=self._tool.name,
-                description=self._tool.description,
-                input_schema=self._tool.input_schema,
-            ),
-        )
-
-    def call(
-        self, run_id: object, agent_version_id: object, name: str, arguments: dict[str, Any]
-    ) -> ToolResult:
-        del run_id, agent_version_id
-        if name != self._tool.name:
-            raise ToolNotFound(name)
-        return self._tool.run(arguments)
 
 
 def _build_cancel_test_handler(
