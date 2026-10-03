@@ -1,0 +1,28 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-03-001
+date: 2026-10-03
+status: candidate
+symptom: verify 를 동시에 두 번 돌리면 .harness/verify.json 에 JSON 문서 두 개가 이어 붙어 파싱이 깨지고, 한쪽 실행이 필수 단계 실패로 끝난다. 락이 없고, 같은 Docker 자원(compose 프로젝트·포트)과 같은 결과 파일을 공유한다
+evidence: |
+  2026-10-03, 후보 2026-09-28-001 을 적용하던 중. 주 세션이 verify 를 돌렸고 같은 시점에 위임 세션도
+  마무리 verify 를 돌렸다. 주 세션 쪽 출력은 "필수 단계 실패로 이후 단계를 실행하지 않았습니다" 였고,
+  `.harness/verify.json` 은 `json.load` 에서 `Extra data: line 33 column 1` 로 깨졌다 — 문서 두 개가
+  이어 붙은 것이다. 위임 세션은 같은 트리에서 18/18 pass 를 보고했고, 뒤에 단독으로 다시 돌린 결과도
+  18/18 pass 였다. 즉 실패는 변경 때문이 아니라 **동시 실행** 때문이었다.
+  부수 피해: 그 실패를 확인하지 않은 채 커밋 메시지에 "verify 18/18" 을 적었다(주 세션의 실수).
+  같은 라운드의 앞선 사고도 같은 뿌리다 — 위임 세션이 중단되며 정리하지 못한 compose 프로젝트가
+  collector 포트를 잡아 smoke 가 실패했다(P2-5, PR #98 본문).
+root_cause: verify 는 단일 실행을 가정하지만 그것을 강제하지 않는다. 결과 파일은 원자적으로 쓰이지 않고(append 로 깨짐), compose 프로젝트 이름은 격리되어 있어도 호스트 포트는 공유한다. 주 세션과 위임 세션이 같은 저장소에서 각자 verify 를 돌릴 수 있는 구조인데 그 경합을 막는 것이 없다
+fix: 이번에는 단독으로 다시 돌려 18/18 을 확인하고, 커밋 메시지를 사실에 맞게 고쳤다. 구조는 그대로다
+recurrence_risk: high
+harness_element: HE-3
+proposed_harness_change: "(사람 결정) (1) verify 에 락을 둔다 — `.harness/verify.lock` 을 잡지 못하면 즉시 비영 종료하고 '다른 verify 가 실행 중' 을 알린다. 대기하지 않는다(대기는 두 실행이 교대로 Docker 를 잡는 더 나쁜 상태를 만든다). (2) 결과 파일은 임시 파일에 쓰고 원자적으로 교체한다(같은 디렉터리 rename) — 깨진 JSON 이 남지 않게. (3) 위임 세션 브리핑의 표준 문구에 '주 세션이 verify 를 돌리는 동안 돌리지 말 것' 을 넣는 대신, (1)이 그것을 기계로 막게 한다 — 자연어 지시보다 락이 먼저다(AGENTS.md Learning)"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: 락 적용 뒤 verify 를 동시에 둘 돌린다.
+  기준: 나중 실행이 즉시 비영 종료하며 사유를 적고, 먼저 실행은 영향 없이 18/18 로 끝난다.
+  `.harness/verify.json` 은 항상 파싱 가능한 단일 문서다(동시 실행을 시도한 뒤에도).
+  락 파일이 남아 다음 단독 실행을 막는 일이 없어야 한다(비정상 종료 뒤 재실행 1회로 확인).
+owner: unassigned
+expires: 2027-01-03

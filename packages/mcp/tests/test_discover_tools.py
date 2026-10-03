@@ -4,24 +4,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any
-
 from aether_mcp.application.usecases.discover_tools import DiscoverToolsUseCase
-from aether_mcp.domain.tools import McpServerRef, Tool, ToolResult
+from aether_mcp.domain.tools import McpServerRef, Tool
 
-
-@dataclass
-class FakeMcpClient:
-    tools: tuple[Tool, ...] = ()
-    discover_calls: list[McpServerRef] = field(default_factory=list)
-
-    def discover(self, server: McpServerRef) -> tuple[Tool, ...]:
-        self.discover_calls.append(server)
-        return self.tools
-
-    def call(self, server: McpServerRef, tool_name: str, arguments: dict[str, Any]) -> ToolResult:
-        raise NotImplementedError
+from tests.support.mcp_fakes import FakeMcpClient
 
 
 def test_discover_tools_delegates_to_mcp_client() -> None:
@@ -30,7 +16,7 @@ def test_discover_tools_delegates_to_mcp_client() -> None:
         Tool(name="echo", description="echoes input", input_schema={"type": "object"}),
         Tool(name="fail", description="always fails", input_schema={"type": "object"}),
     )
-    client = FakeMcpClient(tools=tools)
+    client = FakeMcpClient(tools_by_server={server.name: tools})
     usecase = DiscoverToolsUseCase(client=client)
 
     result = usecase(server)
