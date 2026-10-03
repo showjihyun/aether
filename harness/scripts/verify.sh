@@ -162,9 +162,83 @@ fi
 
 harness_ensure_state_dir "$ROOT"
 
+# --- 단일 실행 락 (improvement-log 2026-10-03-001) -----------------------------
+# verify 는 같은 Docker 자원(compose 프로젝트·호스트 포트)과 같은 결과 파일을 씁니다.
+# 두 실행이 겹치면 결과 파일에 JSON 문서가 두 개 이어 붙고(파싱 불가) 한쪽이 엉뚱한
+# 필수 실패로 끝납니다 — 2026-10-03 에 주 세션과 위임 세션이 동시에 돌려 실제로 겪었습니다.
+# 기다리지 않고 즉시 비영 종료합니다. 기다리면 두 실행이 Docker 를 교대로 잡는 더 나쁜
+# 상태가 됩니다. mkdir 은 원자적이라 flock 없이도 test-and-set 이 됩니다.
+# 락 경로는 덮어쓸 수 있습니다 — 테스트가 verify 를 중첩해 부를 때 바깥 실행의 락을
+# 건드리지 않게 하는 용도입니다(tests/scripts/test_verify_lock.py). 평상시에는 쓰지 않습니다.
+VERIFY_LOCK_DIR="${HARNESS_VERIFY_LOCK_DIR:-$ROOT/.harness/verify.lock}"
+VERIFY_LOCK_STALE_S="${HARNESS_VERIFY_LOCK_STALE_S:-7200}"
+VERIFY_LOCK_HELD=0
+
+release_verify_lock() {
+  [[ "$VERIFY_LOCK_HELD" -eq 1 ]] || return 0
+  rm -rf "$VERIFY_LOCK_DIR"
+}
+
+acquire_verify_lock() {
+  if mkdir "$VERIFY_LOCK_DIR" 2>/dev/null; then
+    VERIFY_LOCK_HELD=1
+    printf 'pid=%s\nstarted_at=%s\n' "$$" "$(now_iso)" > "$VERIFY_LOCK_DIR/owner" 2>/dev/null || true
+    return 0
+  fi
+  # 비정상 종료로 남은 락은 나이로 판정해 회수합니다.
+  local age=0 now_s mtime_s
+  now_s="$(date +%s)"
+  mtime_s="$(date -r "$VERIFY_LOCK_DIR" +%s 2>/dev/null || echo "$now_s")"
+  age=$(( now_s - mtime_s ))
+  if [[ "$age" -ge "$VERIFY_LOCK_STALE_S" ]]; then
+    log_warn "오래된 verify 락을 회수했습니다(${age}초 전). 이전 실행이 비정상 종료한 것으로 봅니다."
+    rm -rf "$VERIFY_LOCK_DIR"
+    if mkdir "$VERIFY_LOCK_DIR" 2>/dev/null; then
+      VERIFY_LOCK_HELD=1
+      printf 'pid=%s\nstarted_at=%s\n' "$$" "$(now_iso)" > "$VERIFY_LOCK_DIR/owner" 2>/dev/null || true
+      return 0
+    fi
+  fi
+  return 1
+}
+
+if ! acquire_verify_lock; then
+  log_error "다른 verify 가 실행 중입니다(락: .harness/verify.lock)."
+  log_error "다음 조치: 그 실행이 끝난 뒤 다시 실행하십시오. 동시에 돌리면 결과 파일과 Docker 자원이 충돌합니다."
+  if [[ -f "$VERIFY_LOCK_DIR/owner" ]]; then
+    log_error "락 소유자: $(tr '\n' ' ' < "$VERIFY_LOCK_DIR/owner")"
+  fi
+  exit 4
+fi
+trap release_verify_lock EXIT
+
+# 이전 실행의 단계 소요. 벽시계로 재므로 실행 중 절전이 들면 숫자가 실제 계산 시간과
+# 무관해집니다(2026-09-26-001: smoke 가 7.5시간·web-lint 가 9.25시간으로 기록된 실행이
+# 있었고, 같은 스크립트의 단독 실행은 68초였습니다). 직전 실행 대비 급증을 그 표시로 씁니다.
+declare -A PREV_DUR=()
+if [[ -f "$ROOT/$HARNESS_VERIFY_JSON" ]]; then
+  while IFS=$'\t' read -r _pid _pdur; do
+    [[ -n "$_pid" ]] && PREV_DUR["$_pid"]="$_pdur"
+  done < <(sed -n 's/.*"id": "\([^"]*\)".*"duration_ms": \([0-9]*\).*/\1\t\2/p' "$ROOT/$HARNESS_VERIFY_JSON" 2>/dev/null)
+fi
+VERIFY_BUDGET_MS="${HARNESS_VERIFY_BUDGET_MS:-600000}"
+SUSPECT_FACTOR="${HARNESS_VERIFY_SUSPECT_FACTOR:-10}"
+SUSPECT_FLOOR_MS="${HARNESS_VERIFY_SUSPECT_FLOOR_MS:-200}"
+TOTAL_DURATION_MS=0
+WALL_CLOCK_SUSPECT=0
+SUSPECT_IDS=()
+BUDGET_EXCEEDED=0
+
 write_verify_json() {
   local status="$1" failed_required="$2" failed_optional="$3" steps_json="$4"
   local only_json="" sep="" i=0 partial="false"
+  local suspect_json="" ssep="" j=0
+  for ((j = 0; j < ${#SUSPECT_IDS[@]}; j++)); do
+    suspect_json="${suspect_json}${ssep}\"${SUSPECT_IDS[$j]}\""
+    ssep=", "
+  done
+  # 원자적 교체. 같은 디렉터리의 임시 파일에 쓰고 rename 합니다 — 깨진 JSON 이 남지 않게.
+  local tmp="$ROOT/$HARNESS_VERIFY_JSON.tmp.$$"
   for ((i = 0; i < ${#ONLY_IDS[@]}; i++)); do
     only_json="${only_json}${sep}\"${ONLY_IDS[$i]}\""
     sep=", "
@@ -186,9 +260,27 @@ write_verify_json() {
     printf '%s' "$steps_json"
     printf '  ],\n'
     printf '  "failed_required": %s,\n' "$failed_required"
-    printf '  "failed_optional": %s\n' "$failed_optional"
+    printf '  "failed_optional": %s,\n' "$failed_optional"
+    # 시간 예산과 그 신뢰도. budget_exceeded 는 선택 실패로 집계합니다 — 필수가 아닌 이유는
+    # 느린 머신에서 게이트가 막히는 비용이 더 크기 때문입니다(임계값은 사람이 소유, EI-2).
+    printf '  "total_duration_ms": %s,\n' "$TOTAL_DURATION_MS"
+    printf '  "budget_ms": %s,\n' "$VERIFY_BUDGET_MS"
+    if [[ "$BUDGET_EXCEEDED" -eq 1 ]]; then
+      printf '  "budget_exceeded": true,\n'
+    else
+      printf '  "budget_exceeded": false,\n'
+    fi
+    # 벽시계가 절전 구간을 삼킨 것으로 보이는 실행입니다. 이 표시가 있으면 예산 판정을
+    # 하지 않습니다 — 그 숫자는 계산 시간이 아니라 사람이 자리를 비운 시간입니다.
+    if [[ "$WALL_CLOCK_SUSPECT" -eq 1 ]]; then
+      printf '  "wall_clock_suspect": true,\n'
+    else
+      printf '  "wall_clock_suspect": false,\n'
+    fi
+    printf '  "wall_clock_suspect_steps": [%s]\n' "$suspect_json"
     printf '}\n'
-  } > "$ROOT/$HARNESS_VERIFY_JSON"
+  } > "$tmp"
+  mv -f "$tmp" "$ROOT/$HARNESS_VERIFY_JSON"
 }
 
 if [[ "$TOTAL" -eq 0 ]]; then
@@ -263,10 +355,26 @@ for ((i = 0; i < TOTAL; i++)); do
     fi
   fi
 
+  TOTAL_DURATION_MS=$(( TOTAL_DURATION_MS + dur ))
+  prev_dur="${PREV_DUR[$id]:-}"
+  if [[ -n "$prev_dur" && "$prev_dur" -ge "$SUSPECT_FLOOR_MS" && "$dur" -gt $(( prev_dur * SUSPECT_FACTOR )) ]]; then
+    WALL_CLOCK_SUSPECT=1
+    SUSPECT_IDS+=("$id")
+  fi
+
   [[ -n "$STEPS_JSON" ]] && STEPS_JSON="${STEPS_JSON},"$'\n'
   STEPS_JSON="${STEPS_JSON}    {\"id\": \"$(json_escape "$id")\", \"layer\": \"${layer}\", \"required\": ${req}, \"status\": \"${status}\", \"exit_code\": ${code}, \"duration_ms\": ${dur}, \"summary\": \"$(json_escape "$summary")\", \"log\": \"$(json_escape "$log_rel")\"}"
 done
 [[ -n "$STEPS_JSON" ]] && STEPS_JSON="${STEPS_JSON}"$'\n'
+
+# 시간 예산 판정. 전량 실행에서만 하고(--only 는 합계가 의미 없습니다), 절전 의심 실행은
+# 제외합니다. 넘으면 선택 실패 1건으로 집계합니다 — 재는 것과 판정하는 것이 분리되어 있어
+# 예산을 26배 넘긴 실행이 pass 로 남은 일이 있었습니다(2026-09-26-001).
+if [[ "$TOTAL" -eq "$DEFINED_TOTAL" && "$WALL_CLOCK_SUSPECT" -eq 0 && "$TOTAL_DURATION_MS" -gt "$VERIFY_BUDGET_MS" ]]; then
+  BUDGET_EXCEEDED=1
+  FAILED_OPTIONAL=$(( FAILED_OPTIONAL + 1 ))
+  FAILED_IDS+=("time-budget")
+fi
 
 if [[ "$FAILED_REQUIRED" -gt 0 ]]; then
   OVERALL="fail"
@@ -286,6 +394,13 @@ else
   fi
   if [[ "$ABORTED" -eq 1 ]]; then
     say "필수 단계 실패로 이후 단계를 실행하지 않았습니다. 전부 실행하려면 --continue-on-fail 을 쓰십시오."
+  fi
+  if [[ "$WALL_CLOCK_SUSPECT" -eq 1 ]]; then
+    say "소요: 합계 ${TOTAL_DURATION_MS} ms — 벽시계가 절전 구간을 삼킨 것으로 보입니다(직전 대비 ${SUSPECT_FACTOR}배 초과: ${SUSPECT_IDS[*]}). 예산 판정을 건너뜁니다."
+  elif [[ "$BUDGET_EXCEEDED" -eq 1 ]]; then
+    say "소요: 합계 ${TOTAL_DURATION_MS} ms > 예산 ${VERIFY_BUDGET_MS} ms — 선택 실패 1건으로 집계했습니다(time-budget)."
+  else
+    say "소요: 합계 ${TOTAL_DURATION_MS} ms (예산 ${VERIFY_BUDGET_MS} ms)"
   fi
   say "결과 파일: ${HARNESS_VERIFY_JSON}"
 fi

@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-09-26-001
 date: 2026-09-26
-status: candidate
+status: validating
 symptom: verify 가 소요를 벽시계로 재므로 실행 중 머신이 절전에 들어가면 단계 소요가 실제 계산 시간과 무관해진다. smoke 단계가 27,130,216 ms(약 7.5시간)로 기록되었지만 같은 스크립트를 독립 시계로 단독 실행하면 68초다. 게이트는 그 실행을 pass 로 집계했다 — 시간 예산(spec 0001 D-12, 합계 600,000 ms)을 판정하는 단계가 아예 없다
 evidence: |
   2026-09-25~26 P2-4 라운드. `.harness/verify.json` 의 smoke 단계 duration_ms = 27130216, 합계 27308740.
@@ -17,13 +17,14 @@ evidence: |
   다른 17단계는 정상 범위였다. 즉 한 라운드에서 서로 다른 두 단계(smoke, web-lint)가 각각 절전 구간을
   삼켰다 — 단계가 무엇인지와 무관하고, 재현 조건은 '사람이 자리를 비운 사이에 실행이 걸쳐 있는 것' 이다.
 root_cause: 하네스가 단계 소요를 벽시계 차이로만 재고, 그 값이 타당한 범위인지도 검사하지 않는다. 그래서 (1) 절전·최대 절전이 든 실행의 숫자는 성능 판단에 쓸 수 없고 (2) 그 숫자로 예산을 판정하는 단계도 없어 위반이 pass 로 남는다. 두 번째가 더 크다 — 재는 것과 판정하는 것이 분리되어 있다
-fix: 이번에는 원인을 단독 측정으로 좁혀 기록만 했다. 게이트 결과(18/18 pass)는 바뀌지 않는다 — 모든 단계가 실제로 통과했다
+fix: 이번에는 원인을 단독 측정으로 좁혀 기록만 했다. 게이트 결과(18/18 pass)는 바뀌지 않는다 — 모든 단계가 실제로 통과했다. 2026-10-03 에 제안 (1)(2)(3)을 적용했다 — verify 가 합계 소요를 `HARNESS_VERIFY_BUDGET_MS`(기본 600000)와 비교해 넘으면 **선택 실패 1건**(`time-budget`)으로 집계하고, 직전 실행 대비 10배를 넘은 단계가 있으면 `wall_clock_suspect` 로 표시해 예산 판정을 건너뛴다. 판정은 전량 실행에서만 한다(`--only` 는 합계가 의미 없다). 임계값·배수·하한은 환경변수로 사람이 소유한다
 recurrence_risk: medium
 harness_element: HE-3
 proposed_harness_change: "(사람 결정) (1) verify 에 시간 예산 판정을 더한다 — 합계가 `HARNESS_VERIFY_BUDGET_MS`(기본 600,000)를 넘으면 **선택 실패**로 기록한다. 필수 실패로 하지 않는 이유는 느린 머신에서 게이트가 막히는 비용이 더 크기 때문이다. 임계값은 사람이 소유한다(EI-2). (2) 절전이 든 실행을 성능 근거로 쓰지 않도록, 단계 소요가 그 단계의 이전 실행 대비 10배를 넘으면 `.harness/verify.json` 에 `wall_clock_suspect: true` 를 남기고 (1)의 판정에서 제외한다. 비교 기준선은 이미 있는 `.harness/baseline-eval.json` 이 아니라 verify 자신의 직전 결과를 쓴다. (3) smoke·bench 의 요약 문구도 같은 표시를 따른다 — `{{성능_기준}}` 판정(spec 0002 D-8)이 절전 든 실행의 숫자를 쓰면 기준값이 오염된다"
 preferred_enforcement: script
 trust: untrusted
 regression_check: |
+  2026-10-03 실측: 예산 1000 ms 로 전량 실행 → `failed_optional: 1`, `실패 단계: time-budget`, `status: pass`(필수 0건), 합계 313,379 ms 가 기록됐다. 배수를 0 으로 주어 급증을 모사한 실행에서는 `wall_clock_suspect: true` 와 의심 단계 목록이 남고 예산 판정을 건너뛰었다. 기본값에서는 선택 실패 0건이다.
   대상: 제안 적용 뒤 verify 2회(정상 1회, 예산 초과를 흉내낸 1회).
   기준: 예산 안의 실행은 선택 실패 0건. `HARNESS_VERIFY_BUDGET_MS` 를 작게 준 실행은 선택 실패 1건이고
   필수 실패는 0건으로 유지된다. 직전 대비 10배가 넘는 단계가 있는 실행에서는 `wall_clock_suspect: true`
