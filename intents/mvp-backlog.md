@@ -297,17 +297,19 @@ Intent: [0003](0003-phase-2-mcp-gateway.md) (승인됨 2026-09-25). Spec: [../sp
 
 plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 불변), 순서는 plan 이 소유합니다 — 권한 판정(P2-4)이 Gateway(P2-2b)보다 **먼저** 갑니다. 판정 없는 Gateway 가 main 에 남는 구간을 만들지 않기 위해서입니다.
 
+**완료 2026-10-03.** 사람 손은 둘이었습니다 — H-1(`.importlinter` 의 `aether_mcp -> aether_policy.adapters` 금지 계약, PR #95)과 H-2(REP-6 실행 가능, PR #99). 그 밖에 보호 파일 변경 두 건이 단위 안에서 함께 갔습니다(AR-6 의 조립 예외 두 줄, PR #96·#98).
+
 **Phase 완료 판정** — Agent 의 모든 도구 호출이 `packages/mcp` 의 Gateway 한 곳을 지나고, Gateway 가 연결된 MCP Server 에서 Tool 을 발견하며, 호출마다 권한 판정과 감사 기록이 남습니다. Filesystem·HTTP·PostgreSQL MCP Server 가 인터넷 없이 붙습니다.
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| P2-1 | MCP Client 와 Tool Discovery | P0-1 | — | 대기 |
-| P2-2a | 마이그레이션 0003 과 감사 싱크 | P0-8 | — | 대기 |
-| P2-2b | MCP Gateway (단일 통로, 연결 관리, 감사 기록) | P2-1, P2-2a, P2-4 | — | 대기 |
-| P2-3 | Runtime 이 Gateway 로만 도구를 부름 | P2-2b, P1-4 | — | 대기 |
-| P2-4 | 🔒 Permission 판정 지점 | P2-2a | — | 대기 |
-| P2-5 | 초기 Integration: Filesystem, HTTP, PostgreSQL | P2-3 | — | 대기 |
-| P2-6 | Agent 에 MCP Server 바인딩 | P2-3, P1-1 | — | 대기 |
+| P2-1 | MCP Client 와 Tool Discovery | P0-1 | — | 완료 (PR #91) |
+| P2-2a | 마이그레이션 0003 과 감사 싱크 | P0-8 | — | 완료 (PR #92) |
+| P2-2b | MCP Gateway (단일 통로, 연결 관리, 감사 기록) | P2-1, P2-2a, P2-4 | — | 완료 (PR #94, 반려 1회 뒤 재작업) |
+| P2-3 | Runtime 이 Gateway 로만 도구를 부름 | P2-2b, P1-4 | — | 완료 (PR #96) |
+| P2-4 | 🔒 Permission 판정 지점 | P2-2a | — | 완료 (PR #93) |
+| P2-5 | 초기 Integration: Filesystem, HTTP, PostgreSQL | P2-3 | — | 완료 (PR #98) |
+| P2-6 | Agent 에 MCP Server 바인딩 | P2-3, P1-1 | — | 완료 (PR #97) |
 
 ### P2-1 MCP Client 와 Tool Discovery
 
