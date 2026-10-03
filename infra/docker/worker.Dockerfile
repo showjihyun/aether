@@ -11,7 +11,7 @@
 # 않고 공급망 관점에서도 매 실행마다 외부 코드를 받는 것은 받을 수 없습니다.
 # 버전은 여기 정확히 고정합니다(`2026.8.31`, 2026-09-29 확인) — 갱신은 Dependabot
 # 밖이라 사람이 주기적으로 봅니다(spec C-5, docs 초안은 구현자 보고 참고).
-FROM node:22-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS mcp-filesystem
+FROM node:26-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS mcp-filesystem
 
 RUN npm install --global --no-fund --no-audit @modelcontextprotocol/server-filesystem@2026.8.31
 
