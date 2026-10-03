@@ -11,7 +11,7 @@
 # 않고 공급망 관점에서도 매 실행마다 외부 코드를 받는 것은 받을 수 없습니다.
 # 버전은 여기 정확히 고정합니다(`2026.8.31`, 2026-09-29 확인) — 갱신은 Dependabot
 # 밖이라 사람이 주기적으로 봅니다(spec C-5, docs 초안은 구현자 보고 참고).
-FROM node:22-slim@sha256:43ac6c60b8f89723f746e8a92ce91abd5017e627ce1ddfe4238355d3a30b772c AS mcp-filesystem
+FROM node:26-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS mcp-filesystem
 
 RUN npm install --global --no-fund --no-audit @modelcontextprotocol/server-filesystem@2026.8.31
 
@@ -20,6 +20,13 @@ FROM ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb
 FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
 
 COPY --from=uv /uv /uvx /usr/local/bin/
+
+# Node 26 바이너리가 libatomic.so.1 에 동적으로 링크합니다(Node 22 는 그렇지 않았음) —
+# 이 베이스에는 없어 바이너리만 복사한 Node 가 "libatomic.so.1: cannot open shared
+# object file" 로 즉시 죽습니다(실측, smoke 단계). 패키지만 넣고 바로 지웁니다.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends libatomic1 \
+    && rm -rf /var/lib/apt/lists/*
 
 # D-8: Node 런타임 실행 파일과, npm 전역 설치가 만든 패키지 트리(그 패키지 자신의
 # `node_modules` 안에 `@modelcontextprotocol/sdk` 등 전이 의존까지 포함)만 옮깁니다
