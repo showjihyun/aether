@@ -1,0 +1,32 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-04-001
+date: 2026-10-04
+status: validating
+symptom: 종료 게이트가 전량 통과(18/18, 필수 실패 0) 직후에도 종료를 막았다. 그래서 문서 한 줄을 고친 뒤에도 약 320~440초의 전량 재검증을 요구했고, 그 재실행은 새 정보를 주지 않았다. 이 세션에서 다섯 번 반복됐다
+evidence: |
+  2026-10-04 실측. 같은 트리에서 `harness_tree_fingerprint` 를 verify 실행 **전**과 **후**에 계산하면
+  둘 다 4491df74d396 인데, 같은 실행이 `.harness/verify.json` 에 기록한 tree 는 c8cbb8477bbb 였다.
+  즉 기록 시점의 값만 다르다 — 실행 중 git index 재평가(CRLF 정규화 경고가 같은 세션의 커밋에서
+  여러 파일에 났다)로 `git diff --name-only`(index↔작업 트리)의 결과가 흔들리고, 그 목록을 입력으로
+  쓰는 지문이 함께 흔들린다. 게이트는 그 값을 현재 값과 비교하므로 통과할 수 없었다.
+  반복 횟수: 이 세션에서 5회(마지막 사례의 재실행 벽시계 343초). 각 재실행의 결과는 직전과 동일했다.
+  앞선 분석에서 "커밋만 해도 지문이 달라진다" 고 적었던 것은 측정으로 반증됐다 — 빈 커밋 전후의
+  지문은 같았다. 원인은 커밋이 아니라 실행 중 index 재평가였다.
+root_cause: 신선도 판정의 입력이 '파일 내용' 이 아니라 'index 와 작업 트리의 차이 목록' 이었다. 그 목록은 git 이 index 를 다시 stat 할 때 바뀔 수 있어서 내용이 같아도 값이 달라진다. 게이트는 그 흔들림을 '검증 이후 변경' 으로 읽었다
+fix: 신선도 판정을 계열 지문(docs/code)으로 바꿨다 — 모든 파일을 git hash-object 로 해시하므로 index 상태와 무관하다. 그 위에 범위 한정(verify --changed)을 더해, 문서계열만 바뀐 경우 자기 점검 단계만 돌린다. 게이트는 그 부분 실행을 '마지막 전량 통과 이후 코드계열이 바뀌지 않았을 때만' 받아들인다
+recurrence_risk: high
+harness_element: HE-3
+proposed_harness_change: "적용 완료(2026-10-04). (1) harness_scope_fingerprint(docs|code) 를 lib 에 추가 — git ls-files --cached --others --exclude-standard 의 모든 파일을 git hash-object 로 해시하고 하네스 상태 디렉터리는 제외한다. (2) verify.sh --changed — 직전 기록과 비교해 문서계열만 바뀌었으면 HARNESS_SCOPE_DOC_STEPS 만 돌린다. (3) verify.json 에 scope_docs·scope_code·full_pass_code·full_pass_at 을 steps **앞**에 기록한다(게이트의 폴백 파서가 steps 앞만 본다). (4) 게이트는 계열 지문으로 신선도를 판정하고, 부분 실행은 코드계열이 마지막 전량 통과와 같을 때만 통과시킨다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  2026-10-04 실측(적용 뒤):
+    전량 통과 → 게이트 exit 0 (이전에는 exit 2 였다. 이 한 줄이 이 후보의 핵심이다)
+    문서 한 줄 변경 → `--changed` 가 6단계만 돌림, 벽시계 82초, 게이트 exit 0
+    같은 변경에 전량 실행 → 441~512초
+    코드(스크립트) 변경 뒤 `--changed` → "코드계열이 바뀌어 전량" 으로 전량 실행
+    부분 실행 뒤 코드가 바뀐 상태 → 게이트가 거부하며 사유를 적는다
+  남은 확인: 다음 라운드에서 문서·기록만 고친 종료가 전량 재검증 없이 끝나는지(5회 중 0회 목표).
+  그리고 계열 지문의 비용(전체 파일 hash-object)이 커지는지 — 지금은 verify 1회당 수 초 수준이다.
+owner: unassigned
+expires: 2027-01-04
