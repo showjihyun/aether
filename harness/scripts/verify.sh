@@ -16,6 +16,11 @@ usage() {
 
 프로젝트의 검증 단계를 순서대로 실행하고 결과를 .harness/verify.json 에 씁니다.
 
+  --changed  직전 실행(.harness/verify.json) 이후 바뀐 입력의 계열만 돌립니다.
+             문서계열만 바뀌었으면 HARNESS_SCOPE_DOC_STEPS 만, 코드계열이 바뀌었으면
+             전량입니다. 기록이 없으면 전량입니다. 판정을 건너뛰는 것이 아니라
+             영향 없는 단계를 돌리지 않는 것입니다.
+
 옵션:
   --only <id>          지정한 id 의 단계만 실행합니다. 여러 번 지정할 수 있습니다.
   --list               실행할 단계 목록만 출력하고 종료합니다.
@@ -41,6 +46,7 @@ OPT_JSON=0
 OPT_LIST=0
 OPT_CONTINUE=0
 ONLY_IDS=()
+OPT_CHANGED=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -48,6 +54,10 @@ while [[ $# -gt 0 ]]; do
     --json) OPT_JSON=1; shift ;;
     --list) OPT_LIST=1; shift ;;
     --continue-on-fail) OPT_CONTINUE=1; shift ;;
+    --changed)
+      OPT_CHANGED=1
+      shift
+      ;;
     --only)
       [[ $# -ge 2 ]] || die "--only 에는 단계 id 가 필요합니다." 3
       ONLY_IDS+=("$2"); shift 2 ;;
@@ -119,6 +129,37 @@ if [[ "${HARNESS_LANG_PACK_PROBLEMS:-0}" -gt 0 ]]; then
   log_warn "계약을 어긴 언어 팩 ${HARNESS_LANG_PACK_PROBLEMS}개를 비활성화했습니다. 위 오류를 먼저 해소하십시오."
 fi
 say ""
+
+SCOPE_DOCS="$(harness_scope_fingerprint "$ROOT" docs)"
+SCOPE_CODE="$(harness_scope_fingerprint "$ROOT" code)"
+PREV_SCOPE_DOCS=""
+PREV_SCOPE_CODE=""
+PREV_FULL_PASS_CODE=""
+PREV_FULL_PASS_AT=""
+if [[ -f "$ROOT/$HARNESS_VERIFY_JSON" ]]; then
+  PREV_SCOPE_DOCS="$(sed -n 's/.*"scope_docs": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
+  PREV_SCOPE_CODE="$(sed -n 's/.*"scope_code": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
+  PREV_FULL_PASS_CODE="$(sed -n 's/.*"full_pass_code": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
+  PREV_FULL_PASS_AT="$(sed -n 's/.*"full_pass_at": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
+fi
+
+if [[ "$OPT_CHANGED" -eq 1 ]]; then
+  if [[ -z "$PREV_SCOPE_CODE" ]]; then
+    say "범위 한정: 직전 실행 기록이 없어 전량을 돌립니다."
+  elif [[ "$SCOPE_CODE" != "$PREV_SCOPE_CODE" ]]; then
+    say "범위 한정: 코드계열이 바뀌어 전량을 돌립니다."
+  elif [[ "$SCOPE_DOCS" != "$PREV_SCOPE_DOCS" ]]; then
+    if [[ ${#HARNESS_SCOPE_DOC_STEPS[@]} -eq 0 ]]; then
+      say "범위 한정: HARNESS_SCOPE_DOC_STEPS 가 비어 있어 전량을 돌립니다."
+    else
+      ONLY_IDS=("${HARNESS_SCOPE_DOC_STEPS[@]}")
+      say "범위 한정: 문서계열만 바뀌었습니다 — ${ONLY_IDS[*]} 만 돌립니다."
+    fi
+  else
+    ONLY_IDS=("${HARNESS_SCOPE_DOC_STEPS[@]:0:1}")
+    say "범위 한정: 직전 실행 이후 입력이 바뀌지 않았습니다 — 첫 단계만 돌려 신선도를 갱신합니다."
+  fi
+fi
 
 # --- 파싱과 검증 ---------------------------------------------------------------
 IDS=(); LAYERS=(); REQUIREDS=(); COMMANDS=()
@@ -233,6 +274,11 @@ write_verify_json() {
   local status="$1" failed_required="$2" failed_optional="$3" steps_json="$4"
   local only_json="" sep="" i=0 partial="false"
   local suspect_json="" ssep="" j=0
+  local full_pass_code="$PREV_FULL_PASS_CODE" full_pass_at="$PREV_FULL_PASS_AT"
+  if [[ "$status" == "pass" && "$failed_required" -eq 0 && "$TOTAL" -eq "$DEFINED_TOTAL" ]]; then
+    full_pass_code="$SCOPE_CODE"
+    full_pass_at="$(now_iso)"
+  fi
   for ((j = 0; j < ${#SUSPECT_IDS[@]}; j++)); do
     suspect_json="${suspect_json}${ssep}\"${SUSPECT_IDS[$j]}\""
     ssep=", "
@@ -256,11 +302,6 @@ write_verify_json() {
     # 신선도 근거. 둘 다 없으면 며칠 지난 pass 가 오늘의 종료를 통과시킵니다.
     printf '  "finished_at": "%s",\n' "$(now_iso)"
     printf '  "tree": "%s",\n' "$(harness_tree_fingerprint "$ROOT")"
-    printf '  "steps": [\n'
-    printf '%s' "$steps_json"
-    printf '  ],\n'
-    printf '  "failed_required": %s,\n' "$failed_required"
-    printf '  "failed_optional": %s,\n' "$failed_optional"
     # 시간 예산과 그 신뢰도. budget_exceeded 는 선택 실패로 집계합니다 — 필수가 아닌 이유는
     # 느린 머신에서 게이트가 막히는 비용이 더 크기 때문입니다(임계값은 사람이 소유, EI-2).
     printf '  "total_duration_ms": %s,\n' "$TOTAL_DURATION_MS"
@@ -277,7 +318,20 @@ write_verify_json() {
     else
       printf '  "wall_clock_suspect": false,\n'
     fi
-    printf '  "wall_clock_suspect_steps": [%s]\n' "$suspect_json"
+    printf '  "wall_clock_suspect_steps": [%s],\n' "$suspect_json"
+    # 계열별 입력 지문. stop 게이트가 "무엇이 바뀌어 어떤 단계가 낡았는가" 를 이것으로
+    # 판정합니다 — 전체 트리 지문 하나로는 문서 한 줄과 코드 변경을 구별할 수 없습니다.
+    printf '  "scope_docs": "%s",\n' "$SCOPE_DOCS"
+    printf '  "scope_code": "%s",\n' "$SCOPE_CODE"
+    # 마지막 전량 통과의 코드계열 지문. 범위 한정 실행은 이 값을 이어받습니다 —
+    # 그래야 종료 게이트가 "코드는 전량으로 검증됐고 이번엔 문서만 바뀌었다" 를 알 수 있습니다.
+    printf '  "full_pass_code": "%s",\n' "$full_pass_code"
+    printf '  "full_pass_at": "%s",\n' "$full_pass_at"
+    printf '  "steps": [\n'
+    printf '%s' "$steps_json"
+    printf '  ],\n'
+    printf '  "failed_required": %s,\n' "$failed_required"
+    printf '  "failed_optional": %s\n' "$failed_optional"
     printf '}\n'
   } > "$tmp"
   mv -f "$tmp" "$ROOT/$HARNESS_VERIFY_JSON"

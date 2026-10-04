@@ -8,6 +8,7 @@
 .harness/guard-evidence-allow.log
 .harness/guard-snapshot.tsv
 .harness/guard-patterns.cache
+.harness/verify.lock/
 .harness/logs/
 
 # import-linter 캐시. 매 실행 재생성됩니다. 디렉터리 자체 .gitignore 가 있지만 명시해 둡니다.

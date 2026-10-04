@@ -208,6 +208,14 @@ if [[ "${HARNESS_SKIP_STOP_GATE:-}" == "1" ]]; then
 fi
 
 PROJECT_ROOT="$(resolve_project_root)"
+
+# 계열 판정(문서/코드)은 harness.config 의 HARNESS_SCOPE_DOC_PATTERNS 가 소유합니다.
+# 게이트는 그 값만 읽습니다 — 단계 정의나 명령은 쓰지 않습니다. 루트가 정해진 뒤에
+# 읽어야 하므로 이 자리입니다.
+if [[ -f "${PROJECT_ROOT}/harness.config" ]]; then
+  # shellcheck disable=SC1091
+  source "${PROJECT_ROOT}/harness.config" || true
+fi
 VERIFY_JSON="${PROJECT_ROOT}/${VERIFY_REL}"
 
 # 3. 검증 결과가 없는 경우.
@@ -238,15 +246,35 @@ PARTIAL="$(json_raw "${VERIFY_JSON}" "partial")"
 if [[ "${PARTIAL}" == "true" ]]; then
   RAN="$(json_raw "${VERIFY_JSON}" "ran_steps")"
   DEFINED="$(json_raw "${VERIFY_JSON}" "defined_steps")"
-  emit "[harness] 종료를 차단했습니다: 마지막 검증이 부분 실행이었습니다 (${RAN:-?}/${DEFINED:-?} 단계)."
-  emit "--only 로 거른 결과는 완료 근거가 아닙니다. 실행되지 않은 단계는 통과한 것이 아닙니다."
-  emit "다음 조치: ./harness/scripts/verify.sh 를 옵션 없이 실행합니다."
-  exit 2
+  # 예외 하나: `--changed` 가 문서계열만 돌린 결과입니다. 그 경우 코드계열은 마지막
+  # **전량 통과** 이후 바뀌지 않았고(full_pass_code 와 현재 코드 지문이 같음) 돌지 않은
+  # 단계는 그 전량 통과가 이미 판정했습니다. 코드가 바뀌었으면 여전히 전량을 요구합니다.
+  # 근거: 문서·실행 기록만 고친 뒤의 전량 재실행이 이 세션에서 5회, 새 정보 0(약 320초/회).
+  FULL_PASS_CODE_NOW=""
+  if declare -F harness_scope_fingerprint >/dev/null 2>&1; then
+    FULL_PASS_CODE_NOW="$(harness_scope_fingerprint "${PROJECT_ROOT}" code)"
+  fi
+  RECORDED_FULL_PASS_CODE_EARLY="$(json_raw "${VERIFY_JSON}" "full_pass_code")"
+  if [[ -n "${FULL_PASS_CODE_NOW}" && -n "${RECORDED_FULL_PASS_CODE_EARLY}"         && "${FULL_PASS_CODE_NOW}" == "${RECORDED_FULL_PASS_CODE_EARLY}" ]]; then
+    : # 코드계열은 전량으로 검증됐습니다. 아래 신선도 검사로 넘어갑니다.
+  else
+    emit "[harness] 종료를 차단했습니다: 마지막 검증이 부분 실행이었습니다 (${RAN:-?}/${DEFINED:-?} 단계)."
+    emit "--only 로 거른 결과는 완료 근거가 아닙니다. 실행되지 않은 단계는 통과한 것이 아닙니다."
+    if [[ -n "${RECORDED_FULL_PASS_CODE_EARLY}" ]]; then
+      emit "코드계열이 마지막 전량 통과 이후 바뀌었습니다 — 범위 한정으로는 통과시키지 않습니다."
+    fi
+    emit "다음 조치: ./harness/scripts/verify.sh 를 옵션 없이 실행합니다."
+    exit 2
+  fi
 fi
 
 # 5. 신선도. 검증한 뒤 파일을 고치고 종료하면 그 결과는 이 작업의 것이 아닙니다.
 FINISHED_AT="$(json_raw "${VERIFY_JSON}" "finished_at")"
 RECORDED_TREE="$(json_raw "${VERIFY_JSON}" "tree")"
+RECORDED_SCOPE_DOCS="$(json_raw "${VERIFY_JSON}" "scope_docs")"
+RECORDED_SCOPE_CODE="$(json_raw "${VERIFY_JSON}" "scope_code")"
+RECORDED_FULL_PASS_CODE="$(json_raw "${VERIFY_JSON}" "full_pass_code")"
+RECORDED_FULL_PASS_AT="$(json_raw "${VERIFY_JSON}" "full_pass_at")"
 
 if [[ -z "${FINISHED_AT}" ]]; then
   emit "[harness] 종료를 차단했습니다: ${VERIFY_REL} 에 신선도 근거가 없습니다."
@@ -255,12 +283,56 @@ if [[ -z "${FINISHED_AT}" ]]; then
   exit 2
 fi
 
+# 계열 지문. lib/common.sh 의 harness_scope_fingerprint 와 같은 입력을 봅니다.
+scope_fingerprint_of() {
+  if declare -F harness_scope_fingerprint >/dev/null 2>&1; then
+    harness_scope_fingerprint "$1" "$2"
+  fi
+}
+
 CURRENT_TREE="$(tree_fingerprint_of "${PROJECT_ROOT}")"
+CURRENT_SCOPE_DOCS_FRESH="$(scope_fingerprint_of "${PROJECT_ROOT}" docs)"
+CURRENT_SCOPE_CODE_FRESH="$(scope_fingerprint_of "${PROJECT_ROOT}" code)"
+
+# 신선도는 **계열 지문**으로 판정합니다. 전체 트리 지문(tree)은 실행 중 index 재평가로
+# 흔들립니다 — 2026-10-04 실측: 같은 트리에서 실행 전·후 값은 같은데(4491df74d396)
+# verify 가 기록한 값은 달랐습니다(c8cbb8477bbb). 그래서 전량 통과 직후에도 종료가
+# 막혔고, 그것이 이 세션에서 다섯 번의 무의미한 재검증(약 320초/회)이었습니다.
+# 계열 지문은 모든 파일을 git hash-object 로 해시하므로 그 흔들림이 없습니다.
+if [[ -n "${RECORDED_SCOPE_DOCS}" && -n "${RECORDED_SCOPE_CODE}"       && -n "${CURRENT_SCOPE_DOCS_FRESH}" && -n "${CURRENT_SCOPE_CODE_FRESH}" ]]; then
+  if [[ "${RECORDED_SCOPE_DOCS}" == "${CURRENT_SCOPE_DOCS_FRESH}"         && "${RECORDED_SCOPE_CODE}" == "${CURRENT_SCOPE_CODE_FRESH}" ]]; then
+    exit 0
+  fi
+  emit "[harness] 종료를 차단했습니다: 검증 이후 입력이 바뀌었습니다."
+  emit "마지막 검증: ${FINISHED_AT}"
+  if [[ "${RECORDED_SCOPE_CODE}" == "${CURRENT_SCOPE_CODE_FRESH}" ]]; then
+    emit "바뀐 것은 문서계열뿐입니다(코드계열 지문 동일)."
+    emit "다음 조치: ./harness/scripts/verify.sh --changed — 영향받는 자기 점검 단계만 돌립니다."
+  else
+    emit "코드계열이 바뀌었습니다. 그 결과는 지금의 변경을 검증한 것이 아닙니다."
+    emit "다음 조치: ./harness/scripts/verify.sh 를 다시 실행합니다."
+  fi
+  exit 2
+fi
+
+# 계열 지문이 없는 결과(이전 버전의 verify.sh)는 종전처럼 트리 지문으로 봅니다.
 if [[ -n "${RECORDED_TREE}" && -n "${CURRENT_TREE}" && "${RECORDED_TREE}" != "${CURRENT_TREE}" ]]; then
+  # 무엇이 바뀌었는지를 계열로 나눠 다음 조치를 다르게 안내합니다. 문서·실행 기록·개선
+  # 후보만 바뀐 경우에 전량(약 320초)을 요구하는 것이 이 세션에서 5회였고 새 정보는
+  # 0이었습니다 — 그 재실행은 자기 점검 단계(약 5초)로 충분합니다.
+  CURRENT_SCOPE_DOCS="$(scope_fingerprint_of "${PROJECT_ROOT}" docs)"
+  CURRENT_SCOPE_CODE="$(scope_fingerprint_of "${PROJECT_ROOT}" code)"
   emit "[harness] 종료를 차단했습니다: 검증 이후 작업 트리가 바뀌었습니다."
   emit "마지막 검증: ${FINISHED_AT} (당시 지문 ${RECORDED_TREE:0:12}, 현재 ${CURRENT_TREE:0:12})"
-  emit "그 결과는 지금의 변경을 검증한 것이 아닙니다."
-  emit "다음 조치: ./harness/scripts/verify.sh 를 다시 실행합니다."
+  if [[ -n "${RECORDED_SCOPE_CODE}" && -n "${CURRENT_SCOPE_CODE}" \
+        && "${RECORDED_SCOPE_CODE}" == "${CURRENT_SCOPE_CODE}" \
+        && "${RECORDED_SCOPE_DOCS}" != "${CURRENT_SCOPE_DOCS}" ]]; then
+    emit "바뀐 것은 문서계열뿐입니다(코드계열 지문 동일)."
+    emit "다음 조치: ./harness/scripts/verify.sh --changed — 영향받는 자기 점검 단계만 돌립니다."
+  else
+    emit "그 결과는 지금의 변경을 검증한 것이 아닙니다."
+    emit "다음 조치: ./harness/scripts/verify.sh 를 다시 실행합니다(--changed 로 범위를 좁힐 수 있습니다)."
+  fi
   exit 2
 fi
 

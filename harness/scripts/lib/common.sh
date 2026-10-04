@@ -150,6 +150,43 @@ now_iso() { date -u +%Y-%m-%dT%H:%M:%SZ; }
 # 오늘의 종료를 통과시킵니다. 두 값을 함께 기록해야 게이트가 성립합니다.
 # git 저장소가 아니거나 해시 도구가 없으면 빈 문자열을 냅니다. 그 환경에서는
 # 신선도를 판정하지 않습니다(판정할 근거가 없는 것을 통과로도 실패로도 쓰지 않습니다).
+# harness_scope_fingerprint <프로젝트루트> <계열> — 계열에 속한 파일 내용만의 지문입니다.
+# 계열은 docs 또는 code 이고, 판정 기준은 HARNESS_SCOPE_DOC_PATTERNS(harness.config)입니다.
+# harness_tree_fingerprint 와 같은 입력(index 를 뼈대로 쓰고 작업 트리가 다른 파일은 실제
+# 내용, 비추적 파일도 포함)을 쓰되 경로를 계열로 걸러냅니다 — 그래서 커밋·stage 에 불변입니다.
+harness_scope_fingerprint() {
+  local root="${1:-$PWD}" want="${2:-code}" hasher="" h="" p="" is_doc=0 pat=""
+  git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  for h in sha1sum shasum md5sum cksum; do
+    if command -v "$h" >/dev/null 2>&1; then hasher="$h"; break; fi
+  done
+  [[ -n "$hasher" ]] || return 0
+
+  # set -u 아래에서 미정의 배열 접근은 즉시 종료입니다(게이트가 그렇게 돕니다).
+  local -a patterns=()
+  if [[ -n "${HARNESS_SCOPE_DOC_PATTERNS+x}" ]]; then
+    patterns=(${HARNESS_SCOPE_DOC_PATTERNS[@]+"${HARNESS_SCOPE_DOC_PATTERNS[@]}"})
+  fi
+
+  {
+    while IFS= read -r -d '' p; do
+      [[ -f "$root/$p" ]] || continue
+      # 하네스 상태 디렉터리는 입력이 아니라 산출물입니다. 실행마다 생기고 사라지는
+      # 파일(verify.lock/owner 등)이 지문에 들어가면 "코드가 바뀌었다" 로 오판합니다.
+      case "$p" in .harness/*) continue ;; esac
+      is_doc=0
+      for pat in "${patterns[@]}"; do
+        # shellcheck disable=SC2053
+        if [[ "$p" == $pat ]]; then is_doc=1; break; fi
+      done
+      if [[ "$want" == "docs" && "$is_doc" -eq 0 ]]; then continue; fi
+      if [[ "$want" == "code" && "$is_doc" -eq 1 ]]; then continue; fi
+      printf '%s\0' "$p"
+      git -C "$root" hash-object -- "$p" 2>/dev/null || printf 'unhashable\0'
+    done < <(git -C "$root" ls-files -z --cached --others --exclude-standard 2>/dev/null)
+  } | "$hasher" | awk '{print $1}'
+}
+
 harness_tree_fingerprint() {
   local root="${1:-$PWD}" hasher="" h="" p="" line="" meta="" blob=""
   git -C "$root" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
