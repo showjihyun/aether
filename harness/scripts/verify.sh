@@ -136,16 +136,27 @@ PREV_SCOPE_DOCS=""
 PREV_SCOPE_CODE=""
 PREV_FULL_PASS_CODE=""
 PREV_FULL_PASS_AT=""
+PREV_PASS_DOCS=""
+PREV_PASS_CODE=""
 if [[ -f "$ROOT/$HARNESS_VERIFY_JSON" ]]; then
   PREV_SCOPE_DOCS="$(sed -n 's/.*"scope_docs": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
   PREV_SCOPE_CODE="$(sed -n 's/.*"scope_code": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
   PREV_FULL_PASS_CODE="$(sed -n 's/.*"full_pass_code": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
   PREV_FULL_PASS_AT="$(sed -n 's/.*"full_pass_at": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
+  PREV_PASS_DOCS="$(sed -n 's/.*"pass_docs": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
+  PREV_PASS_CODE="$(sed -n 's/.*"pass_code": "\([^"]*\)".*/\1/p' "$ROOT/$HARNESS_VERIFY_JSON" | head -1)"
 fi
 
 if [[ "$OPT_CHANGED" -eq 1 ]]; then
+  # 기준선은 **통과한 실행**의 지문입니다. 실패한 실행의 지문을 기준으로 삼으면 아무것도
+  # 고치지 않고 다시 돌릴 때 "바뀐 것이 없다" 로 1단계만 돌고, 실패한 단계는 여전히
+  # 실패 상태입니다(2026-10-05 실측). pass_* 가 없으면 직전 실행과 비교합니다(하위 호환).
+  if [[ -n "$PREV_PASS_CODE" ]]; then
+    PREV_SCOPE_CODE="$PREV_PASS_CODE"
+    PREV_SCOPE_DOCS="$PREV_PASS_DOCS"
+  fi
   if [[ -z "$PREV_SCOPE_CODE" ]]; then
-    say "범위 한정: 직전 실행 기록이 없어 전량을 돌립니다."
+    say "범위 한정: 통과한 실행 기록이 없어 전량을 돌립니다."
   elif [[ "$SCOPE_CODE" != "$PREV_SCOPE_CODE" ]]; then
     say "범위 한정: 코드계열이 바뀌어 전량을 돌립니다."
   elif [[ "$SCOPE_DOCS" != "$PREV_SCOPE_DOCS" ]]; then
@@ -157,7 +168,7 @@ if [[ "$OPT_CHANGED" -eq 1 ]]; then
     fi
   else
     ONLY_IDS=("${HARNESS_SCOPE_DOC_STEPS[@]:0:1}")
-    say "범위 한정: 직전 실행 이후 입력이 바뀌지 않았습니다 — 첫 단계만 돌려 신선도를 갱신합니다."
+    say "범위 한정: 마지막 통과 이후 입력이 바뀌지 않았습니다 — 첫 단계만 돌려 신선도를 갱신합니다."
   fi
 fi
 
@@ -275,6 +286,11 @@ write_verify_json() {
   local only_json="" sep="" i=0 partial="false"
   local suspect_json="" ssep="" j=0
   local full_pass_code="$PREV_FULL_PASS_CODE" full_pass_at="$PREV_FULL_PASS_AT"
+  local pass_docs="$PREV_PASS_DOCS" pass_code="$PREV_PASS_CODE"
+  if [[ "$status" == "pass" && "$failed_required" -eq 0 ]]; then
+    pass_docs="$SCOPE_DOCS"
+    pass_code="$SCOPE_CODE"
+  fi
   if [[ "$status" == "pass" && "$failed_required" -eq 0 && "$TOTAL" -eq "$DEFINED_TOTAL" ]]; then
     full_pass_code="$SCOPE_CODE"
     full_pass_at="$(now_iso)"
@@ -327,6 +343,9 @@ write_verify_json() {
     # 그래야 종료 게이트가 "코드는 전량으로 검증됐고 이번엔 문서만 바뀌었다" 를 알 수 있습니다.
     printf '  "full_pass_code": "%s",\n' "$full_pass_code"
     printf '  "full_pass_at": "%s",\n' "$full_pass_at"
+    # 마지막으로 **통과한** 실행의 계열 지문. --changed 의 기준선입니다.
+    printf '  "pass_docs": "%s",\n' "$pass_docs"
+    printf '  "pass_code": "%s",\n' "$pass_code"
     printf '  "steps": [\n'
     printf '%s' "$steps_json"
     printf '  ],\n'
