@@ -377,7 +377,7 @@ plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 
 
 ## Phase 3 — Context Compiler / RAG
 
-Intent: [0004](0004-phase-3-context-compiler.md) (2026-10-05 발급, **승인 대기** — 승인 전에는 이 단위들을 집지 않습니다). 기간: Week 9~12.
+Intent: [0004](0004-phase-3-context-compiler.md) (승인됨 2026-10-05). Spec: [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (**승인 대기** — D-1 ~ D-14 가 다섯 단위의 공통 결정입니다). 기간: Week 9~12.
 
 **Phase 완료 판정** — 모델 호출마다 `Context Compiler` 가 예산 안에서 System Context · Conversation · Knowledge · Memory · Tools 를 조립하고, Knowledge 는 로컬 Vector DB 에서 검색되며, Memory 는 Knowledge 와 다른 저장소에 검증 전 표시를 달고 있고, Run 마다 컨텍스트 토큰 수가 트레이스에 남습니다.
 
