@@ -377,15 +377,18 @@ plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 
 
 ## Phase 3 — Context Compiler / RAG
 
-Intent: [0004](0004-phase-3-context-compiler.md) (승인됨 2026-10-05). Spec: [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (**승인 대기** — D-1 ~ D-14 가 다섯 단위의 공통 결정입니다). 기간: Week 9~12.
+Intent: [0004](0004-phase-3-context-compiler.md) (승인됨 2026-10-05). Spec: [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05 — D-1 ~ D-14 가 공통 결정입니다). Plan: [../plans/0004-phase-3-context-compiler.md](../plans/0004-phase-3-context-compiler.md) (**승인 대기**). 기간: Week 9~12.
+
+plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 불변), 순서는 plan 이 소유합니다 — **P3-2a(pgvector 이미지 교체·마이그레이션·임베딩 모델 분리)가 1번**입니다. 깨질 가능성이 가장 큰 것이고, 거기서 깨지면 뒤 단위 전부가 멈춥니다(spec 0004 C-1).
 
 **Phase 완료 판정** — 모델 호출마다 `Context Compiler` 가 예산 안에서 System Context · Conversation · Knowledge · Memory · Tools 를 조립하고, Knowledge 는 로컬 Vector DB 에서 검색되며, Memory 는 Knowledge 와 다른 저장소에 검증 전 표시를 달고 있고, Run 마다 컨텍스트 토큰 수가 트레이스에 남습니다.
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
 | P3-1 | Context Compiler v1 (예산과 조립 규칙) | P1-4 | — | 대기 |
-| P3-2 | Knowledge 적재: Connector → Indexer → Embedding → Vector DB | P1-3 | Q7 | 대기 |
-| P3-3 | 검색 결과를 Context 에 | P3-1, P3-2 | — | 대기 |
+| P3-2a | pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 분리 | P0-8, P1-3 | Q7 닫힘(D-1) | 대기 |
+| P3-2b | Knowledge 적재: Connector → Indexer → Embedding → Vector DB | P3-2a | — | 대기 |
+| P3-3 | 검색 결과를 Context 에 | P3-1, P3-2b | — | 대기 |
 | P3-4 | Memory v1 (Knowledge 와 분리) | P3-1, P1-5 | — | 대기 |
 | P3-5 | KPI 계측: Task Success / Context Token | P3-3, P1-8 | — | 대기 |
 
@@ -398,7 +401,16 @@ Intent: [0004](0004-phase-3-context-compiler.md) (승인됨 2026-10-05). Spec: [
 | 완료 판정 | 같은 입력에 같은 출력(결정성 테스트). 예산 초과 입력이 예산 안으로 잘리는 테스트. runtime → context 단방향(AR-3) |
 | 걸리는 규칙 | `Context` 는 예산이 있는 자원입니다 |
 
-### P3-2 Knowledge 적재
+### P3-2a pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 분리
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | compose 의 PostgreSQL 이미지를 `pgvector/pgvector:pg16`(다이제스트 핀)으로 교체. 마이그레이션 0004 가 `vector` 확장과 spec 2.8 의 네 표·GRANT 를 만듦. 임베딩 모델을 채팅 모델과 **별도 핀**으로 분리(spec D-3 — 지금 어댑터는 채팅 모델 id 를 `/embeddings` 로 보내므로 그대로 두면 적재가 실패합니다) |
+| 범위 밖 | 적재 파이프라인(P3-2b), Compiler(P3-1) |
+| 완료 판정 | 빈 DB 에서 마이그레이션 up/down 왕복. `vector` 확장 존재. 기존 역할 테스트 무회귀 + 새 네 표의 GRANT 범위 고정. `embed` 가 임베딩 모델 id 를, 채팅이 채팅 모델 id 를 보냄 |
+| 걸리는 규칙 | P0-8 의 역할 분리 유지. alpine → Debian 전환이 init·로케일에 닿습니다 — 깨지면 멈추고 보고(우회 금지, spec 0004 C-1) |
+
+### P3-2b Knowledge 적재
 
 | 항목 | 내용 |
 | --- | --- |
