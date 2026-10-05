@@ -151,3 +151,51 @@ def test_empty_stdin_exits_zero(tmp_path: Path) -> None:
     result = _run(tmp_path, "")
 
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_running_a_protected_script_is_allowed(tmp_path: Path) -> None:
+    """improvement-log 2026-10-05-001: 보호된 스크립트를 **부르는** 것은 고치는 것이 아니다.
+
+    번들 가드는 명령문에 보호 경로 문자열이 있으면 위치를 보지 않고 차단한다. 그래서
+    보호된 스크립트를 실행하는 정상 명령이 이 세션에서 세 번 막혔고, 매번 명령을 쪼개
+    다시 실행했다. 래퍼는 각 명령 구획의 첫 토큰만 실행 위치로 보고 허용한다.
+    """
+    _copy_bundle(tmp_path)
+    payload = _payload("Bash", {"command": "./harness/scripts/improvement-log.sh validate"})
+
+    result = _run(tmp_path, payload)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_running_a_protected_script_beside_an_unrelated_edit_is_allowed(tmp_path: Path) -> None:
+    """실행과 무관한 파일 편집이 한 명령에 섞여도 허용한다(쓰기 대상이 보호 경로가 아니다)."""
+    _copy_bundle(tmp_path)
+    payload = _payload(
+        "Bash",
+        {"command": "sed -i s/a/b/ notes.txt && ./harness/scripts/improvement-log.sh validate"},
+    )
+
+    result = _run(tmp_path, payload)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_redirecting_into_a_protected_path_is_still_blocked(tmp_path: Path) -> None:
+    """실행 위치 예외가 쓰기 판정을 약화시키지 않는다 — 리다이렉트 대상은 그대로 차단."""
+    _copy_bundle(tmp_path)
+    payload = _payload("Bash", {"command": "echo x > harness.config"})
+
+    result = _run(tmp_path, payload)
+
+    assert result.returncode == 2, result.stdout + result.stderr
+
+
+def test_in_place_editing_a_protected_script_is_still_blocked(tmp_path: Path) -> None:
+    """같은 스크립트를 실행이 아니라 고치는 명령은 차단한다."""
+    _copy_bundle(tmp_path)
+    payload = _payload("Bash", {"command": "sed -i s/a/b/ harness/scripts/verify.sh"})
+
+    result = _run(tmp_path, payload)
+
+    assert result.returncode == 2, result.stdout + result.stderr

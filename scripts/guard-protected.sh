@@ -154,6 +154,8 @@ is_root_evaluation_runs_path() {
 # 둘 다 아니면 아무 것도 올리지 않습니다(관심 밖 — 위임해도 결국 허용됩니다).
 SAW_EVIDENCE=0
 SAW_OTHER=0
+SAW_PROGRAM=0
+PROGRAM_VALUE=""
 EVIDENCE_VALUE=""
 
 classify_token() {
@@ -179,15 +181,65 @@ for _field in file_path path notebook_path; do
   classify_token "${_v}"
 done
 
+# --- 실행 위치의 보호 경로는 변경이 아닙니다 -------------------------------------------
+# 보호된 스크립트를 **부르는** 것은 고치는 것이 아닙니다. 번들 가드는 명령문에 보호 경로
+# 문자열이 있으면 위치를 보지 않고 차단하므로, 보호된 스크립트를 실행하는 정상 명령이
+# 막혔습니다(이 세션에서 3회. 마지막은 이 수정을 담은 명령 자체가 주석 안의 경로 때문에
+# 막힌 것입니다). 각 명령 구획의 **첫 토큰**(환경변수 대입과 bash·sh·uv·source 류 래퍼를
+# 건너뛴 뒤)만 실행 위치로 보고 분류에서 제외합니다. 리다이렉트 대상·cp/mv 인자·in-place
+# 편집 대상은 그대로 분류되므로 쓰기 판정은 약해지지 않습니다.
+# 근거: improvement-log 2026-10-05-001.
+program_position_tokens() {
+  local cmd="$1" seg="" first="" tok=""
+  printf '%s' "$cmd" | tr '\n' ';' | tr '|&;' '\n' | while IFS= read -r seg || [[ -n "$seg" ]]; do
+    first=""
+    for tok in $seg; do
+      tok="${tok//[\'\"]/}"
+      case "$tok" in
+        *=*) continue ;;
+        bash|sh|zsh|uv|run|source|.|exec|time|sudo|command|env) continue ;;
+        -*) continue ;;
+      esac
+      first="$tok"
+      break
+    done
+    first="${first#./}"
+    [[ -n "$first" ]] && printf '%s\n' "$first"
+  done
+}
+
 # --- 자유 텍스트 필드: 경로가 문장 안에 섞여 옵니다 -----------------------------------
 for _field in command pattern glob; do
   _v="$(json_field "${PAYLOAD}" ".tool_input.${_field}" "${_field}")"
   [[ -n "${_v}" ]] || continue
+  _PROGRAMS=""
+  if [[ "${_field}" == "command" ]]; then
+    _PROGRAMS="$(program_position_tokens "${_v}")"
+  fi
   while IFS= read -r _tok; do
     _tok="${_tok//[\'\"();,]/}"
+    if [[ -n "${_PROGRAMS}" ]] && printf '%s\n' "${_PROGRAMS}" | grep -Fxq -- "${_tok#./}"; then
+      # 실행 위치입니다. 그 토큰이 보호 대상이면 "부르기만 했다" 를 기록해 둡니다 —
+      # 아래 판정에서 쓰기 위치의 보호 경로가 없을 때 허용의 근거가 됩니다.
+      _pv="$(normalize_slashes "${_tok#./}")"
+      _prel="$(to_relative "${ROOT}" "${_pv}")"
+      if matches_any "${_prel}" "${_prel##*/}" "${HARNESS_PROTECTED_PATTERNS[@]}" >/dev/null; then
+        SAW_PROGRAM=1
+        [[ -n "${PROGRAM_VALUE}" ]] || PROGRAM_VALUE="${_prel}"
+      fi
+      continue
+    fi
     classify_token "${_tok}"
   done < <(printf '%s' "${_v}" | tr '[:space:]' '\n' | grep -E '[./]' || true)
 done
+
+if [[ "${SAW_EVIDENCE}" -eq 0 && "${SAW_OTHER}" -eq 0 && "${SAW_PROGRAM}" -eq 1 ]]; then
+  # 보호된 스크립트를 실행만 했습니다(쓰기 위치에 보호 경로가 없습니다).
+  mkdir -p "$(dirname -- "${ALLOW_LOG}")" 2>/dev/null || true
+  TS="$(date -u +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || printf 'unknown')"
+  printf '%s\t%s\texec:%s\n' "${TS}" "${TOOL_NAME}" "${PROGRAM_VALUE}" >> "${ALLOW_LOG}" 2>/dev/null || true
+  exit 0
+fi
 
 if [[ "${SAW_EVIDENCE}" -eq 1 && "${SAW_OTHER}" -eq 0 ]]; then
   mkdir -p "$(dirname -- "${ALLOW_LOG}")" 2>/dev/null || true
