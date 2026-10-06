@@ -15,8 +15,8 @@ spec 2.8 이, 열의 세부(타입·기본값·제약 이름)는 이 문서가 �
 
 | 스키마 | 소유(Plane) | 테이블 | 접근 역할과 권한 |
 | --- | --- | --- | --- |
-| `control` | Control Plane(`apps/api`) | `agents`, `agent_versions`, `api_keys`, `runs`, `tool_permissions` | `aether_control`: `USAGE` + 테이블 전부 |
-| `data` | Data Plane(`apps/worker`, `packages/runtime`, `packages/mcp`) | `run_executions`, `run_states`, `tool_call_audit` | `aether_data`: `USAGE` + `run_executions`·`run_states` 전부, `tool_call_audit` 은 **`INSERT`·`SELECT` 만**(append-only). 그리고 `control` 스키마 `USAGE` + `control.agent_versions`·`control.runs`·`control.tool_permissions` **SELECT 만** |
+| `control` | Control Plane(`apps/api`) | `agents`, `agent_versions`, `api_keys`, `runs`, `tool_permissions`, `knowledge_sets`, `knowledge_ingestions` | `aether_control`: `USAGE` + 테이블 전부 |
+| `data` | Data Plane(`apps/worker`, `packages/runtime`, `packages/mcp`, `packages/context`, `packages/memory`) | `run_executions`, `run_states`, `tool_call_audit`, `knowledge_chunks`, `agent_memory` | `aether_data`: `USAGE` + `run_executions`·`run_states` 전부, `tool_call_audit` 은 **`INSERT`·`SELECT` 만**(append-only). 그리고 `control` 스키마 `USAGE` + `control.agent_versions`·`control.runs`·`control.tool_permissions` **SELECT 만** |
 
 `aether_control` 은 `data` 스키마에 **아무 권한이 없습니다** — `USAGE` 조차 없습니다. `SELECT`
 를 시도하면 relation 이 아니라 스키마 단계에서 `permission denied for schema data` 로
@@ -204,6 +204,44 @@ PK 가 셋의 복합키인 이유는 MCP 에 **전역 도구 이름공간이 없
 `aether_control` 은 이 표에 여전히 아무 권한이 없습니다.
 
 조회 경로(API·대시보드)와 보존 정책은 이번 Phase 에 없습니다 — Phase 9 입니다(spec 0003 D-3).
+
+### `control.knowledge_sets` · `control.knowledge_ingestions`
+
+Phase 3 의 선언 두 표입니다(spec 0004 2.8, P3-2a). `knowledge_sets` 는 Agent 가 바인딩하는
+집합의 이름이고, `knowledge_ingestions` 는 적재의 **선언과 상태**입니다 — `control.runs` 와 같은
+모양입니다(api 가 선언하고 worker 가 실행합니다, spec 0004 D-4). 쓰는 것은 `aether_control`
+이고 `aether_data` 는 **SELECT 만** 합니다(worker 가 이름·상태를 읽어야 합니다).
+
+### `data.knowledge_chunks` · `data.agent_memory`
+
+실행 부산물 두 표입니다. 둘은 **별도 표·별도 인덱스**를 씁니다 —
+[domain.md](domain.md) 3절이 `Memory` 와 `Knowledge` 를 한 저장소에 섞지 말라고 정했고,
+섞이면 검증되지 않은 경험이 사실로 승격됩니다(spec 0004 R-10).
+
+| 표 | 담는 것 |
+| --- | --- |
+| `knowledge_chunks` | 청크 본문, `embedding vector(N)`, `embed_model_id`, `embed_dim`, 출처(`source_path`·`chunk_index`) |
+| `agent_memory` | Run 이 남긴 경험. 읽을 때 "검증 전" 표지가 붙어 Context 에 들어갑니다 |
+
+둘 다 코사인 거리 HNSW 인덱스를 각자 갖습니다(spec 0004 D-2). `aether_data` 가 읽고 쓰며
+`aether_control` 은 `data` 스키마에 여전히 아무 권한이 없습니다.
+
+**벡터 차원은 `AETHER_EMBED_DIM`(기본 768)입니다** — worker 와 마이그레이션이 같은 변수를
+읽습니다. 차원이 어긋난 벡터를 넣으면 PostgreSQL 이 `expected N dimensions, not M` 으로
+거부합니다(타입 자체가 1차 방어선). 모델이 바뀌면 기존 벡터는 무효이므로 청크와 함께
+`embed_model_id` 를 저장하고, 검색 시점에 **재적재를 요구하는 오류**로 드러냅니다(spec 0004 D-9,
+그 애플리케이션 로직은 P3-2b).
+
+**임베딩 모델은 채팅 모델과 별도로 핀합니다** — `AETHER_EMBED_MODEL_ID`(기본
+`nomic-embed-text`). 그 전까지 어댑터는 채팅 모델 id 를 `/embeddings` 로 보냈고 그대로면 적재가
+실패합니다(spec 0004 D-3 이 spec 0002 2.5 를 [실질] 개정).
+
+### PostgreSQL 이미지
+
+Phase 3 부터 `pgvector/pgvector:pg16`(다이제스트 핀)입니다. 이전은 `postgres:16-alpine` 이었고,
+교체로 이미지가 111 MiB → 152 MiB(+37%)가 되었습니다. `infra/docker/postgres/init/01-roles.sh` 는
+그대로 씁니다 — 그 이미지에도 bash·psql 이 있고, 전용 회귀 테스트가 실제 이미지로 그것을
+확인합니다(`apps/api/tests/test_roles_script_runs.py`).
 
 ## 3. 트리거
 

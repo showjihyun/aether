@@ -8,6 +8,10 @@ spec 0001 2.8 · R-7 · LP-2 — P0-8 의 단위 테스트(`test_roles_script.py
 `/docker-entrypoint-initdb.d/01-roles.sh` 로 실제 마운트해 postgres 컨테이너
 초기화 과정에서 그대로 실행시켜, (a) 초기화 자체가 실패하거나 (b) 초기화는
 성공하지만 역할이 만들어지지 않는 두 실패 모드를 모두 잡습니다.
+
+spec 0004 D-1, C-1 (P3-2a): 이미지가 `postgres:16-alpine` 에서 `pgvector/pgvector:pg16`
+(Debian 계열)으로 바뀌었으므로, 이 테스트도 **실제 production 이미지**로 돕니다 —
+alpine 전용 셸 가정이 있었다면 여기서 드러납니다.
 """
 
 from __future__ import annotations
@@ -36,7 +40,10 @@ def test_roles_script_creates_both_roles_when_run_by_postgres_entrypoint() -> No
     assert ROLES_SCRIPT.is_file(), f"스크립트가 없습니다: {ROLES_SCRIPT}"
 
     container = PostgresContainer(
-        image="postgres:16-alpine",
+        image=(
+            "pgvector/pgvector:pg16"
+            "@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a"
+        ),
         username=_ADMIN_USER,
         password=_ADMIN_PASSWORD,
         dbname=_ADMIN_DB,

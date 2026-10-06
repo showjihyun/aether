@@ -7,8 +7,9 @@
 | 근거 intent | [../intents/0004-phase-3-context-compiler.md](../intents/0004-phase-3-context-compiler.md) (승인됨 2026-10-05) |
 | 작업 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) P3-1 ~ P3-5 (P3-2 → **2a·2b** 로 분할) |
 | 작성일 | 2026-10-05 |
-| 상태 | 승인 대기 |
-| 승인 | (사람 이름과 날짜. 비어 있으면 구현을 시작하지 않습니다) |
+| 상태 | 승인됨 |
+| 승인 | showjihyun, 2026-10-06 |
+| 개정 | 1 — 2026-10-06. P3-2a 절의 compose 파일 목록을 실제 구조에 맞췄습니다(PG 이미지는 `compose.yaml` 한 곳에만 있습니다) |
 
 spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-14)은 반복하지 않습니다. 이 문서는 여섯 단위를 어떤 순서로 하고, 단위마다 어느 파일을 누가 만들며, 무엇으로 판정하는지를 정합니다. 표기 — **A** 에이전트(`implementer`), **M** 주 세션, **H** 사람(보호 파일).
 
@@ -41,7 +42,7 @@ P3-2 를 2a·2b 로 쪼갠 것과 P3-2a 를 P3-1 앞에 둔 것이 backlog 번�
 
 | 항목 | 내용 |
 | --- | --- |
-| 고치는 것 | `infra/docker/compose.yaml`·`compose.smoke.yaml`·`compose.ci.yaml` 의 PostgreSQL 이미지를 `pgvector/pgvector:pg16`(다이제스트 핀 — **실제 조회로 확인**하고 값을 보고에 적습니다). `infra/docker/postgres/init/01-roles.sh` 가 그 이미지에서 그대로 도는지 확인 |
+| 고치는 것 | `infra/docker/compose.yaml` 의 PostgreSQL 이미지를(개정 1: `compose.smoke.yaml`·`compose.ci.yaml`·`compose.offline.yaml` 은 PG 이미지를 지정하지 않습니다 — 실행자가 확인했습니다) `pgvector/pgvector:pg16`(다이제스트 핀 — **실제 조회로 확인**하고 값을 보고에 적습니다). `infra/docker/postgres/init/01-roles.sh` 가 그 이미지에서 그대로 도는지 확인 |
 | 만드는 것 | `apps/api/migrations/versions/0004_*.py` — `CREATE EXTENSION IF NOT EXISTS vector`, spec 2.8 의 네 표(`control.knowledge_sets`·`control.knowledge_ingestions`·`data.knowledge_chunks`·`data.agent_memory`), GRANT. 벡터 열 차원은 `AETHER_EMBED_DIM`(기본 768) |
 | 임베딩 분리 | `AETHER_EMBED_MODEL_ID`(기본 `nomic-embed-text`)를 설정에 더하고 `OpenAiCompatibleModelGateway.embed` 가 **그 모델**을 보냅니다(spec D-3). 채팅 경로는 바뀌지 않습니다 |
 | 판정 | `api-integration`: 빈 DB 에서 마이그레이션 up/down 왕복, `vector` 확장 존재, 역할 테스트 전부 통과(기존 `test_plane_roles.py` 무회귀 + 새 네 표의 GRANT 범위). `api-unit`: `embed` 가 임베딩 모델 id 를 보내고 채팅은 채팅 모델 id 를 보내는 것(`httpx.MockTransport`) |

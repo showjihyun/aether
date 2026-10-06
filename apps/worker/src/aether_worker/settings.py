@@ -75,6 +75,16 @@ class Settings(BaseSettings):
     model_thinking: bool = False
     """spec 0002 D-19. Qwen3.8 계열은 기본이 thinking 이라 꺼 둡니다."""
 
+    embed_model_id: str = "nomic-embed-text"
+    """spec 0004 2.9, D-3. 채팅 모델(`model_id`)과 **다른** 임베딩 전용 모델 id 입니다 —
+    지금까지 어댑터가 채팅 모델 id 를 `/embeddings` 로 그대로 보내 적재가 실패했습니다."""
+
+    embed_dim: int = 768
+    """spec 0004 2.9, D-9. `data.knowledge_chunks`·`data.agent_memory` 벡터 열의
+    차원이고 마이그레이션 0004 가 같은 이름의 환경변수(`AETHER_EMBED_DIM`)를 읽습니다 —
+    모델을 바꾸면 이 값과 함께 바뀌고, 불일치는 검색에서 재적재를 요구하는 오류로
+    드러납니다(C-3, D-9). 이 필드 자체는 아직 쓰는 코드가 없습니다(P3-2b 범위)."""
+
     observation_max_chars: int = 16_000
     """spec 0002 2.6, R-14. 도구 결과를 이 길이로 잘라 `truncated: true` 를 표시합니다."""
 
