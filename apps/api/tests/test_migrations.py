@@ -2,6 +2,9 @@
 spec 0002 2.10: 마이그레이션 0002 가 더하는 열·기본값(P1-2a).
 spec 0003 2.7, P2-2a: 마이그레이션 0003 이 더하는 `data.tool_call_audit`,
 `control.tool_permissions`.
+spec 0004 2.8, D-1, D-9, D-10 (P3-2a): 마이그레이션 0004 가 더하는 `vector` 확장과
+네 표(`control.knowledge_sets`·`control.knowledge_ingestions`·
+`data.knowledge_chunks`·`data.agent_memory`).
 
 역할은 `db_roles`(conftest) 가 이미 만들어 둔 상태 위에서, `upgrade head` →
 `downgrade base` → `upgrade head` 가 예외 없이 끝나고 `control`·`data` 스키마와
@@ -29,6 +32,10 @@ _EXPECTED_TABLES = {
     ("data", "run_executions"),
     ("control", "tool_permissions"),
     ("data", "tool_call_audit"),
+    ("control", "knowledge_sets"),
+    ("control", "knowledge_ingestions"),
+    ("data", "knowledge_chunks"),
+    ("data", "agent_memory"),
 }
 
 
@@ -157,3 +164,47 @@ def test_data_run_executions_has_lease_columns(
         conn.close()
 
     assert {"lease_owner", "lease_until"} <= columns
+
+
+def test_vector_extension_is_installed(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0004 D-1, R-5: 마이그레이션 0004 가 `CREATE EXTENSION IF NOT EXISTS vector`
+    를 실행합니다 — `pg_extension` 카탈로그에 `vector` 가 있어야 합니다."""
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT extname FROM pg_extension")
+            extensions = {row[0] for row in cur.fetchall()}
+    finally:
+        conn.close()
+
+    assert "vector" in extensions
+
+
+def test_knowledge_chunks_and_agent_memory_have_distinct_vector_indexes(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0004 D-10, R-10: `data.knowledge_chunks` 와 `data.agent_memory` 는
+    **다른 표·다른 인덱스**입니다 — 카탈로그로 확인(이름이 겹치지 않음)."""
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT tablename, indexname FROM pg_indexes
+                WHERE schemaname = 'data'
+                  AND tablename IN ('knowledge_chunks', 'agent_memory')
+                """
+            )
+            rows = cur.fetchall()
+    finally:
+        conn.close()
+
+    by_table: dict[str, set[str]] = {}
+    for tablename, indexname in rows:
+        by_table.setdefault(tablename, set()).add(indexname)
+
+    assert "ix_knowledge_chunks_embedding_hnsw_cosine" in by_table.get("knowledge_chunks", set())
+    assert "ix_agent_memory_embedding_hnsw_cosine" in by_table.get("agent_memory", set())
+    assert by_table["knowledge_chunks"].isdisjoint(by_table["agent_memory"])

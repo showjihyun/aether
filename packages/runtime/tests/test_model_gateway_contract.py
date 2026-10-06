@@ -372,6 +372,58 @@ def test_embed_round_trips_length_and_dimension(kind: str) -> None:
     assert all(len(vector) == 8 for vector in vectors)
 
 
+def test_embed_sends_the_dedicated_embedding_model_id_not_the_chat_model_id() -> None:
+    """spec 0004 D-3, R-6 (P3-2a): `embed` 는 채팅 모델 id 가 아니라 별도로 핀한 임베딩
+    모델 id 를 `/embeddings` 에 보냅니다 — 지금 어댑터는 `self._model_id`(채팅)를
+    그대로 보내 적재가 반드시 실패합니다(실측, `openai_compatible.py` 231행)."""
+    captured: dict[str, object] = {}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        captured["model"] = body["model"]
+        return httpx.Response(200, json={"data": [{"embedding": [0.1] * 8, "index": 0}]})
+
+    gateway = OpenAICompatibleGateway(
+        base_url="http://llm.test/v1",
+        model_id="qwen-chat-test",
+        embed_model_id="nomic-embed-test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    gateway.embed(["hello"])
+
+    assert captured["model"] == "nomic-embed-test"
+
+
+def test_complete_sends_the_chat_model_id_not_the_embedding_model_id() -> None:
+    """spec 0004 D-3 (P3-2a): 채팅 경로는 바뀌지 않습니다 — `complete` 는 여전히
+    채팅 모델 id 를 보냅니다."""
+    captured: dict[str, object] = {}
+
+    def handler(req: httpx.Request) -> httpx.Response:
+        body = json.loads(req.content)
+        captured["model"] = body["model"]
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {"message": {"role": "assistant", "content": "ok"}, "finish_reason": "stop"}
+                ]
+            },
+        )
+
+    gateway = OpenAICompatibleGateway(
+        base_url="http://llm.test/v1",
+        model_id="qwen-chat-test",
+        embed_model_id="nomic-embed-test",
+        transport=httpx.MockTransport(handler),
+    )
+
+    gateway.complete(ModelRequest(messages=[Message(role="user", content="hi")]))
+
+    assert captured["model"] == "qwen-chat-test"
+
+
 @pytest.mark.parametrize("kind", _KINDS)
 def test_complete_passes_per_request_timeout_to_the_transport(kind: str) -> None:
     """spec 0002 2.8 (P1-7): `ModelRequest.timeout_seconds` 가 잔여 시간을 모델 호출에

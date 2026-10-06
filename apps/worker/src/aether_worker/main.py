@@ -127,6 +127,7 @@ def _build_model_gateway(settings: Settings) -> ModelGateway:
         settings.model_id,
         settings.model_api_key,
         settings.model_thinking,
+        embed_model_id=settings.embed_model_id,
     )
 
 

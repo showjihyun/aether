@@ -7,7 +7,11 @@
 
 services:
   postgres:
-    image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+    # spec 0004 D-1, C-1: pgvector 확장을 위해 postgres:16-alpine → pgvector/pgvector:pg16
+    # 으로 교체(Debian 계열). 다이제스트는 index(멀티 아키텍처) 다이제스트입니다 — 기존
+    # postgres:16-alpine 핀과 같은 종류(`docker buildx imagetools inspect` 결과의 최상단
+    # `Digest:` 값, 2026-10-06 조회).
+    image: pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -57,6 +61,9 @@ services:
         AETHER_VERSION: ${AETHER_VERSION:-dev}
     environment:
       ALEMBIC_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # spec 0004 2.9, D-9: 마이그레이션 0004 의 벡터 열 차원. worker 의 같은 변수와
+      # 반드시 같은 값이어야 합니다 — 다르면 다음 재적재 전까지 검색이 깨집니다(C-3).
+      AETHER_EMBED_DIM: ${AETHER_EMBED_DIM:-768}
     command: ["alembic", "-c", "apps/api/migrations/alembic.ini", "upgrade", "head"]
     depends_on:
       postgres:
@@ -107,6 +114,10 @@ services:
       AETHER_MODEL_ID: ${AETHER_MODEL_ID:-qwen3.8:27b}
       AETHER_MODEL_API_KEY: ${AETHER_MODEL_API_KEY:-}
       AETHER_MODEL_THINKING: ${AETHER_MODEL_THINKING:-false}
+      # spec 0004 2.9, D-3, D-9: 임베딩 전용 모델·차원 — 채팅 모델과 다릅니다. 차원은
+      # 위 migrate 서비스의 AETHER_EMBED_DIM 과 같은 값이어야 합니다(C-3).
+      AETHER_EMBED_MODEL_ID: ${AETHER_EMBED_MODEL_ID:-nomic-embed-text}
+      AETHER_EMBED_DIM: ${AETHER_EMBED_DIM:-768}
       # P2-5 2단계, spec 2.9 개정 6: postgres-readonly MCP 서버(아래
       # AETHER_MCP_SERVERS 기본값)가 `AETHER_POSTGRES_READONLY_URL` 을 만들 때 쓰는
       # 재료입니다. worker **프로세스 자신의** env 로 넣어 두면(compose 의 `$$` 로

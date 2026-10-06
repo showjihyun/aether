@@ -64,10 +64,19 @@ def _create_role_if_missing(admin_conn: psycopg.Connection, role: str, password:
         )
 
 
+_POSTGRES_IMAGE = (
+    "pgvector/pgvector:pg16@sha256:7b822b0aac60967beb1ea5e576b8602c94c300a157d187f385ae3e0da199b90a"
+)
+"""spec 0004 D-1, C-1: `infra/docker/compose.yaml` 과 같은 이미지·다이제스트(index
+다이제스트, 2026-10-06 `docker buildx imagetools inspect` 로 조회). 마이그레이션
+0004 가 `CREATE EXTENSION vector` 를 요구하므로, 이 확장이 없는 `postgres:16-alpine`
+로는 `api-integration` 전체가 실패합니다(실측 — FeatureNotSupported)."""
+
+
 @pytest.fixture(scope="session")
 def postgres_container() -> Iterator[PostgresContainer]:
     with PostgresContainer(
-        image="postgres:16-alpine",
+        image=_POSTGRES_IMAGE,
         username=_ADMIN_USER,
         password=_ADMIN_PASSWORD,
         dbname=_ADMIN_DB,

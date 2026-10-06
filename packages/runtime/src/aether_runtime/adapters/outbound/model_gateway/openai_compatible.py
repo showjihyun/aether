@@ -114,8 +114,15 @@ class OpenAICompatibleGateway:
         thinking: bool = False,
         timeout_seconds: float = 60.0,
         transport: httpx.BaseTransport | None = None,
+        embed_model_id: str | None = None,
     ) -> None:
         self._model_id = model_id
+        # spec 0004 D-3: 임베딩은 채팅과 **별도로 핀한 모델**을 씁니다 — 지금까지는
+        # `embed` 가 `self._model_id`(채팅 모델)를 그대로 `/embeddings` 로 보내 적재가
+        # 반드시 실패했습니다(실측, 2026-10-05 조사). `embed_model_id` 를 넘기지 않으면
+        # `model_id` 로 fallback 합니다(기존 호출부·테스트 호환) — 운영 조립(worker
+        # `main.py`)은 항상 `Settings.embed_model_id` 를 명시적으로 넘깁니다.
+        self._embed_model_id = embed_model_id or model_id
         self._thinking = thinking
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else None
         self._client = httpx.Client(
@@ -229,7 +236,7 @@ class OpenAICompatibleGateway:
                 buffer.arguments += function["arguments"]
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        data = self._post_json("/embeddings", {"model": self._model_id, "input": texts})
+        data = self._post_json("/embeddings", {"model": self._embed_model_id, "input": texts})
         entries = data.get("data") or []
         if len(entries) != len(texts):
             raise ModelError(
