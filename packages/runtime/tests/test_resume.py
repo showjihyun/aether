@@ -239,8 +239,9 @@ def test_running_with_expired_lease_resumes_from_stored_state_instead_of_restart
         step=1,
         last_seq=6,
         started_at=started_at,
+        # spec 0004 R-3: `system` 은 더 이상 persisted history 에 쌓이지 않습니다 —
+        # `ContextCompiler` 가 모델을 부르기 전마다 따로 붙입니다.
         messages=[
-            Message(role="system", content=_SYSTEM_PROMPT),
             Message(role="user", content="원래 입력"),
             Message(role="assistant", content=""),
             Message(

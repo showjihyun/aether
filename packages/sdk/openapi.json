@@ -541,6 +541,18 @@
             },
             "type": "array",
             "title": "Mcp Servers"
+          },
+          "context_budget_tokens": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Context Budget Tokens"
           }
         },
         "type": "object",

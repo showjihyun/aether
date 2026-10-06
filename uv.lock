@@ -133,6 +133,7 @@ name = "aether-runtime"
 version = "0.0.0"
 source = { editable = "packages/runtime" }
 dependencies = [
+    { name = "aether-context" },
     { name = "aether-mcp" },
     { name = "httpx" },
     { name = "opentelemetry-sdk" },
@@ -143,6 +144,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aether-context", editable = "packages/context" },
     { name = "aether-mcp", editable = "packages/mcp" },
     { name = "httpx" },
     { name = "opentelemetry-sdk", specifier = ">=1.45.0" },

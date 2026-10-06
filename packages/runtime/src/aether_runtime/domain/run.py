@@ -92,11 +92,34 @@ def transition(current: RunStatus, target: RunStatus) -> RunStatus:
 
 
 class Message(BaseModel):
-    """모델에 오가는 메시지 하나. `tool_call_id` 는 `role == "tool"` 일 때만 채워집니다."""
+    """모델에 오가는 메시지 하나. `tool_call_id` 는 `role == "tool"` 일 때만 채워집니다.
+
+    spec 0004 R-3 (P3-1): `execute_run.py` 는 이 생성자를 직접 부르지 않고 아래
+    분류 메서드만 씁니다(`tests/arch/test_execute_run_uses_context_compiler.py` 가
+    AST 로 판정) — 모델 입력 자체의 조립은 `ContextCompiler` 가 맡고, 이 메서드들은
+    `RunState.messages`(재개 가능한 대화 history, 2.4)에 쌓이는 턴 하나를 만드는
+    역할만 합니다.
+    """
 
     role: Literal["system", "user", "assistant", "tool"]
     content: str
     tool_call_id: str | None = None
+
+    @classmethod
+    def system(cls, content: str) -> Message:
+        return cls(role="system", content=content)
+
+    @classmethod
+    def user(cls, content: str) -> Message:
+        return cls(role="user", content=content)
+
+    @classmethod
+    def assistant(cls, content: str) -> Message:
+        return cls(role="assistant", content=content)
+
+    @classmethod
+    def tool(cls, *, tool_call_id: str, content: str) -> Message:
+        return cls(role="tool", tool_call_id=tool_call_id, content=content)
 
 
 class RunState(BaseModel):

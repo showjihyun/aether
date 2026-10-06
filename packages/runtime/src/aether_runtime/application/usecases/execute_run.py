@@ -57,6 +57,11 @@ from uuid import UUID
 from pydantic import BaseModel, ValidationError
 
 from aether_runtime.application.ports.outbound.clock import Clock
+from aether_runtime.application.ports.outbound.context_compiler import (
+    CompiledContext,
+    ContextCompiler,
+    ContextReport,
+)
 from aether_runtime.application.ports.outbound.event_sink import EventSink
 from aether_runtime.application.ports.outbound.lease_keeper import LeaseKeeper
 from aether_runtime.application.ports.outbound.model_gateway import (
@@ -108,6 +113,10 @@ from aether_runtime.domain.tools import ToolCall
 
 _DEFAULT_LEASE_TTL_SECONDS = 60.0
 _DEFAULT_OBSERVATION_MAX_CHARS = 16_000
+_DEFAULT_CONTEXT_BUDGET_TOKENS = 8192
+"""spec 0004 2.2, 2.9, D-5: `AgentDefinition.context_budget_tokens` 가 `None` 일
+때 쓰는 기본값 — `AETHER_CONTEXT_BUDGET_TOKENS` 의 기본값과 같은 숫자입니다(실제
+환경변수 해석은 worker 의 조립(main.py)이 합니다, AR-9)."""
 
 # spec 0002 2.8 [편집 예정], P1-7: `http` 4xx 는 이 경계 이상이거나 429 일 때만
 # 재시도 대상입니다. 5xx 는 전부 포함(501/505 등 드문 코드까지) 되므로 고정된
@@ -161,6 +170,27 @@ class _NoOpLeaseKeeper:
         yield _NoOpLeaseStatus()
 
 
+class _PassthroughContextCompiler:
+    """spec 0004 R-3: `context_compiler` 를 넘기지 않은 호출자(대부분의 P1-4·P2-*
+    테스트, 그리고 아직 `AetherContextCompiler` 를 꽂지 않은 조립)를 위한 기본값 —
+    예산을 적용하지 않고 `system_prompt` 를 맨 앞에 붙여, P3-1 이전과 **같은** 모델
+    입력을 돌려줍니다. 프로덕션 조립(worker `main.py`)은 항상
+    `AetherContextCompiler`(실제 `aether_context` 조립)를 넘깁니다."""
+
+    def compile(
+        self,
+        *,
+        system_prompt: str,
+        conversation: tuple[Message, ...],
+        tools: tuple[ToolSchema, ...],
+        budget_tokens: int,
+    ) -> CompiledContext:
+        messages = (Message.system(system_prompt), *conversation)
+        return CompiledContext(
+            messages=messages, tools=tools, report=ContextReport(budget_tokens=budget_tokens)
+        )
+
+
 class ExecuteRunUseCase:
     """`ExecuteRun` 의 구현(spec 0002 2.1, 2.4, 2.6). worker 가 부르는 유일한 문입니다."""
 
@@ -179,6 +209,8 @@ class ExecuteRunUseCase:
         lease_ttl_seconds: float = _DEFAULT_LEASE_TTL_SECONDS,
         observation_max_chars: int = _DEFAULT_OBSERVATION_MAX_CHARS,
         lease_keeper: LeaseKeeper | None = None,
+        context_compiler: ContextCompiler | None = None,
+        default_context_budget_tokens: int = _DEFAULT_CONTEXT_BUDGET_TOKENS,
     ) -> None:
         self._store = store
         self._declarations = declarations
@@ -194,6 +226,13 @@ class ExecuteRunUseCase:
         self._lease_keeper: LeaseKeeper = (
             lease_keeper if lease_keeper is not None else _NoOpLeaseKeeper()
         )
+        # spec 0004 R-3 (P3-1): 모델을 부르기 전에 항상 이 포트를 지납니다 —
+        # 넘기지 않으면 `_PassthroughContextCompiler` 가 P3-1 이전과 같은 모델
+        # 입력을 돌려줍니다(기존 테스트 무회귀).
+        self._context_compiler: ContextCompiler = (
+            context_compiler if context_compiler is not None else _PassthroughContextCompiler()
+        )
+        self._default_context_budget_tokens = default_context_budget_tokens
 
     def __call__(self, run_id: UUID) -> RunStatus:
         current_status = self._store.status(run_id)
@@ -282,10 +321,10 @@ class ExecuteRunUseCase:
             )
 
         if not messages:
-            messages = [
-                Message(role="system", content=definition.system_prompt),
-                Message(role="user", content=declaration.input),
-            ]
+            # spec 0004 R-3, D-11: `system` 은 더 이상 이 history 에 쌓이지
+            # 않습니다 — `_run_step` 이 모델을 부르기 전마다 `ContextCompiler`
+            # 에 `definition.system_prompt` 를 따로 건네 매번 다시 붙입니다.
+            messages = [Message.user(declaration.input)]
 
         # spec 0003 2.15, D-16: 생성 시 정적 검증이 없으므로 여기서도 이름의 존재를
         # 미리 확인하지 않습니다 — Discovery 로 실제 내놓는 스키마만 모델에게
@@ -375,6 +414,12 @@ class ExecuteRunUseCase:
                 run_id=run_id,
                 declaration=declaration,
                 model_id=definition.model.id,
+                system_prompt=definition.system_prompt,
+                context_budget_tokens=(
+                    definition.context_budget_tokens
+                    if definition.context_budget_tokens is not None
+                    else self._default_context_budget_tokens
+                ),
                 tool_schemas=tool_schemas,
                 allowed_tools=frozenset(definition.tools),
                 policy=definition.policy,
@@ -398,6 +443,8 @@ class ExecuteRunUseCase:
         run_id: UUID,
         declaration: RunDeclaration,
         model_id: str | None,
+        system_prompt: str,
+        context_budget_tokens: int,
         tool_schemas: list[ToolSchema],
         allowed_tools: frozenset[str],
         policy: Policy,
@@ -443,9 +490,20 @@ class ExecuteRunUseCase:
                                 started_at,
                             )
                         )
+                    # spec 0004 2.1, 2.2, R-3: 모델을 부르기 전 `ContextCompiler`
+                    # 를 지납니다 — `messages`(지금까지의 대화, system 제외)와
+                    # `tool_schemas` 를 그대로 건네고, 돌아온 `compiled.messages`/
+                    # `compiled.tools` 를 모델 요청에 씁니다. `messages`(persisted
+                    # history) 자체는 바뀌지 않습니다.
+                    compiled = self._context_compiler.compile(
+                        system_prompt=system_prompt,
+                        conversation=tuple(messages),
+                        tools=tuple(tool_schemas),
+                        budget_tokens=context_budget_tokens,
+                    )
                     request = ModelRequest(
-                        messages=messages,
-                        tools=tool_schemas,
+                        messages=list(compiled.messages),
+                        tools=list(compiled.tools),
                         model_id=model_id,
                         timeout_seconds=remaining,
                     )
@@ -513,7 +571,7 @@ class ExecuteRunUseCase:
                         break
                 assert response is not None
 
-            messages.append(Message(role="assistant", content=response.text))
+            messages.append(Message.assistant(response.text))
             seq += 1
             self._publish(
                 run_id,
@@ -753,9 +811,7 @@ class ExecuteRunUseCase:
             is_error=result.is_error,
             truncated=truncated,
         )
-        messages.append(
-            Message(role="tool", tool_call_id=call.id, content=render_observation(observation))
-        )
+        messages.append(Message.tool(tool_call_id=call.id, content=render_observation(observation)))
         return _StepOutcome(seq=seq)
 
     # -- 시간 예산·lease 유지 ----------------------------------------------------

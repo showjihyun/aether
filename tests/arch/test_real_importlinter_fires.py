@@ -195,6 +195,27 @@ def test_mcp_import_of_policy_adapters_is_rejected_ar12(tmp_path: Path) -> None:
     assert "AR-12" in output, output
 
 
+def test_context_import_of_runtime_is_rejected_ar3(tmp_path: Path) -> None:
+    """spec 0004 R-4 (P3-1): `ar3-runtime-direction` — `aether_context` 는
+    `aether_runtime` 을 import 하지 않습니다. 이 계약은 Phase 2 부터 `.importlinter`
+    에 있었지만(`aether_mcp` 와 묶여) 그것을 어기는 코드가 Phase 3 이전까지
+    `aether_context` 에 전혀 없어 한 번도 발화한 적이 없었습니다 — 이 단위가 그
+    계약이 실제로 쓰는 첫 코드(`ContextCompiler`/`AetherContextCompiler`)를
+    추가하므로 위반이 실제로 발화하는지 여기서 판정합니다."""
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "packages" / "context" / "src" / "aether_context" / "_bad.py"
+    bad_module.write_text("import aether_runtime.application\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "AR-3" in output, output
+
+
 def test_real_importlinter_contract_bodies_declare_the_expected_forbidden_modules() -> None:
     """spec 개정 2: 실제 파일의 contract 본문 단언.
 

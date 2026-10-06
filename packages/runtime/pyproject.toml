@@ -10,6 +10,7 @@ dependencies = [
     "httpx",
     "opentelemetry-sdk>=1.45.0",
     "aether-mcp",
+    "aether-context",
 ]
 
 [build-system]
@@ -21,3 +22,4 @@ packages = ["src/aether_runtime"]
 
 [tool.uv.sources]
 aether-mcp = { workspace = true }
+aether-context = { workspace = true }
