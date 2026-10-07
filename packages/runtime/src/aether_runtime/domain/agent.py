@@ -63,6 +63,9 @@ class AgentDefinition(BaseModel):
     mcp_servers: list[McpServerBinding] = Field(default_factory=list)
     """spec 0003 2.6, D-2: 이 Agent Version 이 Run 시작 시 연결할 서버들(spec 2.5).
     기본값 빈 목록 — 바인딩이 비어 있으면 도구 없이 실행됩니다."""
+    context_budget_tokens: int | None = Field(default=None, ge=1)
+    """spec 0004 2.2, D-5: Context Compiler 가 쓰는 토큰 예산. `None` 이면
+    `AETHER_CONTEXT_BUDGET_TOKENS`(기본 8192, worker 가 읽음)를 씁니다."""
 
     @field_validator("system_prompt")
     @classmethod

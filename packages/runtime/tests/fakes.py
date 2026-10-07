@@ -32,13 +32,17 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from aether_runtime.application.ports.outbound.context_compiler import (
+    CompiledContext,
+    ContextReport,
+)
 from aether_runtime.application.ports.outbound.model_gateway import ToolSchema
 from aether_runtime.application.ports.outbound.run_declaration_reader import RunDeclaration
 from aether_runtime.application.ports.outbound.status_notifier import StatusMessage
 from aether_runtime.application.ports.outbound.tool_gateway import ToolCallDenied, ToolNotFound
 from aether_runtime.domain.events import RunEvent
 from aether_runtime.domain.failure import FailureReason
-from aether_runtime.domain.run import RunState, RunStatus
+from aether_runtime.domain.run import Message, RunState, RunStatus
 from aether_runtime.domain.tools import ToolResult
 
 
@@ -371,3 +375,46 @@ class FakeLeaseKeeper:
         self.calls.append((run_id, owner, ttl_seconds))
         lost = self._lost_on_keep is not None and self._keep_count == self._lost_on_keep
         yield _FakeLeaseStatus(lost=lost)
+
+
+@dataclass
+class ContextCompileCall:
+    """`FakeContextCompiler.calls` 에 기록되는 호출 한 건 — spec 0004 R-3 판정용."""
+
+    system_prompt: str
+    conversation: tuple[Message, ...]
+    tools: tuple[ToolSchema, ...]
+    budget_tokens: int
+
+
+class FakeContextCompiler:
+    """spec 0004: `ContextCompiler`(outbound) 포트의 결정적 fake — 호출을
+    그대로 기록하고, `prepend_system`(기본 참)이면 받은 `conversation` 앞에
+    `system_prompt` 메시지 하나를 붙여 돌려줍니다(예산 트림은 흉내내지 않습니다
+    — 그것은 `packages/context` 의 단위 테스트가 증명합니다)."""
+
+    def __init__(self) -> None:
+        self.calls: list[ContextCompileCall] = []
+
+    def compile(
+        self,
+        *,
+        system_prompt: str,
+        conversation: tuple[Message, ...],
+        tools: tuple[ToolSchema, ...],
+        budget_tokens: int,
+    ) -> CompiledContext:
+        self.calls.append(
+            ContextCompileCall(
+                system_prompt=system_prompt,
+                conversation=conversation,
+                tools=tools,
+                budget_tokens=budget_tokens,
+            )
+        )
+        messages = (Message.system(system_prompt), *conversation)
+        return CompiledContext(
+            messages=messages,
+            tools=tools,
+            report=ContextReport(budget_tokens=budget_tokens, total_tokens=0),
+        )

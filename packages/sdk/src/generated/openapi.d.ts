@@ -164,6 +164,8 @@ export interface components {
             policy?: components["schemas"]["Policy"];
             /** Mcp Servers */
             mcp_servers?: components["schemas"]["McpServerBinding"][];
+            /** Context Budget Tokens */
+            context_budget_tokens?: number | null;
         };
         /**
          * AgentDetailResponse
