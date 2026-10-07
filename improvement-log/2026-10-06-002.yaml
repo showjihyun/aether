@@ -1,7 +1,7 @@
 # improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
 id: 2026-10-06-002
 date: 2026-10-06
-status: candidate
+status: validating
 symptom: verify 합계가 592,681 ms 로 예산 600,000 ms 의 98.8% 다. 여유가 7.3초뿐이어서 다음 단위가 조금만 늘어도 선택 실패(time-budget)가 난다. 예산은 사람이 소유하는 값인데 그 값을 정한 근거와 현재 소요의 구성이 한 곳에 정리되어 있지 않다
 evidence: |
   2026-10-06 P3-2a 의 verify: 합계 592,681 ms. 단계별로 api-unit 313.2s, smoke 105.9s,
@@ -10,13 +10,22 @@ evidence: |
   예산 600,000 ms 는 spec 0001 D-12 가 정한 값이고, 그때의 단계 수는 10개였다(지금 18개).
   pgvector 교체로 이미지가 111 MiB → 152 MiB 가 되었고 Phase 3 은 앞으로 네 단위가 더 남았다.
 root_cause: 단계가 10개에서 18개로 늘고 컨테이너가 추가되는 동안 예산 값은 그대로였다. 그리고 api-unit 한 단계가 합계의 절반을 차지하는데 그 안에서 무엇이 느린지는 집계되지 않는다
-fix: 이번에는 숫자를 기록하고 사람 판단에 올린다. 임계값을 에이전트가 올리지 않는다(EI-2)
+fix: 이번에는 숫자를 기록하고 사람 판단에 올린다. 임계값을 에이전트가 올리지 않는다(EI-2). 2026-10-07 에 사람이 **(2) 쪼개기**를 골랐고 적용했다 — api-unit 한 단계를 api-unit(제품: packages·apps)·harness-arch(tests/arch)·harness-scripts(tests/scripts) 셋으로 나눴다. 합집합은 쪼개기 전과 같다(524건 = 413 + 25 + 86). 예산은 올리지 않았다
 recurrence_risk: high
 harness_element: HE-3
 proposed_harness_change: "(사람 결정) 셋 중 하나 또는 조합. (1) 예산을 올린다 — 단계가 18개이고 컨테이너가 셋이므로 600초는 Phase 0 의 값이다. 올린 값과 근거를 harness.config 에 적는다. (2) api-unit 을 쪼갠다 — 그 한 단계가 합계의 절반(313초)이고 그 안의 구성이 보이지 않는다. 패키지별로 나누면 어느 패키지가 느린지가 계층 점수에 드러난다. (3) 느린 테스트를 찾아 고친다 — `pytest --durations=20` 으로 상위를 보고 그중 컨테이너·슬립·네트워크 대기를 제거한다. 측정 없이 (1)만 하는 것은 추천하지 않는다"
 preferred_enforcement: doc
 trust: untrusted
 regression_check: |
+  2026-10-07 쪼개기로 드러난 사실: 느린 것은 제품 테스트가 아니라 **하네스 자신의 스크립트
+  테스트**였다. 단계별 실측 — packages/runtime 3초(216건), packages/mcp·policy·context 16초(37건),
+  apps/api·worker 4초(160건), tests/arch 31초(25건), tests/scripts **261초(86건)**. 즉 api-unit
+  314초 중 83% 가 tests/scripts 였고, 제품 테스트 전부는 23초다. 한 단계로 묶여 있어서 그 사실이
+  보이지 않았다 — 쪼개기의 값이 여기 있다(예산을 올렸다면 이것을 영구히 가렸을 것이다).
+  쪼갠 뒤 전량 verify: 20단계 통과, 합계 546,271 ms(예산의 91%). 가장 비싼 단계는
+  harness-scripts 212.8초, 그다음 smoke 101.9초.
+  남은 일(다음 후보로 분리할 것): tests/scripts 의 86건이 각각 번들을 복사하고 bash 를 띄운다.
+  세션 범위 fixture 로 복사를 1회로 줄이면 그 단계가 크게 줄 것으로 보인다 — 측정 후 판단한다.
   대상: 결정 적용 뒤 verify 3회.
   기준: 세 번 모두 선택 실패 0건이고 합계가 예산의 85% 이하. (2)를 골랐다면 쪼갠 단계들의
   합이 이전 api-unit 소요와 같은 범위여야 한다(테스트를 잃지 않았다는 확인).
