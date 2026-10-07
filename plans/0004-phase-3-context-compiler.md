@@ -108,7 +108,7 @@ P3-2 를 2a·2b 로 쪼갠 것과 P3-2a 를 P3-1 앞에 둔 것이 backlog 번�
 
 ## 4. 판정 절차
 
-`TESTCONTAINERS_RYUK_DISABLED=true ./harness/scripts/verify.sh` 하나가 판정입니다(18단계). 문서·기록만 고친 커밋은 `--changed` 로 범위를 좁힐 수 있습니다(2026-10-04-001).
+`TESTCONTAINERS_RYUK_DISABLED=true ./harness/scripts/verify.sh` 하나가 판정입니다(단계 수는 `harness.config` 가 소유합니다 — 여기 적지 않습니다). 문서·기록만 고친 커밋은 `--changed` 로 범위를 좁힐 수 있습니다(2026-10-04-001).
 
 **단위별 추가 확인**(verify 가 아직 못 보는 것 — 보고에 "손으로 실행", 실행하지 않았으면 "미측정"):
 
