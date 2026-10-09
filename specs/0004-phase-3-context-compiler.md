@@ -76,7 +76,7 @@ apps/worker ──► aether_runtime.application (Planner/Executor)
 | 청크 | 문자 기준 고정 크기 + 겹침(기본 1000/200). 토큰 기준이 아닌 이유는 D-6 과 같습니다 |
 | 임베딩 모델 | **별도 핀**(D-3). 지금 어댑터는 채팅 모델 id 를 `/embeddings` 로 보냅니다 — 그대로 두면 적재가 실패합니다 |
 | 실행 자리 | **worker 작업**(D-4). api 는 적재를 **선언**하고 worker 가 실행합니다 — Run 과 같은 모양입니다 |
-| 진행 상태 | `control.knowledge_ingestions`(선언·상태). 청크·벡터는 `data.knowledge_chunks` |
+| 진행 상태 | `control.knowledge_ingestions`(선언·상태). 청크·벡터는 `data.knowledge_chunks`. **쓰는 주체는 api 뿐입니다**(개정 5) — `aether_data` 는 그 표에 SELECT 만 가지므로(P3-2a 의 GRANT) worker 는 상태를 직접 쓸 수 없고 **상태 스트림으로 api 에 되돌려 보냅니다**. Run 의 `aether:runs:status` 와 같은 모양입니다 |
 
 ### 2.5 검색 결과를 Context 에 (P3-3)
 
@@ -110,7 +110,14 @@ GRANT 는 Phase 2 의 방향을 따릅니다 — `aether_control` 은 `control` 
 | `AETHER_EMBED_MODEL_ID` | `nomic-embed-text` | worker. 채팅 모델과 **다른** 모델입니다(D-3) |
 | `AETHER_EMBED_DIM` | `768` | worker·마이그레이션. 벡터 열의 차원이고 모델과 함께 바뀝니다(D-9) |
 | `AETHER_CONTEXT_BUDGET_TOKENS` | `8192` | worker. `AgentDefinition` 이 지정하지 않았을 때의 기본값 |
-| `AETHER_KNOWLEDGE_CHUNK_CHARS` / `_OVERLAP` | `1000` / `200` | worker |
+| `AETHER_KNOWLEDGE_CHUNK_CHARS` / `AETHER_KNOWLEDGE_CHUNK_OVERLAP_CHARS` | `1000` / `200` | worker (개정 5: 축약 표기를 정식 이름으로) |
+
+### 2.9.1 smoke 의 적재·검색 시나리오 (개정 5)
+
+R-7(오프라인 적재 → 검색)은 **P3-3 이후에 `smoke` 에 들어갑니다.** P3-2b 시점에는 검색의 HTTP
+경로가 없어(그것이 P3-3 의 범위) `smoke` 가 API 로 확인할 방법이 없습니다. 보조 스크립트로
+어댑터를 직접 부르는 것은 smoke 가 "제품이 쓰는 경로" 를 보는 단계라는 성질을 깨므로 하지
+않습니다. 그 사이의 판정은 `api-integration` 의 pgvector 테스트가 같은 경로를 덮습니다(R-5).
 
 ### 2.10 검증 단계
 
@@ -131,7 +138,7 @@ GRANT 는 Phase 2 의 방향을 따릅니다 — `aether_control` 은 `control` 
 | C-1 | pgvector 이미지는 Debian 계열이고 지금 쓰는 것은 `postgres:16-alpine` 입니다. 이미지를 바꾸면 init 스크립트·로케일·크기가 함께 바뀝니다 | 교체는 P3-2 의 첫 작업이고, 기존 마이그레이션·역할 테스트가 그대로 통과하는지가 그 단위의 완료 판정입니다. 통과하지 않으면 거기서 멈추고 보고합니다 |
 | C-2 | 토큰 근사(D-6)는 모델의 실제 토크나이저와 어긋납니다 | 예산을 보수적으로(8192) 두고, 어긋남의 방향을 **과대 추정**으로 고정합니다 — 과소 추정은 모델 한계를 넘기지만 과대 추정은 조금 덜 넣는 것에서 끝납니다 |
 | C-3 | 임베딩 모델을 바꾸면 기존 벡터가 무효입니다 | 차원과 모델 id 를 청크와 함께 저장하고(D-9), 불일치가 검색에서 발견되면 **재적재를 요구하는 오류**를 냅니다. 자동 재적재는 하지 않습니다 |
-| C-4 | 적재가 worker 작업이면 진행 상태 모델이 하나 늘어납니다 | `control.runs` 와 같은 모양을 그대로 씁니다(선언 → 상태 전이). 새 패턴을 만들지 않습니다 |
+| C-4 | 적재가 worker 작업이면 진행 상태 모델이 하나 늘어납니다 | `control.runs` 와 같은 모양을 그대로 씁니다(선언 → 상태 전이). 새 패턴을 만들지 않습니다. 양방향 스트림 두 개(요청·상태)가 그 모양의 일부입니다(개정 5) |
 | C-5 | Memory 가 Context 를 조용히 오염시킬 수 있습니다 | 표지(`verified: false`)와 D-7 의 **첫 번째 제거 대상**이 그 위험을 제한합니다. 자동 승격은 Non-goal 입니다 |
 | C-6 | pgvector 와 testcontainers 가 verify 시간을 늘립니다 | 기존 PG 컨테이너를 pgvector 이미지로 **교체**하므로 컨테이너 수는 늘지 않습니다. 실측은 P3-2 에서 기록합니다(R-12) |
 
@@ -183,4 +190,5 @@ GRANT 는 Phase 2 의 방향을 따릅니다 — `aether_control` 은 `control` 
 
 | 개정 | 내용 |
 | --- | --- |
+| 개정 5 | 2026-10-09. **P3-2b 실행이 찾은 구멍 하나와 표기 둘** — (1) 2.4 의 "진행 상태" 가 `control.knowledge_ingestions` 라고만 적고 **누가 쓰는지** 적지 않았습니다. P3-2a 의 GRANT 가 `aether_data` 에 SELECT 만 주므로 worker 는 그 표에 쓸 수 없고, 상태를 api 로 되돌리는 스트림이 구조적으로 필요합니다 — 실행자가 그것을 만들고 근거를 신고했고 받아들였습니다. (2) 2.9 의 `_OVERLAP` 축약을 정식 이름 `AETHER_KNOWLEDGE_CHUNK_OVERLAP_CHARS` 로 고쳤습니다. (3) R-7 의 smoke 시나리오가 P3-3 이후인 이유를 2.9.1 로 적었습니다 |
 | 초안 | 2026-10-05. intent 0004 의 열린 질문 6건을 D-1 ~ D-7·D-9 로 고정했습니다. 외부 사실 확인에서 나온 것 둘 — pgvector 이미지에 `pg16` 태그가 있고(D-1), Ollama 의 OpenAI 호환 `/v1/embeddings` 는 **전용 임베딩 모델**을 요구합니다(D-3, 지금 어댑터는 채팅 모델 id 를 보냅니다). spec 0002 2.5 를 D-3 으로 [실질] 개정합니다 |

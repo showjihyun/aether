@@ -89,6 +89,12 @@ requires-dist = [
 name = "aether-context"
 version = "0.0.0"
 source = { editable = "packages/context" }
+dependencies = [
+    { name = "psycopg", extra = ["binary"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "psycopg", extras = ["binary"] }]
 
 [[package]]
 name = "aether-evaluation"

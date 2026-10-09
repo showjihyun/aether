@@ -507,6 +507,149 @@
           }
         }
       }
+    },
+    "/knowledge-sets": {
+      "post": {
+        "summary": "Create Knowledge Set Route",
+        "operationId": "create_knowledge_set_route_knowledge_sets_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateKnowledgeSetRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/KnowledgeSetResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge-sets/{knowledge_set_id}/ingestions": {
+      "post": {
+        "summary": "Request Ingestion Route",
+        "operationId": "request_ingestion_route_knowledge_sets__knowledge_set_id__ingestions_post",
+        "parameters": [
+          {
+            "name": "knowledge_set_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Knowledge Set Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RequestIngestionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "knowledge_set_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/knowledge-ingestions/{ingestion_id}": {
+      "get": {
+        "summary": "Get Ingestion Route",
+        "operationId": "get_ingestion_route_knowledge_ingestions__ingestion_id__get",
+        "parameters": [
+          {
+            "name": "ingestion_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Ingestion Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IngestionDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "knowledge_ingestion_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -789,6 +932,20 @@
         "title": "CreateAgentRequest",
         "description": "`POST /agents` 의 요청 본문."
       },
+      "CreateKnowledgeSetRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "CreateKnowledgeSetRequest",
+        "description": "`POST /knowledge-sets` 의 요청 본문."
+      },
       "FailureReason": {
         "type": "string",
         "enum": [
@@ -838,6 +995,156 @@
         ],
         "title": "HealthzResponse",
         "description": "spec 2.3 의 계약 그대로: `{status, service, version}`."
+      },
+      "IngestionAccepted": {
+        "properties": {
+          "ingestion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ingestion Id"
+          },
+          "knowledge_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Knowledge Set Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingestion_id",
+          "knowledge_set_id",
+          "source",
+          "status",
+          "requested_at"
+        ],
+        "title": "IngestionAccepted",
+        "description": "`POST /knowledge-sets/{id}/ingestions` 의 성공 응답(202) — 항상 `queued` 로\n시작합니다(`control.runs` 의 `RunAccepted` 와 같은 모양)."
+      },
+      "IngestionDetailResponse": {
+        "properties": {
+          "ingestion_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Ingestion Id"
+          },
+          "knowledge_set_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Knowledge Set Id"
+          },
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ingestion_id",
+          "knowledge_set_id",
+          "source",
+          "status",
+          "requested_at",
+          "started_at",
+          "finished_at",
+          "failure_reason"
+        ],
+        "title": "IngestionDetailResponse",
+        "description": "`GET /knowledge-ingestions/{id}` 의 성공 응답 — 선언·투영만 읽습니다."
+      },
+      "KnowledgeSetResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "created_at"
+        ],
+        "title": "KnowledgeSetResponse",
+        "description": "`POST /knowledge-sets` 의 성공 응답."
       },
       "ListAgentsResponse": {
         "properties": {
@@ -949,6 +1256,20 @@
         },
         "type": "object",
         "title": "Policy"
+      },
+      "RequestIngestionRequest": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source"
+        ],
+        "title": "RequestIngestionRequest",
+        "description": "`POST /knowledge-sets/{id}/ingestions` 의 요청 본문 — `source` 는 Connector\n(Filesystem, spec D-6 과 같은 범위)가 읽을 위치."
       },
       "RunAccepted": {
         "properties": {

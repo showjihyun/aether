@@ -85,6 +85,27 @@ class Settings(BaseSettings):
     모델을 바꾸면 이 값과 함께 바뀌고, 불일치는 검색에서 재적재를 요구하는 오류로
     드러납니다(C-3, D-9). 이 필드 자체는 아직 쓰는 코드가 없습니다(P3-2b 범위)."""
 
+    knowledge_chunk_chars: int = 1000
+    """spec 0004 2.4, 2.9 (P3-2b). `FixedSizeIndexer` 의 청크 크기(문자) —
+    `AETHER_KNOWLEDGE_CHUNK_CHARS`. spec 2.9 표기는 `AETHER_KNOWLEDGE_CHUNK_CHARS` /
+    `_OVERLAP` 로 줄여 썼습니다 — 이 필드 쌍은 `_CHARS`/`_OVERLAP_CHARS` 로 폈습니다
+    (보고에 불일치로 남김, 사람 확인 필요)."""
+
+    knowledge_chunk_overlap_chars: int = 200
+    """spec 0004 2.4, 2.9 (P3-2b). `FixedSizeIndexer` 의 겹침(문자) —
+    `AETHER_KNOWLEDGE_CHUNK_OVERLAP_CHARS`."""
+
+    knowledge_stream: str = "aether:knowledge:ingestions:requested"
+    """spec 0004 2.4, D-4 (P3-2b): api → worker, 적재 선언 통지. `control.runs` 의
+    `aether:runs:requested` 와 같은 모양."""
+
+    knowledge_group: str = "aether-worker"
+
+    knowledge_status_stream: str = "aether:knowledge:ingestions:status"
+    """spec 0004 2.4, D-4 (P3-2b): worker → api, 적재 상태 투영 통지(`aether:runs:status`
+    와 같은 모양) — api 의 소비자가 `control.knowledge_ingestions` 에 적용합니다(api 만
+    control role 로 씁니다, 마이그레이션 0004 GRANT)."""
+
     observation_max_chars: int = 16_000
     """spec 0002 2.6, R-14. 도구 결과를 이 길이로 잘라 `truncated: true` 를 표시합니다."""
 
