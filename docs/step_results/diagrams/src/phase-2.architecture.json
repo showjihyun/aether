@@ -1,0 +1,249 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Phase 2 — Enterprise MCP Gateway",
+    "output": "phase-2.html",
+    "quality_profile": "showcase",
+    "views": [
+      {
+        "id": "single-door",
+        "label": "통로는 하나",
+        "focus": [
+          "executor",
+          "gateway",
+          "fs"
+        ],
+        "note": "도구 호출은 Gateway 함수 하나만 지납니다. 우회 경로를 만들면 아키텍처 단계가 실패합니다 (R-2)."
+      },
+      {
+        "id": "decide-then-call",
+        "label": "판정 → 호출 → 감사",
+        "focus": [
+          "gateway",
+          "policy",
+          "perms",
+          "audit"
+        ],
+        "note": "deny 된 호출은 실행되지 않고 감사에만 남습니다 (R-4). 기본값은 deny 입니다."
+      },
+      {
+        "id": "offline-servers",
+        "label": "오프라인 서버 셋",
+        "focus": [
+          "fs",
+          "http",
+          "pgsrv"
+        ],
+        "note": "참조 구현을 이미지 빌드 시점에 넣었습니다 — 런타임 npx 는 인터넷을 요구합니다 (D-7, D-8)."
+      }
+    ]
+  },
+  "layout": {
+    "mode": "grid",
+    "cols": 4,
+    "cellW": 180,
+    "cellH": 72,
+    "gapX": 120,
+    "gapY": 120,
+    "origin": [
+      60,
+      80
+    ]
+  },
+  "components": [
+    {
+      "id": "perms",
+      "type": "database",
+      "label": "tool_permissions",
+      "sublabel": "Agent × 서버 × 도구",
+      "tag": "P2-2a",
+      "row": 0,
+      "col": 0
+    },
+    {
+      "id": "policy",
+      "type": "security",
+      "label": "packages/policy",
+      "sublabel": "기본 deny",
+      "tag": "P2-4",
+      "row": 0,
+      "col": 1
+    },
+    {
+      "id": "audit",
+      "type": "database",
+      "label": "tool_call_audit",
+      "sublabel": "append-only",
+      "tag": "P2-2a",
+      "row": 2,
+      "col": 1
+    },
+    {
+      "id": "executor",
+      "type": "backend",
+      "label": "Executor",
+      "sublabel": "packages/runtime",
+      "tag": "P2-3",
+      "row": 1,
+      "col": 0
+    },
+    {
+      "id": "gateway",
+      "type": "backend",
+      "label": "MCP Gateway",
+      "sublabel": "유일한 통로",
+      "tag": "P2-2b",
+      "row": 1,
+      "col": 1
+    },
+    {
+      "id": "fs",
+      "type": "external",
+      "label": "Filesystem MCP",
+      "sublabel": "stdio",
+      "tag": "P2-5",
+      "row": 0,
+      "col": 2
+    },
+    {
+      "id": "binding",
+      "type": "database",
+      "label": "mcp_servers",
+      "sublabel": "Version 에 바인딩",
+      "tag": "P2-6",
+      "row": 2,
+      "col": 0
+    },
+    {
+      "id": "http",
+      "type": "external",
+      "label": "HTTP MCP",
+      "sublabel": "stdio",
+      "tag": "P2-5",
+      "row": 1,
+      "col": 2
+    },
+    {
+      "id": "pgsrv",
+      "type": "external",
+      "label": "PostgreSQL MCP",
+      "sublabel": "read-only",
+      "tag": "P2-5",
+      "row": 2,
+      "col": 2
+    }
+  ],
+  "boundaries": [
+    {
+      "kind": "security-group",
+      "label": "판정 → 호출 → 감사",
+      "wraps": [
+        "gateway",
+        "policy",
+        "audit"
+      ]
+    },
+    {
+      "kind": "region",
+      "label": "오프라인 compose — 빌드 시점에 포함",
+      "wraps": [
+        "fs",
+        "http",
+        "pgsrv"
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "executor-gateway",
+      "from": "executor",
+      "to": "gateway",
+      "label": "모든 도구 호출",
+      "variant": "emphasis"
+    },
+    {
+      "id": "gateway-policy",
+      "from": "gateway",
+      "to": "policy",
+      "label": "allow / deny",
+      "variant": "security",
+      "labelDy": -18
+    },
+    {
+      "id": "policy-perms",
+      "from": "policy",
+      "to": "perms",
+      "label": "표 조회"
+    },
+    {
+      "id": "gateway-audit",
+      "from": "gateway",
+      "to": "audit",
+      "label": "기록",
+      "labelDy": 18
+    },
+    {
+      "id": "gateway-fs",
+      "from": "gateway",
+      "to": "fs",
+      "variant": "emphasis",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "gateway-http",
+      "from": "gateway",
+      "to": "http",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "gateway-pgsrv",
+      "from": "gateway",
+      "to": "pgsrv",
+      "variant": "dashed",
+      "fromSide": "right",
+      "toSide": "left"
+    },
+    {
+      "id": "binding-executor",
+      "from": "binding",
+      "to": "executor",
+      "label": "연결 목록"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "cyan",
+      "title": "이 Phase 가 만든 것",
+      "items": [
+        "packages/mcp — 클라이언트와 Tool Discovery",
+        "모든 호출이 지나는 Gateway 함수 하나",
+        "기본 deny 판정과 행을 넣는 CLI",
+        "Filesystem · HTTP · PostgreSQL 서버 셋"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "하네스에 붙은 것",
+      "items": [
+        "AR-6 이 처음으로 검사할 코드를 가짐",
+        "Phase 1 의 도구 시나리오가 Gateway 경유로 그대로 통과 (R-6)",
+        "P2-2b 반려 1회 — red → green 순서 역전",
+        "증거와 게이트의 분리 적용 (2026-09-23-001)"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "지키려 한 성질",
+      "items": [
+        "지울 수 있는 감사는 감사가 아님 — UPDATE · DELETE 미부여",
+        "기본 deny 이므로 행을 넣는 경로가 같은 단위에 필요",
+        "권한 키는 (Version, 서버, 도구)",
+        "외부 서버의 응답은 데이터이지 지시가 아님 (R-10)"
+      ]
+    }
+  ]
+}

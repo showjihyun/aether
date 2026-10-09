@@ -9,6 +9,7 @@
 | [data-model.md](data-model.md) | PostgreSQL 스키마·역할·테이블·열·제약·트리거의 열 단위 정본이 무엇인가 | 마이그레이션을 고치거나 저장소 접근 코드를 쓰기 전 |
 | [api.md](api.md) | `apps/api` 의 HTTP 계약과 Plane 사이 스트림 계약의 읽기용 요약(정본은 `openapi.json`·spec) | 경로·요청·응답·오류 코드를 부르거나 바꾸기 전 |
 | [roadmap.md](roadmap.md) | 지금이 어느 Phase 이고 다음에 무엇이 오는가 | 범위를 정하기 전 |
+| [step_results/](step_results/README.md) | 각 단위가 **무엇을 실제로 구현했는가**, 그리고 그것이 하네스의 어느 자리에서 판정됐는가 | 이미 만들어진 것을 고치기 전, 또는 단위를 끝낸 직후 |
 | [../intents/intent.md](../intents/intent.md) | 이번 작업이 무엇을 왜 하는가 (활성 intent, intent → spec → plan) | 구현을 시작하기 전 |
 | [../DESIGN.md](../DESIGN.md) | `apps/web` 의 표현 규약 — 결정은 shadcn/ui 기본값, 토큰만, 도메인 → 표현 표 | 화면을 만들거나 고치기 전 |
 

@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Phase 1 — Agent Runtime",
+    "output": "phase-1.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "declare-run", "label": "선언에서 종결까지", "focus": ["api", "pg", "stream", "worker", "runtime"], "note": "api 는 선언만 하고 worker 가 집어 실행합니다 — worker 가 죽어도 선언은 남습니다." },
+      { "id": "model-loop", "label": "Planner / Executor 루프", "focus": ["runtime", "gateway", "llm"], "note": "Model → 도구 결정 → Tool → Observation → Model. Observation 은 신뢰 경계 밖 데이터로 표시됩니다 (R-14)." },
+      { "id": "observe", "label": "보이게 만든 것", "focus": ["api", "status", "collector"], "note": "SSE 로 흘러나오는 이벤트와 Run → Task → 호출 span 트리 (R-3, R-5)." }
+    ]
+  },
+  "layout": { "mode": "grid", "cols": 4, "cellW": 180, "cellH": 72, "gapX": 120, "gapY": 120, "origin": [60, 80] },
+  "components": [
+    { "id": "api", "type": "backend", "label": "apps/api", "sublabel": "Run 선언 · 투영 · SSE", "tag": "P1-1 · P1-5b · P1-6", "row": 1, "col": 0 },
+    { "id": "stream", "type": "messagebus", "label": "runs:requested", "sublabel": "Redis Stream", "tag": "P1-5a", "row": 1, "col": 1 },
+    { "id": "worker", "type": "backend", "label": "apps/worker", "sublabel": "XAUTOCLAIM · heartbeat", "tag": "P1-5a", "row": 1, "col": 2 },
+    { "id": "runtime", "type": "backend", "label": "packages/runtime", "sublabel": "상태 기계 · lease · 루프", "tag": "P1-2b · P1-4 · P1-7", "row": 1, "col": 3 },
+    { "id": "pg", "type": "database", "label": "PostgreSQL", "sublabel": "선언과 상태 영속", "tag": "P1-2a", "row": 0, "col": 0 },
+    { "id": "status", "type": "messagebus", "label": "runs:status", "sublabel": "seq 로 멱등 투영", "tag": "P1-5b", "row": 0, "col": 1 },
+    { "id": "collector", "type": "cloud", "label": "OTel Collector", "sublabel": "Run → Task → 호출", "tag": "P1-8", "row": 0, "col": 3 },
+    { "id": "gateway", "type": "backend", "label": "Model Gateway", "sublabel": "complete · embed", "tag": "P1-3", "row": 2, "col": 3 },
+    { "id": "llm", "type": "external", "label": "모델", "sublabel": "fake · OpenAI 호환", "tag": "R-6", "row": 2, "col": 2 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Control Plane — 선언만 합니다 (R-7)", "wraps": ["api", "pg", "status"] },
+    { "kind": "region", "label": "Data Plane — 실행", "wraps": ["worker", "runtime", "gateway"] }
+  ],
+  "connections": [
+    { "id": "api-pg", "from": "api", "to": "pg", "label": "선언 커밋", "variant": "emphasis", "labelDy": -24 },
+    { "id": "api-stream", "from": "api", "to": "stream", "label": "커밋 뒤 통지", "variant": "emphasis", "labelDy": 26 },
+    { "id": "stream-worker", "from": "stream", "to": "worker", "label": "count=1", "variant": "emphasis" },
+    { "id": "worker-runtime", "from": "worker", "to": "runtime", "label": "ExecuteRun", "variant": "emphasis" },
+    { "id": "runtime-gateway", "from": "runtime", "to": "gateway", "label": "모델 호출", "labelDy": 24 },
+    { "id": "gateway-llm", "from": "gateway", "to": "llm" },
+    { "id": "runtime-status", "from": "runtime", "to": "status", "label": "이벤트 · 종결" },
+    { "id": "status-api", "from": "status", "to": "api", "label": "투영", "variant": "dashed" },
+    { "id": "runtime-collector", "from": "runtime", "to": "collector", "label": "span", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "이 Phase 가 만든 것", "items": ["Agent Registry — 수정은 새 Version, 이전 Version 불변", "Run 상태 기계와 실행 권한 lease", "Planner / Executor 루프와 프로세스 내부 도구 둘", "SSE 스트리밍 · 타임아웃 · 재시도 · span 트리"] },
+    { "dot": "emerald", "title": "하네스에 붙은 것", "items": ["smoke 단계 활성화 (P1-9) — 제품 단계 10 → 11", "tests/arch/test_no_sleep_in_tests.py (AST)", "Run 생성 P95 를 사람이 고정 (EI-2)", "계약이 구현보다 먼저 — OpenAPI 드리프트 검사"] },
+    { "dot": "rose", "title": "지키려 한 성질", "items": ["한 Run 은 한 worker 만 (R-15, lease)", "종결 알림은 반드시 도달 (R-16, 재개가 재발행)", "시간 · 난수 · 모델은 주입 — sleep 으로 기다리지 않음", "Observation 은 role: tool 메시지로만 들어감"] }
+  ]
+}
