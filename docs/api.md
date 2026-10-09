@@ -111,7 +111,30 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 | `aether:runs:status` | Data → Control | `StatusMessage`: `run_id`, `seq`, `status`, `at`, `started_at?`, `finished_at?`, `failure_reason?`, `trace_id?` (값 없는 선택 필드는 키 없음) | api consumer group `aether-api`(P1-5b) — `seq` 단조 증가로 멱등 투영 | Redis 자동 |
 | `aether:runs:{run_id}:events` | Data → 독자 | `data` = 5절의 봉투 JSON | api SSE 리더(P1-6, 그룹 없음, `XREAD`) | **explicit `<seq>-0`**. 같은 ID 재-XADD(재개 시 재발행)는 어댑터가 성공으로 흡수. `MAXLEN ~ 10000`, `run.finished` 뒤 TTL 24시간 |
 
+| `aether:knowledge:ingestions:requested` | Control → Data | `ingestion_id`, `knowledge_set_id`, `source`, `traceparent` | worker consumer group(적재 전용), `count=1`. Run 과 같은 패턴(자기 PEL → `XAUTOCLAIM` → `XREADGROUP >`). 성공·실패 **모두 ack** — 적재에는 lease 경합이 없습니다(한 적재는 한 worker 가 끝까지 처리) | Redis 자동 |
+| `aether:knowledge:ingestions:status` | Data → Control | `ingestion_id`, `status`, `at`, `chunk_count?`, `failure_reason?` | api consumer group — `control.knowledge_ingestions` 에 투영 | Redis 자동 |
+
+**적재의 상태를 api 가 쓰는 이유**(spec 0004 개정 5): `aether_data` 는 `control.knowledge_ingestions` 에 **SELECT 만** 가집니다(마이그레이션 0004). worker 는 그 표에 쓸 수 없으므로 상태를 스트림으로 되돌려 보내고 api 가 투영합니다 — Run 과 같은 경계입니다(Control 만 `control` 에 씁니다).
+
 `StatusMessage.seq` 는 대응하는 `run.status` 이벤트의 `seq` 와 같은 수열입니다. worker 는 `aether:worker:{consumer}:heartbeat` 키(TTL = heartbeat 주기의 3배)로 살아 있음을 알리고 compose 의 healthcheck 가 그것을 봅니다(spec 0002 2.14).
+
+## 7. Knowledge 적재 (P3-2b)
+
+전부 인증 뒤입니다(P0-9). 적재는 **선언**이고 실행은 worker 입니다(spec 0004 D-4) — Run 과 같은 모양입니다.
+
+| 메서드·경로 | 요청 | 성공 | 오류 |
+| --- | --- | --- | --- |
+| `POST /knowledge-sets` | `{ name }` | `201 { id, name, created_at }` | `401`, 이름 중복 |
+| `POST /knowledge-sets/{id}/ingestions` | `{ source }` | `202 { ingestion_id, knowledge_set_id, source, status: "queued", requested_at }` | `404 knowledge_set_not_found` |
+| `GET /knowledge-ingestions/{id}` | — | `200 { …, status, started_at?, finished_at?, failure_reason? }` | `404 knowledge_ingestion_not_found` |
+
+`202` 인 이유는 Run 과 같습니다 — 요청은 선언을 기록하고 즉시 돌아오며, 적재는 worker 가 비동기로 합니다. 상태는 6절의 두 스트림으로 오갑니다.
+
+`failure_reason` 은 **500자로 잘립니다** — 적재 실패 메시지에 문서 본문이 섞여 들어가 무한정 커지는 것을 막습니다(spec 0004 R-11 과 같은 취지).
+
+청크는 문자 기준 고정 크기 + 겹침입니다(기본 1000/200, `AETHER_KNOWLEDGE_CHUNK_CHARS`·`AETHER_KNOWLEDGE_CHUNK_OVERLAP_CHARS`). 임베딩은 `ModelGateway.embed` 를 지나고(AR-5) 모델은 채팅과 **별도 핀**입니다(`AETHER_EMBED_MODEL_ID`). 청크에는 그 모델 id 와 차원이 함께 저장되며, 검색 시 현재 설정과 다르면 **재적재를 요구하는 오류**가 납니다(spec 0004 D-9) — 조용히 섞지 않습니다.
+
+검색의 HTTP 경로는 아직 없습니다. 이 단위는 포트와 어댑터까지이고, Context 에 넣는 것과 그 경로는 P3-3 입니다.
 
 ## 관련 문서
 

@@ -142,6 +142,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/knowledge-sets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Knowledge Set Route */
+        post: operations["create_knowledge_set_route_knowledge_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge-sets/{knowledge_set_id}/ingestions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Ingestion Route */
+        post: operations["request_ingestion_route_knowledge_sets__knowledge_set_id__ingestions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/knowledge-ingestions/{ingestion_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ingestion Route */
+        get: operations["get_ingestion_route_knowledge_ingestions__ingestion_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -312,6 +363,14 @@ export interface components {
             definition: components["schemas"]["AgentDefinition"];
         };
         /**
+         * CreateKnowledgeSetRequest
+         * @description `POST /knowledge-sets` 의 요청 본문.
+         */
+        CreateKnowledgeSetRequest: {
+            /** Name */
+            name: string;
+        };
+        /**
          * FailureReason
          * @enum {string}
          */
@@ -332,6 +391,87 @@ export interface components {
             service: string;
             /** Version */
             version: string;
+        };
+        /**
+         * IngestionAccepted
+         * @description `POST /knowledge-sets/{id}/ingestions` 의 성공 응답(202) — 항상 `queued` 로
+         *     시작합니다(`control.runs` 의 `RunAccepted` 와 같은 모양).
+         */
+        IngestionAccepted: {
+            /**
+             * Ingestion Id
+             * Format: uuid
+             */
+            ingestion_id: string;
+            /**
+             * Knowledge Set Id
+             * Format: uuid
+             */
+            knowledge_set_id: string;
+            /** Source */
+            source: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+        };
+        /**
+         * IngestionDetailResponse
+         * @description `GET /knowledge-ingestions/{id}` 의 성공 응답 — 선언·투영만 읽습니다.
+         */
+        IngestionDetailResponse: {
+            /**
+             * Ingestion Id
+             * Format: uuid
+             */
+            ingestion_id: string;
+            /**
+             * Knowledge Set Id
+             * Format: uuid
+             */
+            knowledge_set_id: string;
+            /** Source */
+            source: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+        };
+        /**
+         * KnowledgeSetResponse
+         * @description `POST /knowledge-sets` 의 성공 응답.
+         */
+        KnowledgeSetResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * ListAgentsResponse
@@ -394,6 +534,15 @@ export interface components {
              */
             tool_retries: number;
             backoff?: components["schemas"]["Backoff"];
+        };
+        /**
+         * RequestIngestionRequest
+         * @description `POST /knowledge-sets/{id}/ingestions` 의 요청 본문 — `source` 는 Connector
+         *     (Filesystem, spec D-6 과 같은 범위)가 읽을 위치.
+         */
+        RequestIngestionRequest: {
+            /** Source */
+            source: string;
         };
         /**
          * RunAccepted
@@ -936,6 +1085,140 @@ export interface operations {
                 content?: never;
             };
             /** @description run_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_knowledge_set_route_knowledge_sets_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateKnowledgeSetRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["KnowledgeSetResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_ingestion_route_knowledge_sets__knowledge_set_id__ingestions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                knowledge_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequestIngestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionAccepted"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description knowledge_set_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ingestion_route_knowledge_ingestions__ingestion_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ingestion_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IngestionDetailResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description knowledge_ingestion_not_found */
             404: {
                 headers: {
                     [name: string]: unknown;

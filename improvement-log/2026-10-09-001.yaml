@@ -1,0 +1,29 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-09-001
+date: 2026-10-09
+status: candidate
+symptom: harness-scripts 단계가 verify 합계의 최대 비중을 차지한다 — 2026-10-07 실측 212.8초(86건), 2026-10-09 실측 358.8초. 각 테스트가 하네스 번들을 임시 디렉터리로 복사하고 bash 를 새로 띄우므로 테스트 수에 비례해 비용이 선형으로 늘고, 그 단계 하나가 예산 초과의 주된 원인이 된다
+evidence: |
+  2026-10-07 api-unit 쪼개기 실측(improvement-log 2026-10-06-002): tests/scripts 261초(86건),
+  tests/arch 31초(25건), 제품 테스트 전부 23초(413건). 즉 테스트 1건당 비용이 제품 테스트의
+  약 50배다.
+  2026-10-09 P3-2b 의 verify: harness-scripts 358.8초, 합계 736,213 ms 로 예산 600,000 ms 초과
+  (선택 실패 1건). 그 단위는 tests/scripts 에 테스트를 더하지 않았으므로 증가분은 부하이거나
+  복사 비용의 변동이다 — 어느 쪽이든 이 단계가 예산을 가장 크게 먹는다는 사실은 같다.
+  원인 구조: tests/scripts/test_guard_protected.py 등이 `_copy_bundle(tmp_path)` 로 harness/ 를
+  통째로 복사한다(테스트당 1회). tests/scripts/test_verify_lock.py 의 3건은 각각 verify.sh 를
+  `--only syntax` 로 실행한다(1건당 수십 초).
+root_cause: 테스트가 격리를 '번들 전체 복사' 로 얻는다. 격리는 필요하지만 복사의 단위가 테스트마다인 것은 필요하지 않다 — 대부분의 테스트는 복사본을 읽기만 하거나 한두 파일만 건드린다
+fix: 이번에는 단계를 쪼개 비용이 보이게만 했다(2026-10-06-002). 복사 비용 자체는 그대로다
+recurrence_risk: high
+harness_element: HE-3
+proposed_harness_change: "(사람 결정) (1) 번들 복사를 **세션 범위 fixture** 로 1회만 하고, 테스트가 쓰기를 해야 하면 그 테스트만 자기 복사본을 뜬다. 읽기만 하는 테스트는 공유본을 쓴다. (2) `test_verify_lock.py` 의 세 건은 verify 실행이 꼭 필요한지 다시 본다 — 락 획득·회수·해제는 스크립트의 락 함수만 떼어 부르면 verify 전체를 돌리지 않고도 판정할 수 있을 가능성이 있다. (3) 적용 뒤 harness-scripts 단계의 소요를 기록해 (1)과 (2)의 효과를 분리해 본다. 측정 없이 테스트를 지우는 것은 하지 않는다 — 검출력은 그대로 유지한다"
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  대상: 적용 뒤 verify 3회.
+  기준: harness-scripts 단계의 소요가 기존의 절반 이하. 그 단계의 테스트 수는 줄지 않는다
+  (86건 유지 — 검출력을 비용과 교환하지 않았다는 확인).
+  가드·락의 변이 테스트가 여전히 실패를 잡는다(각 1회 주입으로 확인).
+owner: unassigned
+expires: 2027-01-09

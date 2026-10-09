@@ -25,6 +25,10 @@ from types import FrameType
 from typing import Any, NoReturn
 
 import psycopg
+from aether_context.adapters.outbound.connector.filesystem import FilesystemConnector
+from aether_context.adapters.outbound.indexer.fixed_size import FixedSizeIndexer
+from aether_context.adapters.outbound.knowledge_store.postgres import PostgresKnowledgeStore
+from aether_context.application.usecases.ingest_knowledge import IngestKnowledgeUseCase
 from aether_mcp.adapters.outbound.audit_sink.postgres import PostgresAuditSink
 from aether_mcp.adapters.outbound.mcp_client.http import HttpMcpClient
 from aether_mcp.adapters.outbound.mcp_client.stdio import StdioMcpClient
@@ -52,14 +56,30 @@ from aether_runtime.application.ports.outbound.tool_gateway import ToolGateway
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from redis import Redis
 
+from aether_worker.adapters.inbound.stream.ingestion_requested_consumer import (
+    IngestionRequestedConsumer,
+)
+from aether_worker.adapters.inbound.stream.ingestion_requested_consumer import (
+    ensure_group as ensure_knowledge_group,
+)
 from aether_worker.adapters.inbound.stream.requested_consumer import (
     RequestedConsumer,
     ensure_group,
 )
+from aether_worker.adapters.outbound.embedder.model_gateway import ModelGatewayEmbedder
 from aether_worker.adapters.outbound.otel_trace_context import OtelTraceContext
 from aether_worker.adapters.outbound.redis.heartbeat import Heartbeat
+from aether_worker.adapters.outbound.redis.ingestion_status_notifier import (
+    RedisKnowledgeIngestionStatusNotifier,
+)
 from aether_worker.adapters.outbound.telemetry import init_telemetry
+from aether_worker.application.ports.inbound.handle_ingestion_requested import (
+    HandleIngestionRequested,
+)
 from aether_worker.application.ports.inbound.handle_run_requested import HandleRunRequested
+from aether_worker.application.usecases.handle_ingestion_requested import (
+    HandleIngestionRequestedUseCase,
+)
 from aether_worker.application.usecases.handle_run_requested import HandleRunRequestedUseCase
 from aether_worker.domain.backoff import BackoffPolicy
 from aether_worker.settings import Settings
@@ -297,6 +317,37 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
     return HandleRunRequestedUseCase(execute_run, OtelTraceContext())
 
 
+def _build_production_ingestion_handler(
+    settings: Settings, client: Redis
+) -> HandleIngestionRequested:
+    """spec 0004 2.1, 2.4, D-3, D-9 (P3-2b): `Connector`(Filesystem)·`Indexer`(고정
+    크기)·`Embedder`(`ModelGateway` 를 감쌈)·`KnowledgeStore`(pgvector)로
+    `IngestKnowledgeUseCase` 를 조립하고, `HandleIngestionRequestedUseCase` 로
+    감쌉니다. `aether_context` 는 `aether_runtime` 을 import 하지 않으므로(AR-3)
+    이 조립 — `ModelGatewayEmbedder` 로 gateway 를 꽂는 것 — 은 이 파일(worker 의
+    `main`)에서만 합니다."""
+
+    def connect() -> psycopg.Connection:
+        return psycopg.connect(settings.psycopg_dsn)
+
+    ingest_knowledge = IngestKnowledgeUseCase(
+        FilesystemConnector(),
+        FixedSizeIndexer(
+            chunk_chars=settings.knowledge_chunk_chars,
+            overlap_chars=settings.knowledge_chunk_overlap_chars,
+        ),
+        ModelGatewayEmbedder(
+            _build_model_gateway(settings),
+            model_id=settings.embed_model_id,
+            dim=settings.embed_dim,
+        ),
+        PostgresKnowledgeStore(connect),
+    )
+    return HandleIngestionRequestedUseCase(
+        ingest_knowledge, RedisKnowledgeIngestionStatusNotifier(client)
+    )
+
+
 def _heartbeat_loop(heartbeat: Heartbeat, interval_seconds: float, stop: Event) -> None:
     while not stop.is_set():
         heartbeat.beat()
@@ -311,6 +362,7 @@ def serve(
     sleep: Callable[[float], None] = time.sleep,
     on_ready: Callable[[], None] | None = None,
     handler: HandleRunRequested | None = None,
+    ingestion_handler: HandleIngestionRequested | None = None,
 ) -> int:
     """연결(백오프) → consumer group → heartbeat 스레드 → 소비 대기.
 
@@ -318,6 +370,12 @@ def serve(
     `ready` 를 로그·stdout 에 남기고 `stop` 이 set 될 때까지 대기하다가 0 을
     반환합니다. `make_client`·`sleep`·`handler` 는 테스트가 주입합니다 — `handler` 가
     `None` 이면 PostgreSQL·model gateway 를 포함한 프로덕션 조립을 씁니다.
+
+    spec 0004 2.4, D-4 (P3-2b): `aether:knowledge:ingestions:requested` 소비자는
+    **별도 스레드** 로 돕니다 — Run 소비자(`consumer.run_until`)가 메인 스레드를
+    블록하므로, 같은 프로세스 안에서 두 스트림을 함께 보려면 하나를 스레드로 빼야
+    합니다. `ingestion_handler` 가 `None` 이면 프로덕션 조립을 씁니다(테스트는
+    주입합니다).
 
     `on_ready` 는 `ready` 로그 직후 호출됩니다 — 테스트가 로그 캡처의 타이밍(폴링·
     스레드 경합)에 기대지 않고 `threading.Event` 로 준비 완료를 직접 기다릴 수
@@ -340,8 +398,14 @@ def serve(
         return 1
 
     ensure_group(client, settings.worker_stream, settings.worker_group)
+    ensure_knowledge_group(client, settings.knowledge_stream, settings.knowledge_group)
 
     active_handler = handler if handler is not None else _build_production_handler(settings, client)
+    active_ingestion_handler = (
+        ingestion_handler
+        if ingestion_handler is not None
+        else _build_production_ingestion_handler(settings, client)
+    )
 
     heartbeat = Heartbeat(
         client,
@@ -364,6 +428,22 @@ def serve(
     if on_ready is not None:
         on_ready()
 
+    ingestion_consumer = IngestionRequestedConsumer(
+        client,
+        stream=settings.knowledge_stream,
+        group=settings.knowledge_group,
+        consumer=settings.worker_consumer,
+        handler=active_ingestion_handler,
+        xautoclaim_min_idle_ms=settings.worker_xautoclaim_min_idle_ms,
+    )
+    ingestion_thread = Thread(
+        target=ingestion_consumer.run_until,
+        args=(stop,),
+        name="aether-worker-ingestion-consumer",
+        daemon=True,
+    )
+    ingestion_thread.start()
+
     consumer = RequestedConsumer(
         client,
         stream=settings.worker_stream,
@@ -374,6 +454,7 @@ def serve(
     )
     consumer.run_until(stop)
     heartbeat_thread.join(_STOP_JOIN_TIMEOUT)
+    ingestion_thread.join(_STOP_JOIN_TIMEOUT)
     return 0
 
 

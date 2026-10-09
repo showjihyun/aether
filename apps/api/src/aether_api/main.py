@@ -33,28 +33,45 @@ from aether_api.adapters.inbound.http.agents import build_agents_router
 from aether_api.adapters.inbound.http.auth import require_principal
 from aether_api.adapters.inbound.http.events import build_events_router
 from aether_api.adapters.inbound.http.healthz import build_router
+from aether_api.adapters.inbound.http.knowledge import build_knowledge_router
 from aether_api.adapters.inbound.http.runs import build_runs_router
+from aether_api.adapters.inbound.stream.ingestion_status_consumer import (
+    IngestionStatusConsumer,
+)
+from aether_api.adapters.inbound.stream.ingestion_status_consumer import (
+    ensure_group as knowledge_ensure_group,
+)
 from aether_api.adapters.inbound.stream.status_consumer import StatusConsumer, ensure_group
 from aether_api.adapters.outbound.db.agent_repository import PostgresAgentRepository
 from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
+from aether_api.adapters.outbound.db.knowledge_declaration_store import (
+    PostgresKnowledgeDeclarationStore,
+)
 from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
 from aether_api.adapters.outbound.db.tool_permissions import PostgresToolPermissionStore
 from aether_api.adapters.outbound.otel_request_tracing import OtelRequestTracing
+from aether_api.adapters.outbound.redis.knowledge_ingestion_notifier import (
+    RedisKnowledgeIngestionNotifier,
+)
 from aether_api.adapters.outbound.redis.run_event_reader import RedisRunEventReader
 from aether_api.adapters.outbound.redis.run_notifier import RedisRunNotifier
 from aether_api.adapters.outbound.telemetry import init_telemetry
 from aether_api.application.ports.inbound.authenticate import Authenticate
 from aether_api.application.ports.outbound.request_tracing import RequestTracing
+from aether_api.application.usecases.apply_ingestion_status import ApplyIngestionStatusUseCase
 from aether_api.application.usecases.apply_run_status import ApplyRunStatusUseCase
 from aether_api.application.usecases.authenticate import AuthenticateUseCase
 from aether_api.application.usecases.cancel_run import CancelRunUseCase
 from aether_api.application.usecases.create_agent import CreateAgentUseCase
+from aether_api.application.usecases.create_knowledge_set import CreateKnowledgeSetUseCase
 from aether_api.application.usecases.get_agent import GetAgentUseCase
 from aether_api.application.usecases.get_agent_version import GetAgentVersionUseCase
+from aether_api.application.usecases.get_ingestion import GetIngestionUseCase
 from aether_api.application.usecases.get_run import GetRunUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
+from aether_api.application.usecases.request_ingestion import RequestIngestionUseCase
 from aether_api.application.usecases.request_run import RequestRunUseCase
 from aether_api.application.usecases.run_exists import RunExistsUseCase
 from aether_api.application.usecases.set_tool_permission import SetToolPermissionUseCase
@@ -84,6 +101,11 @@ def _postgres_agent_repository(settings: Settings) -> PostgresAgentRepository:
 def _postgres_run_declaration_store(settings: Settings) -> PostgresRunDeclarationStore:
     """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
     return PostgresRunDeclarationStore(lambda: psycopg.connect(settings.psycopg_dsn))
+
+
+def _postgres_knowledge_declaration_store(settings: Settings) -> PostgresKnowledgeDeclarationStore:
+    """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
+    return PostgresKnowledgeDeclarationStore(lambda: psycopg.connect(settings.psycopg_dsn))
 
 
 def _postgres_tool_permission_store(settings: Settings) -> PostgresToolPermissionStore:
@@ -146,23 +168,59 @@ def _build_production_status_consumer(settings: Settings) -> Callable[[Event], N
     return run
 
 
+_KNOWLEDGE_STATUS_STREAM = "aether:knowledge:ingestions:status"
+_KNOWLEDGE_STATUS_GROUP = "aether-api"
+
+
+def _build_production_knowledge_status_consumer(settings: Settings) -> Callable[[Event], None]:
+    """spec 0004 2.4, D-4: `_build_production_status_consumer` 와 같은 모양 —
+    `aether:knowledge:ingestions:status` 투영 소비자."""
+
+    def run(stop: Event) -> None:
+        client = _connect_redis_with_backoff(settings.redis_url, stop)
+        if client is None or stop.is_set():
+            return
+        apply_status = ApplyIngestionStatusUseCase(_postgres_knowledge_declaration_store(settings))
+        knowledge_ensure_group(client, _KNOWLEDGE_STATUS_STREAM, _KNOWLEDGE_STATUS_GROUP)
+        consumer = IngestionStatusConsumer(
+            client,
+            apply_status,
+            stream=_KNOWLEDGE_STATUS_STREAM,
+            group=_KNOWLEDGE_STATUS_GROUP,
+        )
+        consumer.run_until(stop)
+
+    return run
+
+
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
-    """`aether:runs:status` 투영 소비자를 백그라운드 스레드로 돌립니다(spec 2.4, C-5).
+    """`aether:runs:status` 와 `aether:knowledge:ingestions:status` 투영 소비자를
+    각각 백그라운드 스레드로 돌립니다(spec 2.4, C-5, spec 0004 2.4 D-4).
 
-    `create_app` 이 조립한(또는 테스트가 주입한) `app.state.status_consumer_runner` 를
-    그대로 부릅니다. `aether-api openapi` 와 DB/Redis 없는 단위 테스트는
-    `TestClient(app)` 를 `with` 없이 쓰므로 이 lifespan 자체가 돌지 않습니다.
+    `create_app` 이 조립한(또는 테스트가 주입한) `app.state.status_consumer_runner` ·
+    `app.state.knowledge_status_consumer_runner` 를 그대로 부릅니다. `aether-api
+    openapi` 와 DB/Redis 없는 단위 테스트는 `TestClient(app)` 를 `with` 없이 쓰므로
+    이 lifespan 자체가 돌지 않습니다.
     """
     stop = Event()
     runner: Callable[[Event], None] = app.state.status_consumer_runner
+    knowledge_runner: Callable[[Event], None] = app.state.knowledge_status_consumer_runner
     thread = Thread(target=runner, args=(stop,), name="aether-api-status-consumer", daemon=True)
+    knowledge_thread = Thread(
+        target=knowledge_runner,
+        args=(stop,),
+        name="aether-api-knowledge-status-consumer",
+        daemon=True,
+    )
     thread.start()
+    knowledge_thread.start()
     try:
         yield
     finally:
         stop.set()
         thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
+        knowledge_thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
 
 
 def create_app(
@@ -170,6 +228,7 @@ def create_app(
     *,
     authenticate: Authenticate | None = None,
     status_consumer: Callable[[Event], None] | None = None,
+    knowledge_status_consumer: Callable[[Event], None] | None = None,
     request_tracing: RequestTracing | None = None,
 ) -> FastAPI:
     """설정을 읽어 telemetry 를 초기화하고 라우터를 등록한 `FastAPI` 앱을 조립합니다.
@@ -205,6 +264,11 @@ def create_app(
         status_consumer
         if status_consumer is not None
         else _build_production_status_consumer(settings)
+    )
+    app.state.knowledge_status_consumer_runner = (
+        knowledge_status_consumer
+        if knowledge_status_consumer is not None
+        else _build_production_knowledge_status_consumer(settings)
     )
     app.include_router(build_router(settings.version))
 
@@ -247,6 +311,19 @@ def create_app(
             require_principal(authenticate),
             ReadRunEventsUseCase(event_reader, run_declaration_store),
             RunExistsUseCase(run_declaration_store),
+        )
+    )
+
+    knowledge_declaration_store = _postgres_knowledge_declaration_store(settings)
+    knowledge_ingestion_notifier = RedisKnowledgeIngestionNotifier(
+        Redis.from_url(settings.redis_url, decode_responses=True)
+    )
+    app.include_router(
+        build_knowledge_router(
+            require_principal(authenticate),
+            CreateKnowledgeSetUseCase(knowledge_declaration_store),
+            RequestIngestionUseCase(knowledge_declaration_store, knowledge_ingestion_notifier),
+            GetIngestionUseCase(knowledge_declaration_store),
         )
     )
     return app
