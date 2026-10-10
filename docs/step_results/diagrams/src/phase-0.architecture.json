@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Phase 0 — Architecture & Foundation",
+    "output": "phase-0.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "boot-path", "label": "명령 하나로 기동", "focus": ["web", "sdk", "api", "pg"], "note": "저장소 문서만 보고 찾은 명령 하나로 Web 과 API 가 뜹니다 (R-1)." },
+      { "id": "offline", "label": "인터넷 없이", "focus": ["probe", "api", "migrate", "pg"], "note": "이미지를 빌드해 둔 뒤에는 네트워크 안의 probe 가 판정합니다 (R-4, DP-4)." },
+      { "id": "planes", "label": "Control 과 Data 의 분리", "focus": ["api", "redis", "worker", "pg"], "note": "Control Plane 은 Data Plane 을 호출하지 않고 큐로 선언만 합니다 (R-7)." }
+    ]
+  },
+  "layout": { "mode": "grid", "cols": 4, "cellW": 180, "cellH": 72, "gapX": 110, "gapY": 110, "origin": [60, 80] },
+  "components": [
+    { "id": "web", "type": "frontend", "label": "apps/web", "sublabel": "Next.js · shadcn/ui", "tag": "P0-3 · P0-3b", "row": 1, "col": 0 },
+    { "id": "sdk", "type": "frontend", "label": "packages/sdk", "sublabel": "healthz() · 생성 타입", "tag": "P0-3", "row": 1, "col": 1 },
+    { "id": "api", "type": "backend", "label": "apps/api", "sublabel": "FastAPI · /healthz", "tag": "P0-2 · P0-9", "row": 1, "col": 2 },
+    { "id": "pg", "type": "database", "label": "PostgreSQL", "sublabel": "control / data 스키마", "tag": "P0-8", "row": 1, "col": 3 },
+    { "id": "probe", "type": "external", "label": "probe", "sublabel": "오프라인 판정", "tag": "P0-5", "row": 0, "col": 0 },
+    { "id": "migrate", "type": "backend", "label": "migrate", "sublabel": "Alembic 0001", "tag": "P0-8", "row": 0, "col": 3 },
+    { "id": "worker", "type": "backend", "label": "apps/worker", "sublabel": "큐를 기다림", "tag": "P0-4", "row": 2, "col": 1 },
+    { "id": "redis", "type": "messagebus", "label": "Redis", "sublabel": "선언이 놓이는 자리", "tag": "P0-4", "row": 2, "col": 2 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "infra/docker — 인터넷 없이 기동 (DP-4)", "wraps": ["web", "sdk", "api", "pg", "probe", "migrate", "worker", "redis"] },
+    { "kind": "security-group", "label": "API 키 인증 뒤 (P0-9)", "wraps": ["api"] }
+  ],
+  "connections": [
+    { "id": "web-sdk", "from": "web", "to": "sdk", "label": "HTTP 계약만", "variant": "emphasis" },
+    { "id": "sdk-api", "from": "sdk", "to": "api", "variant": "emphasis" },
+    { "id": "api-pg", "from": "api", "to": "pg", "label": "control.*", "variant": "emphasis" },
+    { "id": "migrate-pg", "from": "migrate", "to": "pg", "label": "스키마 · 역할 · GRANT", "labelDy": 24 },
+    { "id": "probe-api", "from": "probe", "to": "api", "label": "exit 0 판정", "variant": "dashed" },
+    { "id": "worker-redis", "from": "worker", "to": "redis", "label": "대기", "variant": "dashed" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "이 Phase 가 만든 것", "items": ["모노레포 트리와 세 층의 빈 껍데기", "compose 6서비스 + 오프라인 probe", "control / data 스키마와 역할 분리", "API 키 인증 — 보호 경로는 401"] },
+    { "dot": "emerald", "title": "하네스에 붙은 것", "items": ["harness.config 의 제품 단계 활성화 (P0-7)", ".importlinter · .dependency-cruiser 로 AR-* 기계 판정", "CI harness.yml 과 비밀값 스캔 job", "임계값 90 → 80 (AD-2 시작값, 사람이 소유)"] },
+    { "dot": "rose", "title": "미루기로 한 것", "items": ["AR-6 · AR-7 의 검사 — 대상 코드가 없음 (Phase 2)", "packages/{workflow,context,memory,mcp,policy,evaluation} 는 껍데기", "infra/kubernetes 는 README 한 줄"] }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Phase 3 — Context Compiler / RAG",
+    "output": "phase-3.html",
+    "quality_profile": "showcase",
+    "views": [
+      { "id": "compile", "label": "모델을 부르기 전", "focus": ["executor", "compiler", "search", "store"], "note": "Executor 는 메시지를 직접 조립하지 않고 Compiler 포트만 지납니다 (R-3). 예산을 넘으면 D-7 의 순서로 뺍니다." },
+      { "id": "ingest", "label": "선언과 적재", "focus": ["api", "request", "worker", "store"], "note": "api 가 선언하고 worker 가 실행합니다 — Run 과 같은 모양입니다 (D-4)." }
+    ]
+  },
+  "layout": { "mode": "grid", "cols": 4, "cellW": 180, "cellH": 72, "gapX": 130, "gapY": 130, "origin": [60, 80] },
+  "components": [
+    { "id": "api", "type": "backend", "label": "apps/api", "sublabel": "선언과 상태", "tag": "P3-2b", "row": 0, "col": 0 },
+    { "id": "request", "type": "messagebus", "label": "ingestions", "sublabel": "requested", "tag": "P3-2b", "row": 0, "col": 1 },
+    { "id": "worker", "type": "backend", "label": "적재 실행", "sublabel": "청크 · 임베딩", "tag": "P3-2b", "row": 0, "col": 2 },
+    { "id": "store", "type": "database", "label": "pgvector", "sublabel": "청크와 임베딩", "tag": "P3-2a", "row": 0, "col": 3 },
+    { "id": "executor", "type": "backend", "label": "Executor", "sublabel": "packages/runtime", "tag": "P3-1", "row": 1, "col": 0 },
+    { "id": "compiler", "type": "backend", "label": "Context Compiler", "sublabel": "예산 안으로 조립", "tag": "P3-1", "row": 1, "col": 1 },
+    { "id": "search", "type": "backend", "label": "Knowledge 검색", "sublabel": "출처와 표지", "tag": "P3-3 진행 중", "row": 1, "col": 2 }
+  ],
+  "boundaries": [
+    { "kind": "region", "label": "Control Plane — control 표를 쓰는 주체는 api 뿐", "wraps": ["api", "request"] },
+    { "kind": "region", "label": "Data Plane — 적재와 조립", "wraps": ["worker", "store", "executor", "compiler", "search"] }
+  ],
+  "connections": [
+    { "id": "api-request", "from": "api", "to": "request", "label": "선언" },
+    { "id": "request-worker", "from": "request", "to": "worker", "label": "worker 가 집음" },
+    { "id": "worker-store", "from": "worker", "to": "store", "label": "청크 교체" },
+    { "id": "executor-compiler", "from": "executor", "to": "compiler", "label": "모델 호출 전마다", "variant": "emphasis" },
+    { "id": "compiler-search", "from": "compiler", "to": "search", "label": "마지막 user 메시지", "variant": "emphasis" },
+    { "id": "search-store", "from": "search", "to": "store", "label": "코사인 상위 k", "variant": "emphasis", "fromSide": "right", "toSide": "bottom" }
+  ],
+  "cards": [
+    { "dot": "cyan", "title": "병합된 것", "items": ["P3-2a — pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 별도 핀", "P3-1 — Context Compiler v1 (예산과 D-7 제거 순서)", "P3-2b — Knowledge 적재와 상태 왕복"] },
+    { "dot": "emerald", "title": "하네스에 일어난 일", "items": ["verify 단일 실행 락 · 원자적 쓰기 · 시간 예산 자기 판정", "범위 지문으로 문서만 바뀐 커밋은 441초 → 82초", "api-unit 을 셋으로 쪼개니 제품 23초 · 하네스 자신 261초", "예산을 올리는 쪽을 고르지 않았습니다 (EI-2)"] },
+    { "dot": "rose", "title": "그림에 없는 것", "items": ["상태 스트림(ingestions:status) — worker 가 되돌려 보내고 api 가 씁니다", "그 이유는 GRANT 방향입니다 — aether_data 는 control 표에 SELECT 만", "임베딩은 Embedder 포트를 지납니다 (AR-3)", "P3-3 진행 중 · P3-4 Memory · P3-5 KPI 는 아직"] }
+  ]
+}
