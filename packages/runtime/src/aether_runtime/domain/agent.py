@@ -66,6 +66,15 @@ class AgentDefinition(BaseModel):
     context_budget_tokens: int | None = Field(default=None, ge=1)
     """spec 0004 2.2, D-5: Context Compiler 가 쓰는 토큰 예산. `None` 이면
     `AETHER_CONTEXT_BUDGET_TOKENS`(기본 8192, worker 가 읽음)를 씁니다."""
+    knowledge: list[str] = Field(default_factory=list)
+    """spec 0004 2.2, D-5 (P3-3): 이 Agent Version 이 Run 시작 시 검색할 Knowledge
+    Set **이름** 목록. 기본값 빈 목록 — 비어 있으면 검색하지 않습니다. 이름 →
+    id 해석은 `aether_context` 의 어댑터가 합니다(이 패키지는 DB 를 모릅니다).
+    바인딩 변경은 `mcp_servers`(spec 0003 D-2)와 같은 방식 — 새 HTTP 경로 없이
+    기존 `PUT /agents/{id}` 가 새 Version 을 만듭니다(R-9)."""
+    knowledge_top_k: int | None = Field(default=None, ge=1)
+    """spec 0004 2.2, D-5 (P3-3): Knowledge 검색의 상위 k. `None` 이면
+    `KnowledgeStore.DEFAULT_TOP_K`(5)를 씁니다."""
 
     @field_validator("system_prompt")
     @classmethod
@@ -82,4 +91,14 @@ class AgentDefinition(BaseModel):
         실패합니다. 중복만 여전히 여기서 막습니다(정의 자체의 결함)."""
         if len(value) != len(set(value)):
             raise ValueError("tools must not contain duplicates")
+        return value
+
+    @field_validator("knowledge")
+    @classmethod
+    def _knowledge_unique(cls, value: list[str]) -> list[str]:
+        """spec 0004 D-5 (P3-3): `tools`(spec 0003 2.15, D-16)와 같은 방식 —
+        존재 여부는 검증하지 않고(검색 시점에 해석, 미바인딩이면 조용히 미검색,
+        R-9) 중복 이름만 막습니다(정의 자체의 결함)."""
+        if len(value) != len(set(value)):
+            raise ValueError("knowledge must not contain duplicates")
         return value

@@ -217,6 +217,10 @@ export interface components {
             mcp_servers?: components["schemas"]["McpServerBinding"][];
             /** Context Budget Tokens */
             context_budget_tokens?: number | null;
+            /** Knowledge */
+            knowledge?: string[];
+            /** Knowledge Top K */
+            knowledge_top_k?: number | null;
         };
         /**
          * AgentDetailResponse

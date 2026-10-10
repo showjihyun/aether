@@ -27,7 +27,10 @@ from typing import Any, NoReturn
 import psycopg
 from aether_context.adapters.outbound.connector.filesystem import FilesystemConnector
 from aether_context.adapters.outbound.indexer.fixed_size import FixedSizeIndexer
+from aether_context.adapters.outbound.knowledge_search.postgres import PostgresKnowledgeSearch
 from aether_context.adapters.outbound.knowledge_store.postgres import PostgresKnowledgeStore
+from aether_context.adapters.outbound.token_counter.char_approx import CharApproxTokenCounter
+from aether_context.application.usecases.compile_context import CompileContextUseCase
 from aether_context.application.usecases.ingest_knowledge import IngestKnowledgeUseCase
 from aether_mcp.adapters.outbound.audit_sink.postgres import PostgresAuditSink
 from aether_mcp.adapters.outbound.mcp_client.http import HttpMcpClient
@@ -37,6 +40,9 @@ from aether_mcp.application.usecases.discover_tools import DiscoverToolsUseCase
 from aether_mcp.domain.tools import McpServerRef, Tool, ToolResult
 from aether_policy.adapters.outbound.permission_table.postgres import PostgresPermissionTable
 from aether_policy.application.usecases.judge_tool_call import JudgeToolCallUseCase
+from aether_runtime.adapters.outbound.context_compiler.aether_context import (
+    AetherContextCompiler,
+)
 from aether_runtime.adapters.outbound.db.run_declaration_reader import (
     PostgresRunDeclarationReader,
 )
@@ -293,10 +299,29 @@ def _build_tool_gateway(
 
 def _build_production_handler(settings: Settings, client: Redis) -> HandleRunRequested:
     """PostgreSQL·model gateway·Redis 이벤트/상태 어댑터로 `ExecuteRunUseCase` 를
-    조립하고, `HandleRunRequestedUseCase` 로 감쌉니다(spec 0002 2.1)."""
+    조립하고, `HandleRunRequestedUseCase` 로 감쌉니다(spec 0002 2.1).
+
+    spec 0004 2.1, D-5 (P3-3): `ContextCompiler` 에 `AetherContextCompiler
+    (CompileContextUseCase(CharApproxTokenCounter(), PostgresKnowledgeSearch(...)))`
+    를 꽂습니다 — `aether_context` 는 `aether_runtime` 을 import 하지 않으므로
+    (AR-3) 이 조립은 여기(worker 의 `main`)에서만 합니다. 꽂지 않으면
+    `ExecuteRunUseCase` 의 기본값(`_PassthroughContextCompiler`)이 쓰여
+    Knowledge 를 검색하지 않습니다(R-8·R-9 가 성립하지 않습니다)."""
 
     def connect() -> psycopg.Connection:
         return psycopg.connect(settings.psycopg_dsn)
+
+    knowledge_search = PostgresKnowledgeSearch(
+        connect,
+        ModelGatewayEmbedder(
+            _build_model_gateway(settings),
+            model_id=settings.embed_model_id,
+            dim=settings.embed_dim,
+        ),
+    )
+    context_compiler = AetherContextCompiler(
+        CompileContextUseCase(CharApproxTokenCounter(), knowledge_search)
+    )
 
     execute_run = ExecuteRunUseCase(
         PostgresRunStateStore(connect),
@@ -313,6 +338,7 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
         lease_ttl_seconds=settings.worker_lease_seconds,
         observation_max_chars=settings.observation_max_chars,
         lease_keeper=ThreadedLeaseKeeper(PostgresRunStateStore(connect)),
+        context_compiler=context_compiler,
     )
     return HandleRunRequestedUseCase(execute_run, OtelTraceContext())
 

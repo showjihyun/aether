@@ -17,6 +17,12 @@ from pydantic import BaseModel, Field
 from aether_runtime.application.ports.outbound.model_gateway import ToolSchema
 from aether_runtime.domain.run import Message
 
+DEFAULT_KNOWLEDGE_TOP_K = 5
+"""spec 0004 D-5 (P3-3): `AgentDefinition.knowledge_top_k` 가 `None` 일 때의 상위 k.
+`aether_runtime` 안에서는 이 상수가 유일한 출처입니다. `aether_context` 의
+`knowledge_store.DEFAULT_TOP_K`·`compile_context._DEFAULT_KNOWLEDGE_TOP_K` 와 같은
+숫자여야 하지만 AR-3 때문에 import 하지 않고 숫자만 맞춥니다(서로 주석으로 가리킴)."""
+
 
 class ContextSourceTokens(BaseModel):
     """소스 하나의 (드롭 적용 전) 토큰 추정."""
@@ -62,7 +68,10 @@ class ContextCompiler(Protocol):
         conversation: tuple[Message, ...],
         tools: tuple[ToolSchema, ...],
         budget_tokens: int,
+        knowledge_sets: tuple[str, ...] = (),
+        knowledge_top_k: int = DEFAULT_KNOWLEDGE_TOP_K,
     ) -> CompiledContext:
         """`system_prompt`·`conversation`(지금까지의 메시지)·`tools` 를 `budget_tokens`
-        안으로 결정적으로 조립합니다(R-1, R-2)."""
+        안으로 결정적으로 조립합니다(R-1, R-2). `knowledge_sets`(spec 0004 D-5,
+        P3-3)는 `AgentDefinition.knowledge` — 비어 있으면 검색하지 않습니다."""
         ...

@@ -106,7 +106,7 @@ class PostgresKnowledgeStore:
                        embedding <=> %s::vector AS distance
                 FROM data.knowledge_chunks
                 WHERE knowledge_set_id = ANY(%s)
-                ORDER BY distance ASC
+                ORDER BY distance ASC, source_path ASC, chunk_index ASC
                 LIMIT %s
                 """,
                 (_vector_literal(query_embedding), set_ids, top_k),

@@ -696,6 +696,25 @@
               }
             ],
             "title": "Context Budget Tokens"
+          },
+          "knowledge": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Knowledge"
+          },
+          "knowledge_top_k": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Top K"
           }
         },
         "type": "object",

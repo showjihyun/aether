@@ -165,3 +165,37 @@ def test_mcp_servers_binding_requires_ref() -> None:
         AgentDefinition.model_validate(
             _minimal(mcp_servers=[{"name": "filesystem", "transport": "stdio"}])
         )
+
+
+def test_knowledge_defaults_to_empty_list_and_top_k_to_none() -> None:
+    """spec 0004 2.2, D-5 (P3-3): `knowledge` 기본값은 빈 목록 — 바인딩이 없으면
+    검색하지 않습니다. `knowledge_top_k` 의 기본값은 `None`(KnowledgeStore 의
+    기본값을 씁니다)."""
+    definition = AgentDefinition.model_validate(_minimal())
+
+    assert definition.knowledge == []
+    assert definition.knowledge_top_k is None
+
+
+def test_knowledge_accepts_set_names() -> None:
+    definition = AgentDefinition.model_validate(_minimal(knowledge=["docs", "faq"]))
+
+    assert definition.knowledge == ["docs", "faq"]
+
+
+def test_knowledge_rejects_duplicates() -> None:
+    """spec D-5: `tools`(spec 2.15, D-16)와 같은 방식 — 중복 이름만 막습니다."""
+    with pytest.raises(ValidationError):
+        AgentDefinition.model_validate(_minimal(knowledge=["docs", "docs"]))
+
+
+def test_knowledge_top_k_accepts_positive_int() -> None:
+    definition = AgentDefinition.model_validate(_minimal(knowledge_top_k=3))
+
+    assert definition.knowledge_top_k == 3
+
+
+@pytest.mark.parametrize("value", [0, -1])
+def test_knowledge_top_k_rejects_non_positive(value: int) -> None:
+    with pytest.raises(ValidationError):
+        AgentDefinition.model_validate(_minimal(knowledge_top_k=value))

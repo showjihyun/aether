@@ -13,6 +13,8 @@ from uuid import UUID
 from aether_context.domain.knowledge import EmbeddedChunk, SearchResult
 
 DEFAULT_TOP_K = 5
+# 같은 숫자: compile_context._DEFAULT_KNOWLEDGE_TOP_K, aether_runtime 의
+# context_compiler.DEFAULT_KNOWLEDGE_TOP_K(AR-3 때문에 import 하지 않고 숫자만 맞춥니다).
 """spec D-2: 상위 k 기본값 — `AgentDefinition` 이 바꿀 수 있습니다(P3-3 범위)."""
 
 

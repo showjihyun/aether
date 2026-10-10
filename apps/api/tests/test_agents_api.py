@@ -259,6 +259,40 @@ def test_update_only_mcp_servers_bumps_version_and_keeps_version_1_definition_im
     assert version_1["definition"]["mcp_servers"] == []
 
 
+def test_update_only_knowledge_bumps_version_and_keeps_version_1_definition_immutable(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """spec 0004 R-9, D-5 (P3-3): `knowledge` 바인딩 변경도 `mcp_servers`(spec
+    0003 R-9)와 같은 방식 — 기존 `PUT /agents/{id}` 가 그대로 새 Version 을
+    만듭니다. Version 1 의 `definition`(`knowledge` 없음)은 이후에도 그대로."""
+    name = f"knowledge-binding-{uuid4()}"
+    create_response = client.post(
+        "/agents",
+        json={"name": name, "definition": _definition_payload()},
+        headers=auth_headers,
+    )
+    assert create_response.status_code == 201, create_response.text
+    agent_id = create_response.json()["id"]
+
+    bound_definition = _definition_payload(knowledge=["docs", "faq"], knowledge_top_k=3)
+    put_response = client.put(
+        f"/agents/{agent_id}",
+        json={"definition": bound_definition},
+        headers=auth_headers,
+    )
+    assert put_response.status_code == 200, put_response.text
+    updated = put_response.json()
+    assert updated["current_version"] == 2
+    assert updated["definition"]["knowledge"] == ["docs", "faq"]
+    assert updated["definition"]["knowledge_top_k"] == 3
+
+    version_1_response = client.get(f"/agents/{agent_id}/versions/1", headers=auth_headers)
+    assert version_1_response.status_code == 200
+    version_1 = version_1_response.json()
+    assert version_1["definition"]["knowledge"] == []
+    assert version_1["definition"]["knowledge_top_k"] is None
+
+
 def test_create_with_wrong_schema_version_is_422(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
