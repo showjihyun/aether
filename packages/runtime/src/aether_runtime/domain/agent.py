@@ -76,6 +76,14 @@ class AgentDefinition(BaseModel):
     """spec 0004 2.2, D-5 (P3-3): Knowledge 검색의 상위 k. `None` 이면
     `KnowledgeStore.DEFAULT_TOP_K`(5)를 씁니다."""
 
+    memory_enabled: bool = Field(default_factory=bool)
+    """spec 0004 2.6, D-5 (P3-4): 켜면 Run 이 `succeeded` 로 종결할 때 마지막 assistant
+    메시지를 이 Agent 의 Memory 로 남기고, 다음 Run 의 Context 에 검증 전(`verified=false`)
+    표지로 들어갑니다. 기본값 거짓 — 켜지 않은 Agent 는 아무것도 남기지 않고 읽지도
+    않습니다. `default_factory=bool` 인 이유: 평범한 `= False` 는 OpenAPI 에 `default` 를
+    싣고 sdk 생성 타입이 이 필드를 **필수**로 만들어, 이 필드를 모르는 기존 클라이언트의
+    요청 본문이 타입 오류가 됩니다(`tools`·`knowledge` 의 `default_factory` 와 같은 모양)."""
+
     @field_validator("system_prompt")
     @classmethod
     def _system_prompt_not_blank(cls, value: str) -> str:

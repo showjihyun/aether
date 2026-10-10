@@ -13,7 +13,7 @@
 | [phase-2.md](phase-2.md) | Phase 2 Enterprise MCP Gateway — P2-1 ~ P2-6, H-1, H-2 | 완료 2026-10-03 |
 | [phase-3.md](phase-3.md) | Phase 3 Context Compiler / RAG — 단위별 페이지의 입구 | 진행 중 |
 
-Phase 3 부터는 **단위당 한 장**입니다 — [p3-1.md](p3-1.md), [p3-2a.md](p3-2a.md), [p3-2b.md](p3-2b.md).
+Phase 3 부터는 **단위당 한 장**입니다 — [p3-1.md](p3-1.md), [p3-2a.md](p3-2a.md), [p3-2b.md](p3-2b.md), [p3-3.md](p3-3.md), [p3-4.md](p3-4.md).
 
 그림(standalone HTML, Phase 당 1장)은 `diagrams/` 에 있습니다 — [phase-0](diagrams/phase-0.html) · [phase-1](diagrams/phase-1.html) · [phase-2](diagrams/phase-2.html) · [phase-3](diagrams/phase-3.html). 브라우저로 직접 엽니다(외부 요청 없음).
 

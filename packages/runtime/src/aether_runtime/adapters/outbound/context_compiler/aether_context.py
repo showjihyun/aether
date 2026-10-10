@@ -13,6 +13,8 @@ ContextReport` → 이 패키지의 `ContextReport`(outbound 포트의 값 타�
 
 from __future__ import annotations
 
+from uuid import UUID
+
 from aether_context.application.ports.inbound.compile_context import (
     CompileContext,
     CompileContextRequest,
@@ -82,6 +84,7 @@ class AetherContextCompiler:
         budget_tokens: int,
         knowledge_sets: tuple[str, ...] = (),
         knowledge_top_k: int = DEFAULT_KNOWLEDGE_TOP_K,
+        agent_id: UUID | None = None,
     ) -> CompiledContext:
         request = CompileContextRequest(
             system_prompt=system_prompt,
@@ -90,6 +93,7 @@ class AetherContextCompiler:
             tools=tuple(_to_context_tool(t) for t in tools),
             knowledge_sets=knowledge_sets,
             knowledge_top_k=knowledge_top_k,
+            agent_id=agent_id,
         )
         result = self._compile_context(request)
         return CompiledContext(

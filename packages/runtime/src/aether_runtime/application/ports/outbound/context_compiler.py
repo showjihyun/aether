@@ -11,6 +11,7 @@ inbound 포트 타입만 보는 어댑터(`adapters/outbound/context_compiler/`)
 from __future__ import annotations
 
 from typing import Protocol
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -70,8 +71,11 @@ class ContextCompiler(Protocol):
         budget_tokens: int,
         knowledge_sets: tuple[str, ...] = (),
         knowledge_top_k: int = DEFAULT_KNOWLEDGE_TOP_K,
+        agent_id: UUID | None = None,
     ) -> CompiledContext:
         """`system_prompt`·`conversation`(지금까지의 메시지)·`tools` 를 `budget_tokens`
         안으로 결정적으로 조립합니다(R-1, R-2). `knowledge_sets`(spec 0004 D-5,
-        P3-3)는 `AgentDefinition.knowledge` — 비어 있으면 검색하지 않습니다."""
+        P3-3)는 `AgentDefinition.knowledge` — 비어 있으면 검색하지 않습니다.
+        `agent_id`(spec 2.6, P3-4)는 Memory 를 읽을 Agent — `None` 이면 읽지 않습니다.
+        Executor 는 `AgentDefinition.memory_enabled` 인 Agent 에만 건넵니다."""
         ...

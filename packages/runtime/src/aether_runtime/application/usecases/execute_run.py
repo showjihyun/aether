@@ -48,6 +48,7 @@ Planner/Executor 루프. `ExecuteRun`(inbound 포트) 의 유일한 구현입니
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -65,6 +66,7 @@ from aether_runtime.application.ports.outbound.context_compiler import (
 )
 from aether_runtime.application.ports.outbound.event_sink import EventSink
 from aether_runtime.application.ports.outbound.lease_keeper import LeaseKeeper
+from aether_runtime.application.ports.outbound.memory_writer import MemoryWriter
 from aether_runtime.application.ports.outbound.model_gateway import (
     ModelError,
     ModelGateway,
@@ -124,6 +126,9 @@ _DEFAULT_CONTEXT_BUDGET_TOKENS = 8192
 # 목록이 아니라 하한값 + 예외 하나로 표현합니다.
 _RETRYABLE_HTTP_STATUS_MIN = 500
 _RETRYABLE_HTTP_STATUS_EXTRA = frozenset({429})
+
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def is_retryable(error: ModelError) -> bool:
@@ -187,8 +192,9 @@ class _PassthroughContextCompiler:
         budget_tokens: int,
         knowledge_sets: tuple[str, ...] = (),
         knowledge_top_k: int = DEFAULT_KNOWLEDGE_TOP_K,
+        agent_id: UUID | None = None,
     ) -> CompiledContext:
-        del knowledge_sets, knowledge_top_k  # 이 passthrough 는 Knowledge 를 모릅니다.
+        del knowledge_sets, knowledge_top_k, agent_id  # 이 passthrough 는 Knowledge 를 모릅니다.
         messages = (Message.system(system_prompt), *conversation)
         return CompiledContext(
             messages=messages, tools=tools, report=ContextReport(budget_tokens=budget_tokens)
@@ -215,7 +221,9 @@ class ExecuteRunUseCase:
         lease_keeper: LeaseKeeper | None = None,
         context_compiler: ContextCompiler | None = None,
         default_context_budget_tokens: int = _DEFAULT_CONTEXT_BUDGET_TOKENS,
+        memory_writer: MemoryWriter | None = None,
     ) -> None:
+        self._memory_writer = memory_writer
         self._store = store
         self._declarations = declarations
         self._gateway = gateway
@@ -424,6 +432,7 @@ class ExecuteRunUseCase:
                     if definition.context_budget_tokens is not None
                     else self._default_context_budget_tokens
                 ),
+                memory_agent_id=(declaration.agent_id if definition.memory_enabled else None),
                 knowledge_sets=tuple(definition.knowledge),
                 knowledge_top_k=(
                     definition.knowledge_top_k
@@ -457,6 +466,7 @@ class ExecuteRunUseCase:
         context_budget_tokens: int,
         knowledge_sets: tuple[str, ...],
         knowledge_top_k: int,
+        memory_agent_id: UUID | None,
         tool_schemas: list[ToolSchema],
         allowed_tools: frozenset[str],
         policy: Policy,
@@ -514,6 +524,7 @@ class ExecuteRunUseCase:
                         budget_tokens=context_budget_tokens,
                         knowledge_sets=knowledge_sets,
                         knowledge_top_k=knowledge_top_k,
+                        agent_id=memory_agent_id,
                     )
                     request = ModelRequest(
                         messages=list(compiled.messages),
@@ -600,18 +611,22 @@ class ExecuteRunUseCase:
                 tasks.append(Task(task_id=task_id, step=step, tool_calls=[]))
                 seq += 1
                 self._publish(run_id, seq, "task.finished", TaskFinishedPayload(task_id=task_id))
-                return _StepOutcome(
-                    finished=self._finalize(
-                        run_id,
-                        local_status,
-                        RunStatus.SUCCEEDED,
-                        seq,
-                        messages,
-                        step,
-                        tasks,
-                        started_at,
-                    )
+                finished = self._finalize(
+                    run_id,
+                    local_status,
+                    RunStatus.SUCCEEDED,
+                    seq,
+                    messages,
+                    step,
+                    tasks,
+                    started_at,
                 )
+                # spec 0004 2.6, P3-4 (c): 종결(`succeeded`)이 **확정된 뒤** 마지막 assistant
+                # 본문을 남깁니다. 종결 전에 쓰면 종결 커밋이 실패해 재개될 때 같은 기억이
+                # 두 번 쌓입니다.
+                if finished == RunStatus.SUCCEEDED and memory_agent_id is not None:
+                    self._remember(run_id, memory_agent_id, response.text)
+                return _StepOutcome(finished=finished)
 
             # 리뷰 C, spec 0002 2.6, 2.8: 허용 집합은 **`definition.tools`** 입니다 —
             # 레지스트리에 등록되어 있어도 정의가 허용하지 않은 도구를 모델이 부르면
@@ -829,6 +844,21 @@ class ExecuteRunUseCase:
         return _StepOutcome(seq=seq)
 
     # -- 시간 예산·lease 유지 ----------------------------------------------------
+
+    def _remember(self, run_id: UUID, agent_id: UUID, content: str) -> None:
+        """spec 0004 2.6, C-5: 마지막 assistant 본문을 그대로 한 건 남깁니다. 본문이 비어
+        있으면 쓰지 않고, 쓰기가 실패해도 Run 을 실패시키지 않습니다 — Memory 는 부산물이라
+        예외를 삼키고 경고만 남깁니다(본문은 로그에 남기지 않습니다)."""
+        if self._memory_writer is None or not content.strip():
+            return
+        try:
+            self._memory_writer.write(agent_id, run_id, content)
+        except Exception as error:
+            _LOGGER.warning(
+                "memory write failed (run_id=%s, error=%s); the run result is unchanged",
+                run_id,
+                type(error).__name__,
+            )
 
     def _remaining_seconds(self, started_at: datetime | None, timeout_seconds: int) -> float:
         """spec 0002 2.8 [편집 예정]: `deadline = started_at + timeout_seconds`, 잔여

@@ -236,6 +236,16 @@ Phase 3 의 선언 두 표입니다(spec 0004 2.8, P3-2a). `knowledge_sets` 는 
 `nomic-embed-text`). 그 전까지 어댑터는 채팅 모델 id 를 `/embeddings` 로 보냈고 그대로면 적재가
 실패합니다(spec 0004 D-3 이 spec 0002 2.5 를 [실질] 개정).
 
+**`agent_memory` 는 Agent 단위입니다**(P3-4). `memory_enabled` 인 Agent 의 Run 이 `succeeded`
+로 종결한 뒤 Executor 가 넘긴 **마지막 assistant 본문 한 건**이 임베딩(`embed_model_id`·
+`embed_dim` 포함)과 함께 적힙니다 — 요약하거나 쪼개지 않습니다(spec 0004 2.6). `run_id` 는
+어느 Run 이 남겼는가이고, Run 없이 쓰인 기억에는 `NULL` 입니다.
+
+읽을 때는 **같은 Agent·같은 임베딩 모델**의 행만 코사인 거리로 비교하고, 동점은
+`created_at DESC, id ASC` 로 깨서 결정적입니다(R-1). 다른 모델로 만든 행은 **조용히
+제외합니다** — 위의 Knowledge 와 다른 점입니다. Knowledge 는 조직이 소유한 사실이라
+재적재를 요구하는 오류로 드러내지만, 기억은 실행 부산물이라 사람에게 요구할 것이 없습니다.
+
 ### PostgreSQL 이미지
 
 Phase 3 부터 `pgvector/pgvector:pg16`(다이제스트 핀)입니다. 이전은 `postgres:16-alpine` 이었고,

@@ -9,8 +9,9 @@ from dataclasses import dataclass, field
 from typing import Literal
 
 SourceName = Literal["system", "conversation", "knowledge", "memory", "tools"]
-"""D-7 의 제거 순서가 참조하는 다섯 소스 이름. v1(P3-1)은 `system`·`conversation`·
-`tools` 세 개만 실제로 채웁니다 — `knowledge`·`memory` 는 P3-3·P3-4 의 범위입니다."""
+"""D-7 의 제거 순서가 참조하는 다섯 소스 이름. `system`·`conversation`·`tools`
+(P3-1), `knowledge`(P3-3), `memory`(P3-4) 모두 실제로 채워집니다. 해당 소스가 비어 있으면
+`source_tokens` 에 나타나지 않습니다."""
 
 
 @dataclass(frozen=True)

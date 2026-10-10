@@ -145,3 +145,28 @@ def test_cancel_requested_at_is_reflected_after_admin_sets_it(
     declaration = reader.declaration(run_id)
     assert declaration is not None
     assert declaration.cancel_requested_at == now
+
+
+def test_declaration_carries_agent_id_of_the_agent_version(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+    data_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0004 2.6 (P3-4): Memory 는 Agent 단위이므로 선언이 `agent_id` 를 싣습니다 —
+    `control.agent_versions.agent_id`, `aether_data` 가 이미 SELECT 할 수 있는 열입니다."""
+    run_id, agent_version_id = _declare_run(admin_connection_factory)
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT agent_id FROM control.agent_versions WHERE id = %s", (agent_version_id,)
+            )
+            row = cur.fetchone()
+            assert row is not None
+            expected_agent_id = row[0]
+    finally:
+        conn.close()
+
+    declaration = PostgresRunDeclarationReader(data_connection_factory).declaration(run_id)
+
+    assert declaration is not None
+    assert declaration.agent_id == expected_agent_id

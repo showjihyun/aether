@@ -387,6 +387,21 @@ class ContextCompileCall:
     budget_tokens: int
     knowledge_sets: tuple[str, ...] = ()
     knowledge_top_k: int = 5
+    agent_id: UUID | None = None
+
+
+class FakeMemoryWriter:
+    """spec 0004 2.6 (P3-4): `MemoryWriter`(outbound) 포트의 fake — 호출을 기록하고,
+    `error` 를 주면 던집니다(쓰기 실패가 Run 을 실패시키지 않는지 보기 위해)."""
+
+    def __init__(self, error: Exception | None = None) -> None:
+        self.calls: list[tuple[UUID, UUID, str]] = []
+        self._error = error
+
+    def write(self, agent_id: UUID, run_id: UUID, content: str) -> None:
+        self.calls.append((agent_id, run_id, content))
+        if self._error is not None:
+            raise self._error
 
 
 class FakeContextCompiler:
@@ -407,6 +422,7 @@ class FakeContextCompiler:
         budget_tokens: int,
         knowledge_sets: tuple[str, ...] = (),
         knowledge_top_k: int = 5,
+        agent_id: UUID | None = None,
     ) -> CompiledContext:
         self.calls.append(
             ContextCompileCall(
@@ -416,6 +432,7 @@ class FakeContextCompiler:
                 budget_tokens=budget_tokens,
                 knowledge_sets=knowledge_sets,
                 knowledge_top_k=knowledge_top_k,
+                agent_id=agent_id,
             )
         )
         messages = (Message.system(system_prompt), *conversation)

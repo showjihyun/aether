@@ -38,6 +38,9 @@ from aether_mcp.adapters.outbound.mcp_client.stdio import StdioMcpClient
 from aether_mcp.application.usecases.call_tool import CallToolUseCase
 from aether_mcp.application.usecases.discover_tools import DiscoverToolsUseCase
 from aether_mcp.domain.tools import McpServerRef, Tool, ToolResult
+from aether_memory.adapters.outbound.memory_store.postgres import PostgresMemoryStore
+from aether_memory.application.usecases.read_agent_memory import ReadAgentMemoryUseCase
+from aether_memory.application.usecases.write_agent_memory import WriteAgentMemoryUseCase
 from aether_policy.adapters.outbound.permission_table.postgres import PostgresPermissionTable
 from aether_policy.application.usecases.judge_tool_call import JudgeToolCallUseCase
 from aether_runtime.adapters.outbound.context_compiler.aether_context import (
@@ -73,6 +76,7 @@ from aether_worker.adapters.inbound.stream.requested_consumer import (
     ensure_group,
 )
 from aether_worker.adapters.outbound.embedder.model_gateway import ModelGatewayEmbedder
+from aether_worker.adapters.outbound.memory.reader import MemoryReaderAdapter
 from aether_worker.adapters.outbound.otel_trace_context import OtelTraceContext
 from aether_worker.adapters.outbound.redis.heartbeat import Heartbeat
 from aether_worker.adapters.outbound.redis.ingestion_status_notifier import (
@@ -306,21 +310,36 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
     를 꽂습니다 — `aether_context` 는 `aether_runtime` 을 import 하지 않으므로
     (AR-3) 이 조립은 여기(worker 의 `main`)에서만 합니다. 꽂지 않으면
     `ExecuteRunUseCase` 의 기본값(`_PassthroughContextCompiler`)이 쓰여
-    Knowledge 를 검색하지 않습니다(R-8·R-9 가 성립하지 않습니다)."""
+    Knowledge 를 검색하지 않습니다(R-8·R-9 가 성립하지 않습니다).
+
+    spec 0004 2.6, R-10 (P3-4): Memory 는 두 자리에 꽂습니다 — 읽기는
+    `MemoryReaderAdapter` 를 거쳐 `CompileContextUseCase` 에, 쓰기는
+    `ExecuteRunUseCase(memory_writer=...)` 에. 둘 중 하나라도 꽂지 않으면 기억이
+    쌓이지 않거나(쓰기) 들어가지 않습니다(읽기)."""
 
     def connect() -> psycopg.Connection:
         return psycopg.connect(settings.psycopg_dsn)
 
-    knowledge_search = PostgresKnowledgeSearch(
-        connect,
-        ModelGatewayEmbedder(
-            _build_model_gateway(settings),
-            model_id=settings.embed_model_id,
-            dim=settings.embed_dim,
-        ),
+    # spec 0004 D-3, 2.6: Knowledge 와 Memory 는 **같은 임베딩 모델**을 씁니다 — 같은
+    # 어댑터 하나를 둘에 꽂습니다(gateway 는 httpx 연결 풀을 들고 있으므로 임베딩용으로
+    # 두 개를 만들지 않습니다). `embed` 밖에 상태가 없어 공유해도 안전합니다.
+    embedder = ModelGatewayEmbedder(
+        _build_model_gateway(settings),
+        model_id=settings.embed_model_id,
+        dim=settings.embed_dim,
     )
+    knowledge_search = PostgresKnowledgeSearch(connect, embedder)
+    # spec 0004 2.6, D-5, R-10 (P3-4): Memory 는 Knowledge 와 같은 임베딩 모델을 쓰지만
+    # 다른 표(`data.agent_memory`)·다른 포트를 지납니다. 읽기는 `aether_context` 의
+    # `MemoryReader` 모양으로 변환해 Compiler 에, 쓰기는 `aether_runtime` 의 `MemoryWriter`
+    # 자리에 `aether_memory` 의 쓰기 유스케이스를 그대로 꽂습니다.
+    memory_store = PostgresMemoryStore(connect)
     context_compiler = AetherContextCompiler(
-        CompileContextUseCase(CharApproxTokenCounter(), knowledge_search)
+        CompileContextUseCase(
+            CharApproxTokenCounter(),
+            knowledge_search,
+            MemoryReaderAdapter(ReadAgentMemoryUseCase(embedder, memory_store)),
+        )
     )
 
     execute_run = ExecuteRunUseCase(
@@ -339,6 +358,7 @@ def _build_production_handler(settings: Settings, client: Redis) -> HandleRunReq
         observation_max_chars=settings.observation_max_chars,
         lease_keeper=ThreadedLeaseKeeper(PostgresRunStateStore(connect)),
         context_compiler=context_compiler,
+        memory_writer=WriteAgentMemoryUseCase(embedder, memory_store),
     )
     return HandleRunRequestedUseCase(execute_run, OtelTraceContext())
 

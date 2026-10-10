@@ -715,6 +715,10 @@
               }
             ],
             "title": "Knowledge Top K"
+          },
+          "memory_enabled": {
+            "type": "boolean",
+            "title": "Memory Enabled"
           }
         },
         "type": "object",
