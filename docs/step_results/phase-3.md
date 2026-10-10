@@ -13,7 +13,7 @@ intent [0004](../../intents/0004-phase-3-context-compiler.md) · spec [0004](../
 | P3-2b | Knowledge 적재 파이프라인 | [p3-2b.md](p3-2b.md) | #120 |
 | P3-3 | 검색 결과를 Context 에 | [p3-3.md](p3-3.md) | #133 |
 | P3-4 | Memory v1 (Knowledge 와 분리) | [p3-4.md](p3-4.md) | #134 |
-| P3-5 | KPI 계측 (Task Success / Context Token) | [p3-5.md](p3-5.md) | — |
+| P3-5 | KPI 계측 (Task Success / Context Token) | [p3-5.md](p3-5.md) | #135 |
 
 plan 이 정한 순서는 P3-2a → P3-1 → P3-2b → P3-3 → P3-4 → P3-5 입니다. **가장 깨질 가능성이 큰 것(PostgreSQL 이미지 교체)을 먼저** 했습니다.
 
