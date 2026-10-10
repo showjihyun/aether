@@ -30,7 +30,7 @@
 
 ## 아직 없는 것
 
-Phase 2 이후의 것 — MCP Gateway·Firewall(`packages/mcp`), Context Engine(`packages/context`·`memory`), Workflow·HITL(`packages/workflow`), Policy(`packages/policy`), 제품 Evaluation(`packages/evaluation`), 그리고 `apps/web` 의 화면. 그 여섯 패키지는 아직 세 층의 빈 껍데기입니다. 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
+Phase 4 이후의 것 — Workflow·HITL(`packages/workflow`), 제품 Evaluation(`packages/evaluation`), 그리고 `apps/web` 의 화면. 그 두 패키지는 아직 세 층의 빈 껍데기입니다. Phase 2·3 이 채운 `packages/{mcp,policy,context,memory}` 는 더 이상 껍데기가 아닙니다. 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
 
 ## 이 파일의 규칙
 
