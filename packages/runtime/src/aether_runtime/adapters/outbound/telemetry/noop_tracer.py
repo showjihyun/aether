@@ -18,5 +18,8 @@ class NoopTracer:
         del name, attributes
         yield
 
+    def set_attributes(self, attributes: Mapping[str, str]) -> None:
+        del attributes
+
     def current_trace_id(self) -> str | None:
         return None

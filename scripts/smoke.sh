@@ -149,6 +149,50 @@ if [ "$TRACE_FOUND" -ne 1 ]; then
   exit 1
 fi
 
+# spec 0004 R-11 (P3-5): trace 가 있다는 것과 그 안에 Context 숫자가 있다는 것은 다른
+# 사실입니다 — 그 trace 의 span 중 `context.tokens.total` 속성을 가진 것이 하나라도
+# 있는지 OTLP JSON 을 파싱해 확인합니다. worker 의 span 은 API 의 span 보다 늦게 내보내질
+# 수 있어 같은 30초 안에서 다시 폴링합니다.
+_trace_has_attribute() {
+  "$HOST_PYTHON" -c '
+import json, sys
+trace_id, key, path = sys.argv[1:4]
+with open(path, encoding="utf-8") as handle:
+    for line in handle:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except ValueError:
+            continue
+        for resource in payload.get("resourceSpans", []):
+            for scope in resource.get("scopeSpans", []):
+                for span in scope.get("spans", []):
+                    if span.get("traceId") != trace_id:
+                        continue
+                    if any(attr.get("key") == key for attr in span.get("attributes", [])):
+                        sys.exit(0)
+sys.exit(1)
+' "$1" "$2" "$3"
+}
+
+echo "smoke: waiting for context.tokens.total on trace ${TRACE_ID}..." >&2
+ATTR_DEADLINE=$((SECONDS + 30))
+ATTR_FOUND=0
+while [ "$SECONDS" -lt "$ATTR_DEADLINE" ]; do
+  if _trace_has_attribute "$TRACE_ID" "context.tokens.total" "${OTEL_DIR}/spans.jsonl"; then
+    ATTR_FOUND=1
+    break
+  fi
+  sleep 1
+done
+
+if [ "$ATTR_FOUND" -ne 1 ]; then
+  echo "smoke: trace ${TRACE_ID} is in ${OTEL_DIR}/spans.jsonl but no span carries context.tokens.total within 30s" >&2
+  exit 1
+fi
+
 # spec 2.8, D-3, C-2: 이번 Phase 에는 감사 조회 API 가 없으므로 "남았는가" 는 이
 # psql 실측이 유일한 확인입니다 — postgres 컨테이너 안에서 자기 자신에게 붙습니다.
 _audit_sql() {

@@ -269,6 +269,12 @@ class InMemoryTracer:
     def current_trace_id(self) -> str | None:
         return self._trace_id
 
+    def set_attributes(self, attributes: Mapping[str, str]) -> None:
+        """spec 0004 R-11: 지금 열려 있는 span 의 속성에 병합합니다. 열린 span 이
+        없으면 조용히 무시합니다(OpenTelemetry 의 invalid span 과 같습니다)."""
+        if self._stack:
+            self._stack[-1].attributes.update(attributes)
+
     @contextmanager
     def span(self, name: str, attributes: Mapping[str, str]) -> Iterator[None]:
         parent = self._stack[-1].name if self._stack else None
@@ -410,8 +416,11 @@ class FakeContextCompiler:
     `system_prompt` 메시지 하나를 붙여 돌려줍니다(예산 트림은 흉내내지 않습니다
     — 그것은 `packages/context` 의 단위 테스트가 증명합니다)."""
 
-    def __init__(self) -> None:
+    def __init__(self, report: ContextReport | None = None) -> None:
+        """`report` 를 주면 `budget_tokens` 와 무관하게 그 보고를 그대로 돌려줍니다
+        (spec 0004 R-11: span 속성이 보고의 숫자에서 오는지 증명하기 위해)."""
         self.calls: list[ContextCompileCall] = []
+        self._report = report
 
     def compile(
         self,
@@ -439,5 +448,7 @@ class FakeContextCompiler:
         return CompiledContext(
             messages=messages,
             tools=tools,
-            report=ContextReport(budget_tokens=budget_tokens, total_tokens=0),
+            report=self._report
+            if self._report is not None
+            else ContextReport(budget_tokens=budget_tokens, total_tokens=0),
         )

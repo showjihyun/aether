@@ -26,3 +26,12 @@ def test_span_propagates_exceptions_from_the_body() -> None:
 
     with pytest.raises(ValueError), tracer.span("run", {}):
         raise ValueError("boom")
+
+
+def test_set_attributes_is_a_no_op_inside_and_outside_a_span() -> None:
+    """spec 0004 R-11 (P3-5): `Tracer.set_attributes` — 아무것도 하지 않고 예외도 없습니다."""
+    tracer = NoopTracer()
+
+    tracer.set_attributes({"context.budget": "1"})
+    with tracer.span("run", {}):
+        tracer.set_attributes({"context.budget": "1"})
