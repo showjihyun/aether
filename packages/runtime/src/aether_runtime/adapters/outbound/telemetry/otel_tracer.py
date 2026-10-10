@@ -38,6 +38,10 @@ class OtelTracer:
         with self._tracer.start_as_current_span(name, attributes=dict(attributes)):
             yield
 
+    def set_attributes(self, attributes: Mapping[str, str]) -> None:
+        # span 밖이면 `get_current_span()` 이 NonRecordingSpan 을 돌려주므로 무시됩니다.
+        trace.get_current_span().set_attributes(dict(attributes))
+
     def current_trace_id(self) -> str | None:
         context = trace.get_current_span().get_span_context()
         if not context.is_valid:

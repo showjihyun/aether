@@ -188,3 +188,25 @@ def test_span_tree_has_no_prompt_or_response_bodies_in_attributes() -> None:
     assert _FINAL_TEXT not in all_values
     assert _REASONING not in all_values
     assert "2+2" not in all_values
+
+
+def test_set_attributes_lands_on_the_current_span_only() -> None:
+    """spec 0004 R-11 (P3-5): 열린 span 에 속성이 병합되고, span 밖에서는 무시됩니다."""
+    provider, exporter = _provider_and_exporter()
+    tracer = OtelTracer(provider)
+
+    tracer.set_attributes({"ignored": "1"})  # span 밖 — 예외 없이 무시
+    with tracer.span("run", {"aether.run_id": "r1"}):
+        with tracer.span("model.complete", {"aether.model.id": "m1"}):
+            tracer.set_attributes({"context.budget": "100"})
+        tracer.set_attributes({"aether.run.status": "succeeded"})
+
+    spans = {span.name: span for span in exporter.get_finished_spans()}
+    assert dict(spans["model.complete"].attributes or {}) == {
+        "aether.model.id": "m1",
+        "context.budget": "100",
+    }
+    assert dict(spans["run"].attributes or {}) == {
+        "aether.run_id": "r1",
+        "aether.run.status": "succeeded",
+    }

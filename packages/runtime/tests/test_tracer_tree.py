@@ -100,6 +100,7 @@ def test_span_tree_is_run_task_model_and_tool_with_string_attributes_and_no_prom
     assert run_span.attributes == {
         "aether.run_id": str(run_id),
         "aether.agent_version_id": str(agent_version_id),
+        "aether.run.status": "succeeded",  # spec 0004 2.7, P3-5: 종결 상태가 닫히기 전에 붙습니다.
     }
 
     task_span = next(span for span in tracer.spans if span.name == "task")
@@ -119,3 +120,14 @@ def test_span_tree_is_run_task_model_and_tool_with_string_attributes_and_no_prom
     assert _PROMPT_INPUT not in all_attribute_values
     assert _FINAL_TEXT not in all_attribute_values
     assert "2+2" not in all_attribute_values
+
+
+def test_in_memory_tracer_set_attributes_merges_into_the_open_span_and_ignores_none() -> None:
+    """spec 0004 R-11 (P3-5): fake 가 포트와 같은 의미 — 열린 span 에 병합, 없으면 무시."""
+    tracer = InMemoryTracer()
+
+    tracer.set_attributes({"orphan": "1"})
+    with tracer.span("run", {"a": "1"}):
+        tracer.set_attributes({"b": "2"})
+
+    assert tracer.spans[0].attributes == {"a": "1", "b": "2"}

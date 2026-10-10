@@ -157,6 +157,24 @@ def _backoff_delay(backoff: Backoff, attempt: int) -> float:
     return float(min(backoff.base_seconds * (2 ** (attempt - 1)), backoff.max_seconds))
 
 
+def _context_attributes(report: ContextReport) -> dict[str, str]:
+    """spec 0004 2.7, R-11, D-11 (P3-5): `ContextReport` 의 숫자를 span 속성으로.
+
+    값은 전부 문자열이고 본문은 없습니다. 보고에 **있는** 소스만 올립니다 — 없는
+    소스에 `"0"` 을 채우면 "없었다" 와 "비용이 0 이었다" 가 같은 값이 됩니다.
+    """
+    attributes = {
+        f"context.tokens.{item.source}": str(item.tokens) for item in report.source_tokens
+    }
+    attributes["context.tokens.total"] = str(report.total_tokens)
+    attributes["context.budget"] = str(report.budget_tokens)
+    for dropped in report.dropped:
+        attributes[f"context.dropped.{dropped.source}"] = str(dropped.tokens)
+    if report.dropped:
+        attributes["context.dropped.sources"] = ",".join(d.source for d in report.dropped)
+    return attributes
+
+
 @dataclass
 class _NoOpLeaseStatus:
     """`LeaseStatus` 포트 값 — 절대 잃지 않습니다."""
@@ -274,7 +292,10 @@ class ExecuteRunUseCase:
                 "aether.agent_version_id": str(declaration.agent_version_id),
             },
         ):
-            return self._execute(run_id, declaration, saved)
+            status = self._execute(run_id, declaration, saved)
+            # spec 0004 2.7, R-11 (P3-5): Task Success 의 원천 — 종결 상태의 값을 그대로 씁니다.
+            self._tracer.set_attributes({"aether.run.status": status.value})
+            return status
 
     # -- 실행 -----------------------------------------------------------------
 
@@ -526,6 +547,7 @@ class ExecuteRunUseCase:
                         knowledge_top_k=knowledge_top_k,
                         agent_id=memory_agent_id,
                     )
+                    self._tracer.set_attributes(_context_attributes(compiled.report))
                     request = ModelRequest(
                         messages=list(compiled.messages),
                         tools=list(compiled.tools),
