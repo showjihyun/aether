@@ -388,7 +388,7 @@ plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 
 | P3-1 | Context Compiler v1 (예산과 조립 규칙) | P1-4 | — | 완료 (PR #118) |
 | P3-2a | pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 분리 | P0-8, P1-3 | Q7 닫힘(D-1) | 완료 (PR #117) |
 | P3-2b | Knowledge 적재: Connector → Indexer → Embedding → Vector DB | P3-2a | — | 완료 (PR #120, 반려 1회 뒤 변이 증거로 재판정) |
-| P3-3 | 검색 결과를 Context 에 | P3-1, P3-2b | — | 진행 중 |
+| P3-3 | 검색 결과를 Context 에 | P3-1, P3-2b | — | 완료 |
 | P3-4 | Memory v1 (Knowledge 와 분리) | P3-1, P1-5 | — | 대기 |
 | P3-5 | KPI 계측: Task Success / Context Token | P3-3, P1-8 | — | 대기 |
 
