@@ -385,6 +385,8 @@ class ContextCompileCall:
     conversation: tuple[Message, ...]
     tools: tuple[ToolSchema, ...]
     budget_tokens: int
+    knowledge_sets: tuple[str, ...] = ()
+    knowledge_top_k: int = 5
 
 
 class FakeContextCompiler:
@@ -403,6 +405,8 @@ class FakeContextCompiler:
         conversation: tuple[Message, ...],
         tools: tuple[ToolSchema, ...],
         budget_tokens: int,
+        knowledge_sets: tuple[str, ...] = (),
+        knowledge_top_k: int = 5,
     ) -> CompiledContext:
         self.calls.append(
             ContextCompileCall(
@@ -410,6 +414,8 @@ class FakeContextCompiler:
                 conversation=conversation,
                 tools=tools,
                 budget_tokens=budget_tokens,
+                knowledge_sets=knowledge_sets,
+                knowledge_top_k=knowledge_top_k,
             )
         )
         messages = (Message.system(system_prompt), *conversation)

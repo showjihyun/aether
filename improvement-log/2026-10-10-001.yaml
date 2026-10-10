@@ -1,0 +1,28 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-10-001
+date: 2026-10-10
+status: candidate
+symptom: 한 Run 안에서 Knowledge 를 여러 번 검색한다 — Context 조립이 모델 호출마다 일어나고 조립할 때마다 질의를 임베딩해 pgvector 를 조회한다. 질의는 `conversation` 의 마지막 user 메시지이고 Run 중에 바뀌지 않으므로 두 번째 이후의 검색은 같은 질의에 같은 결과를 돌려준다
+evidence: |
+  2026-10-10 P3-3. `ExecuteRunUseCase._run_step` 이 모델을 부르기 전마다
+  `ContextCompiler.compile` 을 부르고(spec R-3), `CompileContextUseCase._search_knowledge` 가
+  그 안에서 `KnowledgeSearch.search` 를 부른다. 도구를 쓰는 Run 은 모델을 여러 번 부르므로
+  호출 수는 (모델 호출 수)배다.
+  검색 1회의 비용은 임베딩 왕복 1회 + pgvector 조회 1회다. 임베딩 왕복의 실제 지연은
+  아직 미측정이다 — 로컬 LLM 확인이 사람 몫으로 남아 있다(spec D-13, 2026-10-09-002 와 같은 전제).
+  질의가 바뀌지 않는다는 근거: Run 중에 `conversation` 에 더해지는 것은 assistant·tool
+  메시지이고 user 메시지는 Run 시작 시의 입력뿐이다(spec 0002 2.6).
+root_cause: 조립과 검색이 한 함수 안에 있다. 조립은 매 호출 필요하지만 검색은 질의가 바뀔 때만 필요하다 — 둘의 수명이 다른데 같은 자리에 있다
+fix: 이번에는 범위 안으로 받아들이고 기록만 했다. 고치는 것은 측정 뒤에 판단한다
+recurrence_risk: medium
+harness_element: HE-6
+proposed_harness_change: "(사람 결정) 먼저 **측정**한다 — 도구를 쓰는 Run 1회에서 `KnowledgeSearch.search` 호출 수와 그 합계 지연이 Run 전체에서 차지하는 비중을 본다(P3-5 의 span 속성이 그 숫자를 싣는 자리다). 비중이 크면 질의가 같은 동안 결과를 재사용한다 — 자리는 둘 중 하나다. (1) `ExecuteRunUseCase` 가 Run 단위로 한 번 검색해 조립에 넘긴다 — 조립이 순수해지지만 포트 모양이 바뀐다. (2) 조립이 질의 문자열로 메모한다 — 포트는 그대로지만 캐시의 수명을 누가 소유하는지가 모호해진다. **측정 없이 (2)를 넣지 않는다** — 보이지 않는 캐시는 결정성 디버깅을 어렵게 한다"
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  대상: 도구를 2회 이상 부르는 Run 1회(fake 모델·fake 검색).
+  기준: `KnowledgeSearch.search` 호출 수가 모델 호출 수가 아니라 1 이다.
+  같은 Run 의 Context 조립 결과는 고치기 전과 **같아야 한다**(R-1 — 캐시가 내용을 바꾸지 않는다).
+  질의가 바뀌는 경우(후속 Phase 에서 Run 중 user 입력이 생긴다면)에는 다시 검색한다.
+owner: unassigned
+expires: 2027-01-10

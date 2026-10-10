@@ -14,16 +14,29 @@ from aether_context.domain.message import ContextMessage
 from aether_context.domain.report import ContextReport
 from aether_context.domain.tool_schema import ContextToolSchema
 
+_DEFAULT_KNOWLEDGE_TOP_K = 5
+"""spec D-2, D-5: `AgentDefinition.knowledge_top_k` 가 `None` 일 때 쓰는 기본값 —
+`aether_context.application.ports.outbound.knowledge_store.DEFAULT_TOP_K` 와
+같은 숫자입니다. `aether_runtime` 의 `context_compiler.DEFAULT_KNOWLEDGE_TOP_K` 와도
+같아야 합니다 — AR-3 때문에 import 하지 않고 숫자만 맞춥니다."""
+
 
 @dataclass(frozen=True)
 class CompileContextRequest:
     """조립할 소스 전부와 예산. `conversation`·`tools` 는 호출자가 건넨 **순서
-    그대로** 쓰입니다 — 결정성(R-1, D-12)을 위해 이 안에서 재정렬하지 않습니다."""
+    그대로** 쓰입니다 — 결정성(R-1, D-12)을 위해 이 안에서 재정렬하지 않습니다.
+
+    `knowledge_sets`(P3-3, spec D-5): 바인딩된 Knowledge Set **이름** 목록 — 비어
+    있으면(기본값) 검색하지 않습니다. 질의는 `conversation` 의 마지막
+    `role == "user"` 메시지입니다(spec 2.5) — 그 메시지가 없으면 역시 검색하지
+    않습니다."""
 
     system_prompt: str
     budget_tokens: int
     conversation: tuple[ContextMessage, ...] = field(default_factory=tuple)
     tools: tuple[ContextToolSchema, ...] = field(default_factory=tuple)
+    knowledge_sets: tuple[str, ...] = field(default_factory=tuple)
+    knowledge_top_k: int = _DEFAULT_KNOWLEDGE_TOP_K
 
 
 @dataclass(frozen=True)

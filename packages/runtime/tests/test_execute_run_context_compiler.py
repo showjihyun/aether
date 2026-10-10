@@ -32,7 +32,11 @@ _OWNER = "worker-test"
 _SYSTEM_PROMPT = "You are a context-compiled test agent."
 
 
-def _definition(context_budget_tokens: int | None = None) -> dict[str, Any]:
+def _definition(
+    context_budget_tokens: int | None = None,
+    knowledge: list[str] | None = None,
+    knowledge_top_k: int | None = None,
+) -> dict[str, Any]:
     definition: dict[str, Any] = {
         "schema_version": 1,
         "system_prompt": _SYSTEM_PROMPT,
@@ -42,11 +46,18 @@ def _definition(context_budget_tokens: int | None = None) -> dict[str, Any]:
     }
     if context_budget_tokens is not None:
         definition["context_budget_tokens"] = context_budget_tokens
+    if knowledge is not None:
+        definition["knowledge"] = knowledge
+    if knowledge_top_k is not None:
+        definition["knowledge_top_k"] = knowledge_top_k
     return definition
 
 
 def _setup(
-    *, context_budget_tokens: int | None = None
+    *,
+    context_budget_tokens: int | None = None,
+    knowledge: list[str] | None = None,
+    knowledge_top_k: int | None = None,
 ) -> tuple[ExecuteRunUseCase, FakeContextCompiler, FakeModelGateway, UUID]:
     clock = FakeClock()
     store = FakeRunStateStore(clock)
@@ -57,7 +68,11 @@ def _setup(
     declarations[run_id] = RunDeclaration(
         run_id=run_id, agent_version_id=agent_version_id, input="do the thing"
     )
-    definitions[agent_version_id] = _definition(context_budget_tokens=context_budget_tokens)
+    definitions[agent_version_id] = _definition(
+        context_budget_tokens=context_budget_tokens,
+        knowledge=knowledge,
+        knowledge_top_k=knowledge_top_k,
+    )
     reader = FakeRunDeclarationReader(declarations, definitions)
     events = FakeEventSink()
     notifier = FakeStatusNotifier()
@@ -108,3 +123,32 @@ def test_execute_run_uses_default_budget_when_definition_has_none() -> None:
     usecase(run_id)
 
     assert compiler.calls[0].budget_tokens == 8192
+
+
+def test_execute_run_passes_definition_knowledge_and_top_k_to_compiler() -> None:
+    """spec 0004 D-5 (P3-3): `definition.knowledge`·`knowledge_top_k` 가 그대로
+    `ContextCompiler.compile` 에 건네집니다 — Executor 가 직접 검색하지 않고
+    포트를 지납니다(R-3 과 같은 경계)."""
+    usecase, compiler, _gateway, run_id = _setup(knowledge=["docs", "faq"], knowledge_top_k=3)
+
+    usecase(run_id)
+
+    assert compiler.calls[0].knowledge_sets == ("docs", "faq")
+    assert compiler.calls[0].knowledge_top_k == 3
+
+
+def test_execute_run_uses_default_knowledge_top_k_when_definition_has_none() -> None:
+    """spec D-5: `knowledge_top_k` 가 `None` 이면 `KnowledgeStore.DEFAULT_TOP_K`(5)."""
+    usecase, compiler, _gateway, run_id = _setup(knowledge=["docs"], knowledge_top_k=None)
+
+    usecase(run_id)
+
+    assert compiler.calls[0].knowledge_top_k == 5
+
+
+def test_execute_run_passes_empty_knowledge_sets_when_definition_has_none() -> None:
+    usecase, compiler, _gateway, run_id = _setup()
+
+    usecase(run_id)
+
+    assert compiler.calls[0].knowledge_sets == ()

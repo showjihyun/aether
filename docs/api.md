@@ -39,6 +39,9 @@
   "model": { "id": null },
   "tools": ["clock", "calculator"],
   "mcp_servers": [{ "name": "builtin", "transport": "stdio", "ref": "builtin" }],
+  "context_budget_tokens": null,
+  "knowledge": ["handbook"],
+  "knowledge_top_k": null,
   "policy": {
     "timeout_seconds": 120,
     "max_steps": 8,
@@ -56,6 +59,9 @@
 | `model.id` | 문자열 또는 `null`(배포 설정 `AETHER_MODEL_ID`). 어댑터 종류·thinking 은 정의가 아니라 배포 설정 |
 | `tools` | 중복 없음. **이름의 존재 여부는 생성 시 검증하지 않습니다**(spec 0003 D-16) — 도구는 Discovery 에서 오고 api 는 생성 시점에 어떤 MCP Server 가 무엇을 내놓는지 알 수 없습니다. 없는 이름은 Run 시점에 `ToolNotFound` 로 실패하고 감사에 남습니다 |
 | `mcp_servers` | 목록, 기본 `[]`. 각 항목은 `{ name, transport: "stdio"｜"http", ref }` 입니다. **자격증명이나 절대 URL 을 넣지 않습니다** — `ref` 는 배포 설정 `AETHER_MCP_SERVERS` 가 실제 명령·URL 로 푸는 키입니다(spec 0003 2.6·2.9, D-2). 바인딩 변경은 `definition` 변경이므로 기존 `PUT /agents/{id}` 가 그대로 새 Version 을 만듭니다. 빈 목록이면 Run 은 도구 없이 실행됩니다 |
+| `context_budget_tokens` | 정수(≥1) 또는 `null`(기본). Context Compiler 가 조립에 쓰는 토큰 예산입니다. `null` 이면 배포 설정 `AETHER_CONTEXT_BUDGET_TOKENS`(기본 8192)를 씁니다 — 모델별 한계가 아니라 **보수적인 고정값**입니다(spec 0004 2.2, D-5) |
+| `knowledge` | 이름 목록, 기본 `[]`. 이 Version 이 검색할 Knowledge Set 의 **이름**입니다. 중복 없음. **존재 여부는 생성 시 검증하지 않습니다**(`tools` 와 같은 이유) — 없는 이름은 Run 시점에 조용히 0건이고, 바인딩되지 않은 집합은 검색되지 않습니다. 바인딩 변경은 `definition` 변경이므로 기존 `PUT /agents/{id}` 가 새 Version 을 만듭니다(spec 0004 D-5, R-9) |
+| `knowledge_top_k` | 정수(≥1) 또는 `null`(기본 5). 검색 상위 k 입니다(spec 0004 D-2, D-5) |
 | `policy` | `timeout_seconds` 1~3600, `max_steps` 1~64, `model_retries`·`tool_retries` 0~10, `backoff.base_seconds` > 0, `max_seconds ≥ base_seconds` |
 
 ## 4. Run (P1-5b)

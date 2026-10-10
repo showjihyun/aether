@@ -52,3 +52,15 @@ class SearchResult:
     chunk_index: int
     content: str
     score: float
+
+
+def render_knowledge_block(result: SearchResult) -> str:
+    """spec 2.5, D-8: `SearchResult` 하나를 전용 블록으로 렌더링합니다 — `aether_runtime.
+    domain.observation.render_observation` 과 같은 모양(표지 `trust=untrusted` +
+    출처). `CompileContextUseCase` 가 이 문자열을 system·conversation 과 **분리된**
+    독립 메시지 하나로 넣습니다 — system 메시지에 이어 붙이지 않습니다(R-8)."""
+    return (
+        f"[knowledge source={result.source_path} chunk={result.chunk_index} trust=untrusted]"
+        f"{result.content}"
+        "[/knowledge]"
+    )

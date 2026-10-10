@@ -23,6 +23,7 @@ from aether_context.adapters.outbound.knowledge_store.postgres import PostgresKn
 from aether_context.application.ports.inbound.ingest_knowledge import IngestKnowledgeRequest
 from aether_context.application.ports.outbound.knowledge_store import EmbeddingMismatch
 from aether_context.application.usecases.ingest_knowledge import IngestKnowledgeUseCase
+from aether_context.domain.knowledge import EmbeddedChunk
 
 pytestmark = pytest.mark.integration
 
@@ -173,4 +174,68 @@ def test_search_with_mismatched_model_or_dim_requires_reingestion(
             [0.0] * _EMBED_DIM,
             embed_model_id="a-different-model",
             embed_dim=_EMBED_DIM,
+        )
+
+
+def test_search_with_tied_distance_orders_deterministically_by_source_path_and_chunk_index(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+    data_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec R-1 (2026-10-09 실측 결함): `ORDER BY distance ASC` 뿐이면 거리가 같은
+    청크 둘의 순서가 PostgreSQL 의 물리적 저장 순서에 달려 있어 "같은 입력에 같은
+    출력"(R-1)이 구조적으로 깨집니다. **같은 임베딩**을 가진 청크 둘(`z-doc.txt`
+    청크 하나, `a-doc.txt` 청크 하나 — `source_path` 알파벳 역순으로 insert)을
+    넣어, 거리가 완전히 같을 때도 순서가 `source_path`(그리고 `chunk_index`)로
+    고정되는지 봅니다."""
+    admin_conn = admin_connection_factory()
+    try:
+        knowledge_set_id = _insert_knowledge_set(admin_conn, f"set-{uuid.uuid4()}")
+        ingestion_id = _insert_ingestion(admin_conn, knowledge_set_id, "tie-break-fixture")
+    finally:
+        admin_conn.close()
+
+    tied_embedding = tuple([1.0] + [0.0] * (_EMBED_DIM - 1))
+    store = PostgresKnowledgeStore(data_connection_factory)
+    # alphabetically-later source_path 를 먼저 insert 합니다 — 물리적 저장 순서가
+    # source_path 순서와 일치하면 이 결함을 재현하지 못하므로, 역순으로 넣습니다.
+    store.replace_chunks(
+        knowledge_set_id,
+        ingestion_id,
+        (
+            EmbeddedChunk(
+                source_path="z-doc.txt",
+                chunk_index=0,
+                content="z content",
+                embedding=tied_embedding,
+                embed_model_id=_EMBED_MODEL_ID,
+                embed_dim=_EMBED_DIM,
+            ),
+            EmbeddedChunk(
+                source_path="a-doc.txt",
+                chunk_index=0,
+                content="a content",
+                embedding=tied_embedding,
+                embed_model_id=_EMBED_MODEL_ID,
+                embed_dim=_EMBED_DIM,
+            ),
+        ),
+    )
+
+    results = [
+        store.search(
+            (knowledge_set_id,),
+            list(tied_embedding),
+            embed_model_id=_EMBED_MODEL_ID,
+            embed_dim=_EMBED_DIM,
+            top_k=5,
+        )
+        for _ in range(5)
+    ]
+    first = results[0]
+    assert len(first) == 2
+    assert first[0].source_path == "a-doc.txt"
+    assert first[1].source_path == "z-doc.txt"
+    for other in results[1:]:
+        assert tuple((r.source_path, r.chunk_index) for r in other) == tuple(
+            (r.source_path, r.chunk_index) for r in first
         )

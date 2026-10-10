@@ -58,6 +58,7 @@ from pydantic import BaseModel, ValidationError
 
 from aether_runtime.application.ports.outbound.clock import Clock
 from aether_runtime.application.ports.outbound.context_compiler import (
+    DEFAULT_KNOWLEDGE_TOP_K,
     CompiledContext,
     ContextCompiler,
     ContextReport,
@@ -184,7 +185,10 @@ class _PassthroughContextCompiler:
         conversation: tuple[Message, ...],
         tools: tuple[ToolSchema, ...],
         budget_tokens: int,
+        knowledge_sets: tuple[str, ...] = (),
+        knowledge_top_k: int = DEFAULT_KNOWLEDGE_TOP_K,
     ) -> CompiledContext:
+        del knowledge_sets, knowledge_top_k  # 이 passthrough 는 Knowledge 를 모릅니다.
         messages = (Message.system(system_prompt), *conversation)
         return CompiledContext(
             messages=messages, tools=tools, report=ContextReport(budget_tokens=budget_tokens)
@@ -420,6 +424,12 @@ class ExecuteRunUseCase:
                     if definition.context_budget_tokens is not None
                     else self._default_context_budget_tokens
                 ),
+                knowledge_sets=tuple(definition.knowledge),
+                knowledge_top_k=(
+                    definition.knowledge_top_k
+                    if definition.knowledge_top_k is not None
+                    else DEFAULT_KNOWLEDGE_TOP_K
+                ),
                 tool_schemas=tool_schemas,
                 allowed_tools=frozenset(definition.tools),
                 policy=definition.policy,
@@ -445,6 +455,8 @@ class ExecuteRunUseCase:
         model_id: str | None,
         system_prompt: str,
         context_budget_tokens: int,
+        knowledge_sets: tuple[str, ...],
+        knowledge_top_k: int,
         tool_schemas: list[ToolSchema],
         allowed_tools: frozenset[str],
         policy: Policy,
@@ -500,6 +512,8 @@ class ExecuteRunUseCase:
                         conversation=tuple(messages),
                         tools=tuple(tool_schemas),
                         budget_tokens=context_budget_tokens,
+                        knowledge_sets=knowledge_sets,
+                        knowledge_top_k=knowledge_top_k,
                     )
                     request = ModelRequest(
                         messages=list(compiled.messages),

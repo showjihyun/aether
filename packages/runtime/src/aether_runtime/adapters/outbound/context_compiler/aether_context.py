@@ -22,6 +22,7 @@ from aether_context.domain.report import ContextReport as AetherContextReport
 from aether_context.domain.tool_schema import ContextToolSchema
 
 from aether_runtime.application.ports.outbound.context_compiler import (
+    DEFAULT_KNOWLEDGE_TOP_K,
     CompiledContext,
     ContextDrop,
     ContextReport,
@@ -79,12 +80,16 @@ class AetherContextCompiler:
         conversation: tuple[Message, ...],
         tools: tuple[ToolSchema, ...],
         budget_tokens: int,
+        knowledge_sets: tuple[str, ...] = (),
+        knowledge_top_k: int = DEFAULT_KNOWLEDGE_TOP_K,
     ) -> CompiledContext:
         request = CompileContextRequest(
             system_prompt=system_prompt,
             budget_tokens=budget_tokens,
             conversation=tuple(_to_context_message(m) for m in conversation),
             tools=tuple(_to_context_tool(t) for t in tools),
+            knowledge_sets=knowledge_sets,
+            knowledge_top_k=knowledge_top_k,
         )
         result = self._compile_context(request)
         return CompiledContext(
