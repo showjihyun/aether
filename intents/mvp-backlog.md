@@ -377,7 +377,7 @@ plan 0003 리뷰로 P2-2 → **P2-2a·P2-2b** 로 분할했고(범위의 합은 
 
 ## Phase 3 — Context Compiler / RAG
 
-Intent: [0004](0004-phase-3-context-compiler.md) (승인됨 2026-10-05). Spec: [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05 — D-1 ~ D-14 가 공통 결정입니다). Plan: [../plans/0004-phase-3-context-compiler.md](../plans/0004-phase-3-context-compiler.md) (**승인 대기**). 기간: Week 9~12.
+Intent: [0004](0004-phase-3-context-compiler.md) (승인됨 2026-10-05). Spec: [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05 — D-1 ~ D-14 가 공통 결정입니다). Plan: [../plans/0004-phase-3-context-compiler.md](../plans/0004-phase-3-context-compiler.md) (승인됨 2026-10-06, 개정 1). 기간: Week 9~12.
 
 plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 불변), 순서는 plan 이 소유합니다 — **P3-2a(pgvector 이미지 교체·마이그레이션·임베딩 모델 분리)가 1번**입니다. 깨질 가능성이 가장 큰 것이고, 거기서 깨지면 뒤 단위 전부가 멈춥니다(spec 0004 C-1).
 
@@ -385,10 +385,10 @@ plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| P3-1 | Context Compiler v1 (예산과 조립 규칙) | P1-4 | — | 대기 |
-| P3-2a | pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 분리 | P0-8, P1-3 | Q7 닫힘(D-1) | 대기 |
-| P3-2b | Knowledge 적재: Connector → Indexer → Embedding → Vector DB | P3-2a | — | 대기 |
-| P3-3 | 검색 결과를 Context 에 | P3-1, P3-2b | — | 대기 |
+| P3-1 | Context Compiler v1 (예산과 조립 규칙) | P1-4 | — | 완료 (PR #118) |
+| P3-2a | pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 분리 | P0-8, P1-3 | Q7 닫힘(D-1) | 완료 (PR #117) |
+| P3-2b | Knowledge 적재: Connector → Indexer → Embedding → Vector DB | P3-2a | — | 완료 (PR #120, 반려 1회 뒤 변이 증거로 재판정) |
+| P3-3 | 검색 결과를 Context 에 | P3-1, P3-2b | — | 진행 중 |
 | P3-4 | Memory v1 (Knowledge 와 분리) | P3-1, P1-5 | — | 대기 |
 | P3-5 | KPI 계측: Task Success / Context Token | P3-3, P1-8 | — | 대기 |
 
