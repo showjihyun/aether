@@ -14,20 +14,7 @@ from aether_context.domain.knowledge import SearchResult
 from aether_context.domain.message import ContextMessage
 from aether_context.domain.tool_schema import ContextToolSchema
 
-
-class FakeKnowledgeSearch:
-    """`KnowledgeSearch`(outbound) 포트의 결정적 fake — 호출을 기록하고 미리
-    준비된 결과를 그대로 돌려줍니다(네트워크·DB 없음, AR-9)."""
-
-    def __init__(self, results: tuple[SearchResult, ...] = ()) -> None:
-        self.results = results
-        self.calls: list[tuple[tuple[str, ...], str, int]] = []
-
-    def search(
-        self, set_names: tuple[str, ...], query: str, *, top_k: int
-    ) -> tuple[SearchResult, ...]:
-        self.calls.append((set_names, query, top_k))
-        return self.results
+from tests.support.context_fakes import FakeKnowledgeSearch
 
 
 def _counter() -> CharApproxTokenCounter:

@@ -30,9 +30,10 @@ class PostgresRunDeclarationReader:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, agent_version_id, input, cancel_requested_at
-                FROM control.runs
-                WHERE id = %s
+                SELECT r.id, r.agent_version_id, r.input, r.cancel_requested_at, v.agent_id
+                FROM control.runs r
+                JOIN control.agent_versions v ON v.id = r.agent_version_id
+                WHERE r.id = %s
                 """,
                 (run_id,),
             )
@@ -44,6 +45,7 @@ class PostgresRunDeclarationReader:
             agent_version_id=row[1],
             input=row[2],
             cancel_requested_at=row[3],
+            agent_id=row[4],
         )
 
     def definition(self, agent_version_id: UUID) -> dict[str, Any]:

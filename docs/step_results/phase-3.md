@@ -11,8 +11,8 @@ intent [0004](../../intents/0004-phase-3-context-compiler.md) · spec [0004](../
 | P3-2a | pgvector 교체 · 마이그레이션 0004 · 임베딩 모델 분리 | [p3-2a.md](p3-2a.md) | #117 |
 | P3-1 | Context Compiler v1 (예산과 조립 규칙) | [p3-1.md](p3-1.md) | #118 |
 | P3-2b | Knowledge 적재 파이프라인 | [p3-2b.md](p3-2b.md) | #120 |
-| P3-3 | 검색 결과를 Context 에 | [p3-3.md](p3-3.md) | — |
-| P3-4 | Memory v1 (Knowledge 와 분리) | — | 대기 |
+| P3-3 | 검색 결과를 Context 에 | [p3-3.md](p3-3.md) | #133 |
+| P3-4 | Memory v1 (Knowledge 와 분리) | [p3-4.md](p3-4.md) | #134 |
 | P3-5 | KPI 계측 (Task Success / Context Token) | — | 대기 |
 
 plan 이 정한 순서는 P3-2a → P3-1 → P3-2b → P3-3 → P3-4 → P3-5 입니다. **가장 깨질 가능성이 큰 것(PostgreSQL 이미지 교체)을 먼저** 했습니다.

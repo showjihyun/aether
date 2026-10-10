@@ -22,6 +22,7 @@ class RunDeclaration(BaseModel):
     run_id: UUID
     agent_version_id: UUID
     input: str
+    agent_id: UUID | None = None
     cancel_requested_at: datetime | None = None
 
 

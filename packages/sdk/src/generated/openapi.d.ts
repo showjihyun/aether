@@ -221,6 +221,8 @@ export interface components {
             knowledge?: string[];
             /** Knowledge Top K */
             knowledge_top_k?: number | null;
+            /** Memory Enabled */
+            memory_enabled?: boolean;
         };
         /**
          * AgentDetailResponse

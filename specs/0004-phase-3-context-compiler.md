@@ -88,6 +88,8 @@ Run 이 종결할 때 남길 것이 있으면 `data.agent_memory` 에 적습니�
 
 무엇을 남길지는 v1 에서 **Executor 가 명시적으로 넘긴 것만** 입니다 — 자동 요약·자동 승격은 Non-goal 입니다.
 
+**트리거와 내용(개정 6).** `AgentDefinition.memory_enabled`(기본 거짓)가 참이고 Run 이 `succeeded` 로 **종결된 뒤**, Executor 가 **마지막 assistant 메시지의 본문 그대로** 한 건을 넘깁니다. 본문이 비어 있으면 넘기지 않습니다. 쓰기 실패는 Run 의 결과를 바꾸지 않습니다 — Memory 는 부산물이고, 경고에 본문을 남기지 않습니다(C-5, Trust). `memory_enabled` 는 **읽기도** 막습니다 — 끈 Agent 는 예전 기억이 있어도 읽지 않습니다. 읽기의 상위 k 기본값은 3 이고, 다른 임베딩 모델로 만든 기억은 D-9 의 오류가 아니라 **조용한 제외**입니다(재적재할 원본이 없습니다).
+
 ### 2.7 KPI 계측 (P3-5)
 
 `ContextReport`(2.3)의 숫자를 span 속성으로 올립니다 — `context.tokens.*`, `context.budget`, `context.dropped.*`. Task Success 는 Run 의 종결 상태에서 옵니다. 집계 쿼리 하나를 `docs/` 에 예시로 둡니다. **이 숫자를 단일 목표로 주지 않습니다**(EI-3 제품판, intent Non-goals).
@@ -190,5 +192,6 @@ R-7(오프라인 적재 → 검색)은 **P3-3 이후에 `smoke` 에 들어갑니
 
 | 개정 | 내용 |
 | --- | --- |
+| 개정 6 | 2026-10-10. **2.6 의 트리거를 구체화했습니다** — "Run 이 종결할 때 남길 것이 있으면" 과 "Executor 가 명시적으로 넘긴 것만" 은 구현마다 다르게 읽히고, 다르게 읽히는 것은 테스트할 수 없습니다. P3-4 를 시작하기 전에 주 세션이 `memory_enabled` ∧ `succeeded` ∧ "마지막 assistant 본문 그대로" 로 좁혔고, 구현과 테스트가 그것을 고정했습니다. 실행 중에 나온 해석 하나도 함께 적습니다 — `memory_enabled` 가 **읽기도** 막습니다 |
 | 개정 5 | 2026-10-09. **P3-2b 실행이 찾은 구멍 하나와 표기 둘** — (1) 2.4 의 "진행 상태" 가 `control.knowledge_ingestions` 라고만 적고 **누가 쓰는지** 적지 않았습니다. P3-2a 의 GRANT 가 `aether_data` 에 SELECT 만 주므로 worker 는 그 표에 쓸 수 없고, 상태를 api 로 되돌리는 스트림이 구조적으로 필요합니다 — 실행자가 그것을 만들고 근거를 신고했고 받아들였습니다. (2) 2.9 의 `_OVERLAP` 축약을 정식 이름 `AETHER_KNOWLEDGE_CHUNK_OVERLAP_CHARS` 로 고쳤습니다. (3) R-7 의 smoke 시나리오가 P3-3 이후인 이유를 2.9.1 로 적었습니다 |
 | 초안 | 2026-10-05. intent 0004 의 열린 질문 6건을 D-1 ~ D-7·D-9 로 고정했습니다. 외부 사실 확인에서 나온 것 둘 — pgvector 이미지에 `pg16` 태그가 있고(D-1), Ollama 의 OpenAI 호환 `/v1/embeddings` 는 **전용 임베딩 모델**을 요구합니다(D-3, 지금 어댑터는 채팅 모델 id 를 보냅니다). spec 0002 2.5 를 D-3 으로 [실질] 개정합니다 |

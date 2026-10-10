@@ -42,6 +42,7 @@
   "context_budget_tokens": null,
   "knowledge": ["handbook"],
   "knowledge_top_k": null,
+  "memory_enabled": false,
   "policy": {
     "timeout_seconds": 120,
     "max_steps": 8,
@@ -62,6 +63,7 @@
 | `context_budget_tokens` | 정수(≥1) 또는 `null`(기본). Context Compiler 가 조립에 쓰는 토큰 예산입니다. `null` 이면 배포 설정 `AETHER_CONTEXT_BUDGET_TOKENS`(기본 8192)를 씁니다 — 모델별 한계가 아니라 **보수적인 고정값**입니다(spec 0004 2.2, D-5) |
 | `knowledge` | 이름 목록, 기본 `[]`. 이 Version 이 검색할 Knowledge Set 의 **이름**입니다. 중복 없음. **존재 여부는 생성 시 검증하지 않습니다**(`tools` 와 같은 이유) — 없는 이름은 Run 시점에 조용히 0건이고, 바인딩되지 않은 집합은 검색되지 않습니다. 바인딩 변경은 `definition` 변경이므로 기존 `PUT /agents/{id}` 가 새 Version 을 만듭니다(spec 0004 D-5, R-9) |
 | `knowledge_top_k` | 정수(≥1) 또는 `null`(기본 5). 검색 상위 k 입니다(spec 0004 D-2, D-5) |
+| `memory_enabled` | `true`｜`false`(기본 `false`). 켜면 Run 이 `succeeded` 로 종결할 때 **마지막 assistant 메시지 본문 그대로** 한 건을 이 Agent 의 Memory 로 남기고, 다음 Run 의 Context 에 `verified=false` 표지를 단 **독립 메시지**로 들어갑니다(spec 0004 2.6, D-8, R-10). 요약·분할·자동 승격은 없습니다. 꺼진 Agent 는 **기록도 읽기도** 하지 않습니다 — 예전에 쌓인 기억이 있어도 읽지 않습니다. 기록 실패는 Run 을 실패시키지 않습니다(부산물) |
 | `policy` | `timeout_seconds` 1~3600, `max_steps` 1~64, `model_retries`·`tool_retries` 0~10, `backoff.base_seconds` > 0, `max_seconds ≥ base_seconds` |
 
 ## 4. Run (P1-5b)

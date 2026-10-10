@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Protocol
+from uuid import UUID
 
 from aether_context.domain.message import ContextMessage
 from aether_context.domain.report import ContextReport
@@ -19,6 +20,9 @@ _DEFAULT_KNOWLEDGE_TOP_K = 5
 `aether_context.application.ports.outbound.knowledge_store.DEFAULT_TOP_K` 와
 같은 숫자입니다. `aether_runtime` 의 `context_compiler.DEFAULT_KNOWLEDGE_TOP_K` 와도
 같아야 합니다 — AR-3 때문에 import 하지 않고 숫자만 맞춥니다."""
+
+_DEFAULT_MEMORY_TOP_K = 3
+"""spec 2.6 (P3-4): Memory 읽기의 상위 k 기본값. runtime 이 따로 지정하지 않으면 이 숫자."""
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,8 @@ class CompileContextRequest:
     tools: tuple[ContextToolSchema, ...] = field(default_factory=tuple)
     knowledge_sets: tuple[str, ...] = field(default_factory=tuple)
     knowledge_top_k: int = _DEFAULT_KNOWLEDGE_TOP_K
+    agent_id: UUID | None = None
+    memory_top_k: int = _DEFAULT_MEMORY_TOP_K
 
 
 @dataclass(frozen=True)

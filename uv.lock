@@ -122,6 +122,12 @@ requires-dist = [
 name = "aether-memory"
 version = "0.0.0"
 source = { editable = "packages/memory" }
+dependencies = [
+    { name = "psycopg", extra = ["binary"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "psycopg", extras = ["binary"] }]
 
 [[package]]
 name = "aether-policy"
