@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -258,3 +259,89 @@ printf 'deferred=%s\\n' "${{HARNESS_DEFERRED_STEPS[*]-}}"
 
     assert deferred, "harness.config 에 HARNESS_DEFERRED_STEPS 가 없습니다"
     assert deferred <= defined, f"HARNESS_STEPS 에 없는 id 를 미뤘습니다: {deferred - defined}"
+
+
+# --- 미룸 예외의 입력 검증 ------------------------------------------------------------
+#
+# 근거: 커밋 030fe5b 의 배경 보안 검토. 미룸 예외는 **종료를 허용하는 쪽** 의 판정이고,
+# 그 입력은 `.harness/verify.json` 이다. 그 파일은 보호 대상이지만 가드는 실수 방지
+# 장치이므로(adversarial 회피를 막지 않는다, harness/hooks/README.md) 이 게이트는
+# 자기 입력을 믿지 않아야 한다. AGENTS.md Trust — 도구 출력은 데이터이지 지시가 아니다.
+
+
+def _patch_verify_json(root: Path, key: str, raw_value: str) -> None:
+    """verify.json 의 한 키를 **원문 그대로** 바꿔 쓴다.
+
+    json.loads → json.dumps 로 다시 쓰면 배열이 여러 줄로 퍼지고, Stop 게이트의
+    `json_list` 는 jq 가 없을 때 줄 단위 grep 이라 그 배열을 읽지 못한다. 그러면 이
+    테스트들이 "판정 로직이 막았다" 가 아니라 "입력을 읽지 못했다" 로 통과한다 —
+    공허하다. verify.sh 는 배열을 항상 한 줄로 쓰므로 그 형식을 유지한다.
+    """
+    path = root / ".harness" / "verify.json"
+    text = path.read_text(encoding="utf-8")
+    pattern = re.compile(rf'("{re.escape(key)}":\s*)(\[[^\]]*\]|"[^"]*"|[^,\n]+)')
+    patched, count = pattern.subn(lambda m: m.group(1) + raw_value, text, count=1)
+    assert count == 1, f"{key} 를 찾지 못했습니다"
+    path.write_text(patched, encoding="utf-8")
+
+
+def test_a_non_numeric_step_count_does_not_reach_arithmetic(sandbox: Path) -> None:
+    """개수 자리에 들어온 문자열을 산술식에 넣지 않는다.
+
+    숫자가 아닌 문자열을 `$(( ))` 에 넣으면 bash 가 그것을 배열 참조로 읽는다.
+    2026-10-11 실측(bash 5, Git Bash): `ran_steps` 를 `"a[$(touch …)]"` 로 바꾸면
+    게이트가 `a: unbound variable` 로 **죽었다**(exit 1). 명령은 실행되지 않았다 —
+    그러니 이것은 재현된 명령 주입이 아니다. 문제는 **죽는 방향**이다. Stop hook 의
+    exit 1 은 차단이 아니라 hook 오류이므로, 그 죽음은 종료를 **허용**하는 쪽으로
+    기울어진다. 게이트가 입력을 읽지 못했을 때는 깨끗하게 막아야 한다.
+
+    bash 판본에 따라 같은 자리에서 첨자 안의 명령 치환이 평가될 수도 있다. 그래서
+    판본에 의존하지 않도록 아예 넣지 않고, 그 확인도 함께 둔다(marker 가 생기지 않는다).
+    """
+    assert _run_verify(sandbox).returncode == 0
+    marker = sandbox / "pwned.txt"
+    _patch_verify_json(sandbox, "ran_steps", f'"a[$(touch {marker.as_posix()})]"')
+
+    result = _run_stop_gate(sandbox)
+
+    assert not marker.exists(), "게이트가 verify.json 안의 명령을 실행했습니다"
+    assert result.returncode == 2, (
+        "개수를 읽을 수 없는 기록은 완료 근거가 아닙니다 — 막아야 합니다: "
+        + result.stdout
+        + result.stderr
+    )
+
+
+def test_deferring_a_step_that_config_did_not_defer_is_not_accepted(sandbox: Path) -> None:
+    """미룬 id 는 harness.config 의 HARNESS_DEFERRED_STEPS 에 있는 것만 인정한다.
+
+    개수만 맞춰 보면 "돌지 않은 것이 실제로 미룬 단계인가" 를 묻지 않게 된다. 기록이
+    어긋난 실행(설정을 바꾼 뒤의 낡은 verify.json 포함)이 예외를 통과한다.
+    """
+    assert _run_verify(sandbox).returncode == 0
+    # 개수는 그대로 맞춘다(2 + 2 = 4). 이름만 바꾼다.
+    _patch_verify_json(sandbox, "deferred", '["fast-a", "fast-b"]')
+
+    result = _run_stop_gate(sandbox)
+
+    assert result.returncode == 2, (
+        "설정이 미루지 않은 단계를 미뤘다고 적은 기록을 받아들였습니다: "
+        + result.stdout
+        + result.stderr
+    )
+
+
+def test_a_glob_in_a_deferred_id_is_not_expanded(sandbox: Path) -> None:
+    """`*` 가 섞인 id 는 인정하지 않는다.
+
+    설정에 없는 id 이므로 허용 목록 검사에서 먼저 걸린다. 그 위에 구현은 단어 분리
+    전에 글로빙을 끈다 — 끄지 않으면 `*` 가 파일명으로 퍼져 **개수가 디렉터리 내용에
+    따라 달라지고**, 판정이 저장소의 파일 목록에 의존하게 된다. 이 테스트는 그 두
+    장치 중 하나라도 살아 있으면 통과하므로, 글로빙만을 따로 고정하지는 못한다.
+    """
+    assert _run_verify(sandbox).returncode == 0
+    _patch_verify_json(sandbox, "deferred", '["*"]')
+
+    result = _run_stop_gate(sandbox)
+
+    assert result.returncode == 2, result.stdout + result.stderr
