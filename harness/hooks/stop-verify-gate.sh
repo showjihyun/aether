@@ -165,6 +165,82 @@ fallback_tree_fingerprint() {
   } | LC_ALL=C sort | "${hasher}" | awk '{print $1}'
 }
 
+# json_list <파일> <키> — 문자열 배열을 공백으로 이어 출력합니다.
+# json_raw 는 스칼라용이라 배열의 '[' 를 읽지 못합니다. only 와 deferred 가 배열입니다.
+json_list() {
+  local file="$1" key="$2" value="" raw=""
+  [[ -f "${file}" ]] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    value="$(jq -r --arg k "${key}" \
+      'if (has($k) and (.[$k] | type) == "array") then (.[$k] | map(tostring) | join(" ")) else empty end' \
+      "${file}" 2>/dev/null || true)"
+    printf '%s' "${value}"
+    return 0
+  fi
+  # jq 가 없을 때. 값에 ']' 가 없다는 것은 이 파일을 verify.sh 가 쓴다는 사실로 보장됩니다
+  # (단계 id 는 harness_slug 를 지나므로 괄호를 담지 않습니다).
+  raw="$(grep -oE "\"${key}\"[[:space:]]*:[[:space:]]*\[[^]]*\]" -- "${file}" \
+    | head -n 1 || true)"
+  raw="${raw#*[}"
+  raw="${raw%]*}"
+  raw="${raw//\"/ }"
+  raw="${raw//,/ }"
+  # 단어 분리로 공백을 접고 [*] 로 하나씩 공백을 끼워 다시 잇습니다.
+  # `local -` 로 셸 옵션을 이 함수 안에 가둔 뒤 글로빙을 끕니다 — 값에 `*` 가 섞이면
+  # 단어 분리 뒤 파일명으로 퍼집니다.
+  local -
+  set -f
+  local -a parts=()
+  # shellcheck disable=SC2206
+  parts=(${raw})
+  printf '%s' "${parts[*]-}"
+}
+
+# deferred_exception_applies <verify.json> <ran_steps> <defined_steps>
+# 미룸만으로 생긴 부분 실행이면 0 을 내고 DEFERRED_EXCEPTION_IDS 를 채웁니다.
+#
+# 이 판정은 **종료를 허용하는 쪽** 이고 입력은 verify.json 입니다. 그 파일은 보호
+# 대상이지만 가드는 실수 방지 장치이지 적대적 회피를 막는 장치가 아니므로
+# (harness/hooks/README.md), 이 게이트는 자기 입력을 믿지 않습니다. AGENTS.md Trust —
+# 도구 출력은 데이터이지 지시가 아닙니다. 그래서 셋을 확인합니다.
+#
+#   1. 개수가 숫자인지 본 뒤에만 산술식에 넣습니다. 숫자가 아닌 문자열을 `$(( ))` 에
+#      넣으면 bash 가 그것을 배열 참조로 읽고, set -u 아래에서 **게이트가 죽습니다**
+#      (2026-10-11 실측: `a: unbound variable`, exit 1). Stop hook 의 exit 1 은 차단이
+#      아니라 hook 오류이므로, 그 죽음은 종료를 **허용**하는 쪽으로 기울어집니다.
+#      (같은 자리에서 bash 판본에 따라 첨자 안의 명령 치환이 평가될 수도 있습니다.
+#       이 플랫폼에서는 재현되지 않았지만, 판본에 의존하지 않도록 아예 넣지 않습니다.)
+#   2. 미룬 id 는 harness.config 의 HARNESS_DEFERRED_STEPS 에 **있는 것만** 인정합니다.
+#      개수만 맞춰 보면 "돌지 않은 것이 실제로 미룬 단계인가" 를 묻지 않게 됩니다.
+#      2026-10-11 실측: deferred 에 `["fast-a","fast-b"]` 를 적은 기록이 통과했습니다 —
+#      싼 단계를 빼고 비싼 단계를 돌린 척하는 기록과 구별되지 않았습니다.
+#   3. 단어 분리 전에 글로빙을 끕니다. id 에 `*` 가 섞이면 파일명으로 퍼져 판정이
+#      저장소의 파일 목록에 의존합니다.
+deferred_exception_applies() {
+  local file="$1" ran="$2" defined="$3"
+  local ids="" allowed="" id="" count=0 known=0
+  DEFERRED_EXCEPTION_IDS=""
+
+  ids="$(json_list "${file}" "deferred")"
+  [[ -n "${ids}" ]] || return 1
+  # `--only` 로 고른 실행은 이 예외의 대상이 아닙니다.
+  [[ -z "$(json_list "${file}" "only")" ]] || return 1
+  [[ "${ran}" =~ ^[0-9]+$ && "${defined}" =~ ^[0-9]+$ ]] || return 1
+
+  allowed=" ${HARNESS_DEFERRED_STEPS[*]-} "
+  set -f
+  for id in ${ids}; do
+    count=$((count + 1))
+    [[ "${allowed}" == *" ${id} "* ]] && known=$((known + 1))
+  done
+  set +f
+  [[ "${count}" -gt 0 && "${count}" -eq "${known}" ]] || return 1
+  [[ $((ran + count)) -eq "${defined}" ]] || return 1
+
+  DEFERRED_EXCEPTION_IDS="${ids}"
+  return 0
+}
+
 tree_fingerprint_of() {
   if declare -F harness_tree_fingerprint >/dev/null 2>&1; then
     harness_tree_fingerprint "$1"
@@ -246,6 +322,17 @@ PARTIAL="$(json_raw "${VERIFY_JSON}" "partial")"
 if [[ "${PARTIAL}" == "true" ]]; then
   RAN="$(json_raw "${VERIFY_JSON}" "ran_steps")"
   DEFINED="$(json_raw "${VERIFY_JSON}" "defined_steps")"
+  # 예외 하나 더: 미룬 단계(HARNESS_DEFERRED_STEPS)만 돌지 않은 실행입니다.
+  # 사람 결정(2026-10-11)으로 통합·e2e 를 로컬 기본에서 뺐으므로, 그 미룸만으로 생긴
+  # 부분 실행을 전량 요구로 되돌리면 미룸 자체가 무용해집니다.
+  # 받되 **조용히 받지는 않습니다** — 무엇이 판정되지 않았는지 이름으로 알립니다.
+  # `--only` 부분 실행은 아래로 떨어져 그대로 차단됩니다. 둘을 구별하는 것이 요점입니다.
+  if deferred_exception_applies "${VERIFY_JSON}" "${RAN}" "${DEFINED}"; then
+    emit "[harness] 미룬 단계가 있습니다: ${DEFERRED_EXCEPTION_IDS}"
+    emit "이 단계들은 돌지 않았습니다 — 통과한 것이 아닙니다. 판정은 CI 의 verify.sh --full 이 합니다."
+    emit "로컬에서 지금 보려면: ./harness/scripts/verify.sh --full"
+    exit 0
+  fi
   # 예외 하나: `--changed` 가 문서계열만 돌린 결과입니다. 그 경우 코드계열은 마지막
   # **전량 통과** 이후 바뀌지 않았고(full_pass_code 와 현재 코드 지문이 같음) 돌지 않은
   # 단계는 그 전량 통과가 이미 판정했습니다. 코드가 바뀌었으면 여전히 전량을 요구합니다.

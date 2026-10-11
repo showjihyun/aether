@@ -1,0 +1,94 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-11-003
+date: 2026-10-11
+status: validating
+symptom: 단위 하나를 끝낼 때마다 로컬 전량 verify(약 400~470초)를 다시 돌린다. 그 안에서 통합·e2e·벤치 세 단계가 약 148초이고, 단위 대부분은 그 세 단계가 보는 것을 건드리지 않는다. 사용자 보고 — "테스트를 계속 붙여서 이어서 하는 것 같다. 지금 방식은 너무 시간이 오래 걸려서 안 좋다. 에이전트가 더 일을 못하게 제약이 너무 많이 걸린 느낌이다"
+evidence: |
+  2026-10-11 실측(Windows 11 + Git Bash, 이 저장소, 20단계):
+    전량            397,185 ms / 447,276 ms / 468,984 ms  (세 번)
+    미룬 기본(17단계) 284,245 ms
+    미룬 세 단계      api-integration 52,209 / smoke 94,557 / bench 1,510 ms = 약 148초
+  세 단계는 Docker 스택을 띄워 agent → run → succeeded → trace 파일까지 본다. 단위가
+  lint·타입·단위 테스트 범위일 때 그 148초가 내는 새 정보는 0이다.
+  같은 부류의 낭비가 이미 한 번 기록됐다 — improvement-log/2026-10-04-001 은 문서만
+  고친 커밋에 전량을 다시 돌린 것이 한 세션에 5회, 새 정보 0이었다고 적었고 그 답이
+  `--changed` 였다. 이 후보는 같은 질문의 **코드를 고쳤을 때** 판이다: 코드를 고쳤으니
+  돌려야 하지만, 통합·e2e 까지 매번 돌려야 하는가.
+root_cause: verify 의 범위가 "전량" 과 "--only 로 고른 것" 둘뿐이다. 그 사이에 "비싼 계층을 빼고 나머지 전부" 가 없어서, 단위마다 비싼 계층을 다시 돌리거나(느림) --only 로 골라 Stop 게이트에 막히거나(완료 불가) 둘 중 하나였다
+fix: |
+  2026-10-11, 사람 결정(showjihyun)으로 계층 분리를 적용했다.
+    harness.config          HARNESS_DEFERRED_STEPS=(api-integration smoke bench)
+    verify.sh               --full 을 더하고, 기본 실행에서 그 id 들을 뺀다. 미뤘다는
+                            사실과 단계 이름을 출력하고 verify.json 에 deferred 로 적는다.
+                            --only 로 이름을 지정하면 미룬 단계도 돈다(명시가 기본보다 강하다).
+    stop-verify-gate.sh     **미룸만으로** 부분 실행이 된 경우를 완료 근거로 받는다.
+                            받되 미룬 단계 이름을 출력한다. --only 부분 실행은 그대로 막는다.
+    .github/workflows/      verify.sh --full. CI 를 환경변수로 자동 감지하지 않는다 —
+    harness.yml             동작이 파일에 보이지 않으면 다음 사람이 읽을 수 없다.
+  로컬 기본 468,984 → 284,245 ms (약 39% 감소).
+
+  이 변경은 **로컬 완료 근거를 의도적으로 약화시킨다.** 에이전트가 통합 테스트를 한 번도
+  돌리지 않고 "끝" 을 선언할 수 있게 되고, 통합이 깨진 것은 CI 에서 처음 드러난다.
+  그것이 이 거래의 내용이고, 사람이 그 거래를 선택했다.
+  약화되지 않는 것은 병합 게이트다 — CI 가 --full 로 돌고 세 단계의 required=true 는
+  그대로다. required 를 내리거나 단계를 지우는 방식은 쓰지 않았다(그것은 수정이 아니다).
+recurrence_risk: medium
+harness_element: HE-11
+proposed_harness_change: "(적용됨, 2026-10-11) verify 의 범위에 세 번째 모드를 둔다 — 전량(`--full`), 미룬 기본(옵션 없음), 지정(`--only`). 미룸은 harness.config 가 소유하고(HARNESS_DEFERRED_STEPS) 스크립트에 id 를 적지 않는다. 미룬 실행은 partial=true 와 deferred 로 기록되어 전량 통과와 구별되고, full_pass_code 는 전량 실행에서만 갱신되므로 '미룬 통과' 가 전량 통과의 기준선이 되지 않는다. **이 설정을 쓰는 프로젝트는 CI 가 `--full` 로 돌아야 한다** — 그러지 않으면 미룬 단계는 어디서도 판정되지 않는다. 그 한 줄이 '로컬만 빠르게' 와 '게이트 약화' 를 가르는 자리이므로 tests/scripts/test_verify_deferred.py 가 워크플로 파일을 직접 읽어 대조한다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  대상: 2026-10-11 적용분. 1회 수행 완료.
+  (a) 로컬 기본이 17/20 을 돌고 pass 하며 verify.json 에 partial=true,
+      deferred=["api-integration","smoke","bench"] 가 적힌다 — 실측 284,245 ms.
+  (b) `--full` 이 20/20 을 돌고 partial=false, deferred=[] 다.
+  (c) Stop 게이트가 (a) 를 통과시키면서 미룬 단계를 이름으로 출력한다 — 실제 출력:
+        [harness] 미룬 단계가 있습니다: api-integration smoke bench
+        이 단계들은 돌지 않았습니다 — 통과한 것이 아닙니다. 판정은 CI 의 ... --full 이 합니다.
+  (d) `--only` 부분 실행은 그대로 차단된다(예외가 모든 부분 실행으로 번지지 않는지).
+  (e) 미룬 단계를 일부러 실패하게 만들면 `--full` 에서 전체가 실패한다 — required 가
+      내려가지 않았다는 확인.
+  (f) `--only <미룬 id>` 로 이름을 지정하면 그 단계가 돈다.
+  (g) HARNESS_DEFERRED_STEPS 의 모든 id 가 HARNESS_STEPS 에 있다(오타면 아무것도
+      미뤄지지 않고 아무 신호도 나지 않는다).
+  (h) CI 워크플로에 `verify.sh --full` 이 있다.
+  (a)~(h) 를 tests/scripts/test_verify_deferred.py 10건이 고정한다. 샌드박스 프로젝트에
+  자기 harness.config 를 주고 단계 명령을 전부 `true` 로 두어, 재는 것이 단계의 내용이
+  아니라 **범위 판정**이게 했다.
+  남은 반대 확인: 다음 PR 3건에서 (1) 로컬은 미룬 기본으로만 돌고 (2) CI 가 통합 단계를
+  실제로 판정하는지, (3) 통합이 깨진 변경이 로컬을 통과하고 CI 에서 걸리는 사건이
+  실제로 일어나는지 관측한다. 세 번째가 일어나면 이 거래의 비용이 처음 측정된다.
+
+  배경 보안 검토(커밋 030fe5b)가 미룸 예외의 입력 검증을 지적했고, 둘 다 **내가 넣은
+  코드**였다. 재현해 보고 하나는 실재, 하나는 내 설명이 과장이었다.
+    (실재) 예외가 **개수만** 봤다. verify.json 에 deferred=["fast-a","fast-b"] 를
+      적으면(개수 2 + 2 = 4 로 맞춰서) 게이트가 exit 0 으로 통과시켰다 — 싼 단계를 빼고
+      비싼 단계를 돌린 척하는 기록과 구별되지 않았다. 조치: 미룬 id 는 harness.config 의
+      HARNESS_DEFERRED_STEPS 에 **있는 것만** 인정한다.
+    (과장) "명령 주입" 은 이 플랫폼에서 재현되지 않았다. `ran_steps` 를
+      `"a[$(touch …)]"` 로 바꾸면 bash 5 는 그것을 배열 참조로 읽고 set -u 아래에서
+      게이트가 `a: unbound variable` 로 **죽었다**(exit 1). 명령은 실행되지 않았다.
+      그래도 조치가 필요한 이유는 **죽는 방향**이다 — Stop hook 의 exit 1 은 차단이
+      아니라 hook 오류이므로 종료를 허용하는 쪽으로 기울어진다. 조치: 개수가 숫자인지
+      확인한 뒤에만 산술식에 넣고, 아니면 깨끗하게 막는다. 판본에 따라 첨자 안의 명령
+      치환이 평가될 수도 있으니 아예 넣지 않는다.
+    함께: json_list 의 폴백과 id 단어 분리에서 글로빙을 끈다(`local -` + `set -f`).
+      끄지 않으면 `*` 가 든 id 가 파일명으로 퍼져 개수가 디렉터리 내용에 의존한다.
+  이 셋을 tests/scripts/test_verify_deferred.py 3건이 고정한다. 그 세 건은 처음에
+  **공허하게 통과**했다 — 테스트가 verify.json 을 json.dumps(indent=2) 로 다시 써서
+  배열이 여러 줄로 퍼졌고, 게이트의 json_list 는 jq 가 없을 때 줄 단위 grep 이라 입력을
+  읽지 못했다. "판정 로직이 막았다" 가 아니라 "입력을 읽지 못했다" 였다. 한 줄 형식을
+  유지하도록 고치자 2건이 red 가 됐고, 그 뒤에 구현을 고쳤다.
+
+  CC-4 라운드 기록(하네스 변경 전후의 계층 점수):
+    변경 전  총점 100 — correctness 100 / architecture 100 / quality 100 /
+             behavior 100 / performance 100 / subjective null  (20/20, 397,185 ms)
+    변경 후  총점 100 — 같음  (--full 20/20, 374,312 ms)
+    판정     keep. 어느 layer 도 내려가지 않았고 게이트의 내용(단계·required·임계)이
+             하나도 바뀌지 않았다.
+  다만 CC-3 의 수치 기준("종합 score 가 기준선보다 높아야 keep")은 이 라운드에서
+  **판정력이 없었다**. 두 라운드 모두 천장(100, 합격선 80)에 있어 "올랐다" 가 도달
+  불가능하고, 이 변경의 효과는 점수가 아니라 벽시계(39% 감소)다. 천장에서 Hill Climbing
+  기준이 무정보가 된다는 것은 1회 관측이므로 규칙으로 올리지 않고 사실만 적는다.
+owner: showjihyun
+expires: 2027-01-11

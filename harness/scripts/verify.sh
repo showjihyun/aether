@@ -22,7 +22,11 @@ usage() {
              영향 없는 단계를 돌리지 않는 것입니다.
 
 옵션:
+  --full               harness.config 의 HARNESS_DEFERRED_STEPS 까지 포함해 전량을
+                       실행합니다. CI 가 쓰는 경로입니다. 기본 실행은 그 단계들을
+                       미루고, 미뤘다는 사실과 단계 이름을 출력합니다.
   --only <id>          지정한 id 의 단계만 실행합니다. 여러 번 지정할 수 있습니다.
+                       미룬 단계도 이름으로 지정하면 실행됩니다.
   --list               실행할 단계 목록만 출력하고 종료합니다.
   --continue-on-fail   필수 단계가 실패해도 남은 단계를 계속 실행합니다.
   --json               사람용 출력을 억제하고 결과 JSON 만 표준출력으로 냅니다.
@@ -47,6 +51,7 @@ OPT_LIST=0
 OPT_CONTINUE=0
 ONLY_IDS=()
 OPT_CHANGED=0
+OPT_FULL=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -54,6 +59,7 @@ while [[ $# -gt 0 ]]; do
     --json) OPT_JSON=1; shift ;;
     --list) OPT_LIST=1; shift ;;
     --continue-on-fail) OPT_CONTINUE=1; shift ;;
+    --full) OPT_FULL=1; shift ;;
     --changed)
       OPT_CHANGED=1
       shift
@@ -175,6 +181,16 @@ fi
 # --- 파싱과 검증 ---------------------------------------------------------------
 IDS=(); LAYERS=(); REQUIREDS=(); COMMANDS=()
 DEFINED_TOTAL=0   # --only 로 걸러내기 **전**의 단계 수. 부분 실행 판정에 씁니다.
+
+# 미룬 단계(HARNESS_DEFERRED_STEPS). --full 이면 미루지 않고, --only 로 이름을 지정하면
+# 그쪽이 이깁니다 — 명시한 것이 기본보다 강합니다.
+# 미룬 단계는 "통과" 가 아니라 "돌지 않음" 입니다. 그래서 아래에서 verify.json 에
+# deferred 로 적고 partial=true 로 남깁니다. 판정은 CI 의 --full 이 합니다.
+DEFER_IDS=()
+DEFERRED_SKIPPED=()
+if [[ "$OPT_FULL" -eq 0 && ${#ONLY_IDS[@]} -eq 0 ]]; then
+  DEFER_IDS=(${HARNESS_DEFERRED_STEPS[@]+"${HARNESS_DEFERRED_STEPS[@]}"})
+fi
 for _line in ${STEP_LINES[@]+"${STEP_LINES[@]}"}; do
   [[ -z "$_line" || "$_line" == \#* ]] && continue
   IFS='|' read -r _id _layer _req _cmd <<<"$_line"
@@ -189,6 +205,14 @@ for _line in ${STEP_LINES[@]+"${STEP_LINES[@]}"}; do
     *) die "required 값이 잘못되었습니다: ${_req} (단계 ${_id})" 3 ;;
   esac
   DEFINED_TOTAL=$((DEFINED_TOTAL + 1))
+  if [[ ${#DEFER_IDS[@]} -gt 0 ]]; then
+    _deferred=0
+    for _d in "${DEFER_IDS[@]}"; do [[ "$_d" == "$_id" ]] && _deferred=1; done
+    if [[ "$_deferred" -eq 1 ]]; then
+      DEFERRED_SKIPPED+=("$_id")
+      continue
+    fi
+  fi
   if [[ ${#ONLY_IDS[@]} -gt 0 ]]; then
     _match=0
     for _o in "${ONLY_IDS[@]}"; do [[ "$_o" == "$_id" ]] && _match=1; done
@@ -198,6 +222,11 @@ for _line in ${STEP_LINES[@]+"${STEP_LINES[@]}"}; do
 done
 
 TOTAL=${#IDS[@]}
+
+if [[ ${#DEFERRED_SKIPPED[@]} -gt 0 ]]; then
+  say "미룬 단계: ${DEFERRED_SKIPPED[*]} — 로컬 기본에서 미뤘습니다(HARNESS_DEFERRED_STEPS)."
+  say "  이 단계들은 돌지 않았습니다. 통과한 것이 아닙니다. 전량은 --full 이고 CI 가 그것을 돌립니다."
+fi
 
 if [[ "$OPT_LIST" -eq 1 ]]; then
   if [[ "$TOTAL" -eq 0 ]]; then
@@ -284,6 +313,7 @@ BUDGET_EXCEEDED=0
 write_verify_json() {
   local status="$1" failed_required="$2" failed_optional="$3" steps_json="$4"
   local only_json="" sep="" i=0 partial="false"
+  local defer_json="" dsep=""
   local suspect_json="" ssep="" j=0
   local full_pass_code="$PREV_FULL_PASS_CODE" full_pass_at="$PREV_FULL_PASS_AT"
   local pass_docs="$PREV_PASS_DOCS" pass_code="$PREV_PASS_CODE"
@@ -305,6 +335,10 @@ write_verify_json() {
     only_json="${only_json}${sep}\"${ONLY_IDS[$i]}\""
     sep=", "
   done
+  for ((i = 0; i < ${#DEFERRED_SKIPPED[@]}; i++)); do
+    defer_json="${defer_json}${dsep}\"${DEFERRED_SKIPPED[$i]}\""
+    dsep=", "
+  done
   if [[ "$TOTAL" -lt "$DEFINED_TOTAL" ]]; then partial="true"; fi
   {
     printf '{\n'
@@ -315,6 +349,9 @@ write_verify_json() {
     printf '  "defined_steps": %s,\n' "$DEFINED_TOTAL"
     printf '  "ran_steps": %s,\n' "$TOTAL"
     printf '  "only": [%s],\n' "$only_json"
+    # 미룬 단계. only 와 다릅니다 — only 는 "이것만 돌려라", deferred 는 "이것만 빼라"
+    # 입니다. Stop 게이트가 둘을 구별해, 미룸만으로 부분 실행이 된 경우에만 통과시킵니다.
+    printf '  "deferred": [%s],\n' "$defer_json"
     # 신선도 근거. 둘 다 없으면 며칠 지난 pass 가 오늘의 종료를 통과시킵니다.
     printf '  "finished_at": "%s",\n' "$(now_iso)"
     printf '  "tree": "%s",\n' "$(harness_tree_fingerprint "$ROOT")"
