@@ -53,6 +53,21 @@ _lang_upper() {
   printf '%s' "${s^^}"
 }
 
+# _lang_upper_into <출력변수> <문자열> — _lang_upper 와 **같은 값**을 fork 없이 냅니다.
+#
+# 위 함수의 본문은 이미 내장만 쓰는데, 부르는 쪽이 명령 치환으로 값을 받으면 그 치환이
+# 서브셸을 띄워 fork 1회를 냅니다. 내장을 쓰려고 tr 을 피한 자리에서 정작
+# fork 를 밖에서 다시 내고 있었습니다. 팩 6개 × (팩 1 + kind 2) × 목록 2벌이면 그것만으로
+# fork 36회이고, 이 플랫폼에서 fork 1회는 약 20ms 라 패턴 병합 한 벌이 약 600ms 였습니다.
+# 그 비용은 verify 단계가 아니라 **도구 호출마다** 도는 PreToolUse 가드에 들어갑니다
+# (improvement-log 2026-10-11-002).
+#
+# _lang_upper 는 그대로 둡니다. 언어 팩이 쓰고 있을 수 있는 계약이고, 값도 같습니다.
+_lang_upper_into() {
+  local _s="${2//-/_}"
+  printf -v "$1" '%s' "${_s^^}"
+}
+
 # _lang_is_array <변수명> — 그 이름이 **인덱스 배열**로 선언되어 있는지 확인합니다.
 # declare -p 만으로는 스칼라도 통과하고, 스칼라에 ${#name[@]} 를 쓰면 set -u 아래에서 스크립트가 죽습니다.
 # ${!name@a} 는 간접 참조 후 속성 플래그를 냅니다. 배열이면 'a' 를 포함하고 미선언·스칼라면 비어 있습니다.
@@ -104,7 +119,7 @@ harness_lang_validate_packs() {
       declare -F "harness_lang_${p}_${fn}" >/dev/null 2>&1 \
         || bad="${bad} harness_lang_${p}_${fn}() 없음;"
     done
-    up="$(_lang_upper "$p")"
+    _lang_upper_into up "$p"
     for v in PROTECTED WARN; do
       _lang_is_array "HARNESS_LANG_${up}_${v}_PATTERNS" \
         || bad="${bad} HARNESS_LANG_${up}_${v}_PATTERNS 가 배열이 아님;"
@@ -267,13 +282,14 @@ _lang_array_lines() {
 # 패턴 이름은 언어 간에 겹치지 않으므로(Java 저장소에 tsconfig.json 은 없습니다) 합집합의 오탐 비용은 없습니다.
 # 감지 결과는 verify 의 기본 단계 선택과 진단 표시에만 씁니다.
 _lang_all_patterns() {
-  local list="$1" p up k
+  local list="$1" p up k ku
   harness_lang_load_packs
   for p in ${HARNESS_LANG_PACKS[@]+"${HARNESS_LANG_PACKS[@]}"}; do
-    up="$(_lang_upper "$p")"
+    _lang_upper_into up "$p"
     _lang_array_lines "HARNESS_LANG_${up}_${list}_PATTERNS"
     for k in "${HARNESS_LANG_KINDS[@]}"; do
-      _lang_array_lines "HARNESS_LANG_${up}_$(_lang_upper "$k")_${list}_PATTERNS"
+      _lang_upper_into ku "$k"
+      _lang_array_lines "HARNESS_LANG_${up}_${ku}_${list}_PATTERNS"
     done
   done
 }
@@ -286,7 +302,7 @@ lang_all_security_patterns() {
   local p up name out="" v
   harness_lang_load_packs
   for p in ${HARNESS_LANG_PACKS[@]+"${HARNESS_LANG_PACKS[@]}"}; do
-    up="$(_lang_upper "$p")"
+    _lang_upper_into up "$p"
     name="HARNESS_LANG_${up}_SECURITY_PATTERNS"
     v="${!name:-}"
     [[ -n "$v" ]] || continue

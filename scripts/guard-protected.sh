@@ -74,8 +74,10 @@ fi
 # json_unescape <문자열> — 근거와 구현은 harness/hooks/guard-evaluation-tampering.sh 의
 # 동명 함수와 같습니다. Windows 경로("C:\\WorkSpace\\...")를 풀지 않으면 '/' 를 포함한
 # 패턴이 전부 빗나갑니다.
-json_unescape() {
-  local s="${1-}"
+# json_unescape_var <출력변수> <문자열> — 아래 json_unescape 와 같은 변환을
+# 명령 치환 없이 합니다. 로직은 여기 한 곳에만 둡니다.
+json_unescape_var() {
+  local s="${2-}"
   s="${s//\\\\/$'\001'}"
   s="${s//\\\"/\"}"
   s="${s//\\\//\/}"
@@ -83,26 +85,74 @@ json_unescape() {
   s="${s//\\t/$'\t'}"
   s="${s//\\r/$'\r'}"
   s="${s//$'\001'/\\}"
-  printf '%s' "${s}"
+  printf -v "$1" '%s' "${s}"
 }
 
-# json_field <payload> <jq-path> <grep-key> — 문자열 값을 출력합니다.
-json_field() {
-  local payload="$1" jq_path="$2" grep_key="$3" value="" raw=""
+# json_unescape <문자열> — 기존 계약(값을 출력)을 그대로 유지합니다.
+json_unescape() {
+  local __v=""
+  json_unescape_var __v "${1-}"
+  printf '%s' "${__v}"
+}
+
+# --- 필드 추출은 한 번만 합니다 -------------------------------------------------
+# 필드마다 `printf | grep -oE | head | sed` 를 새로 띄우면 프로세스 수가 필드 수에
+# 비례합니다. jq 가 있으면 jq 가 한 번에 끝내지만, 없으면 전량 이 폴백이고 필드 7개에
+# 프로세스 28개가 들었습니다. PreToolUse 훅은 **도구 호출마다** 돌기 때문에 그 상수가
+# 세션 전체에 곱해집니다 — `echo hello` 한 줄에 2.2~3.3초였습니다(2026-10-11 실측,
+# improvement-log 2026-10-11-002). 그래서 폴백을 한 번의 추출로 모읍니다.
+# 값과 규칙("처음 나온 값이 이긴다")은 그대로입니다. 비용이 아니라 검출력이 이 훅의
+# 존재 이유이므로, 판정을 건너뛰는 빠른 경로는 만들지 않습니다.
+
+# 보호 판정에 쓰는 키입니다. 여기 없는 키를 폴백으로 찾으면 빈 값이 나오므로,
+# 보는 필드를 늘릴 때 이 목록도 같이 늘립니다.
+JSON_BULK_KEYS='tool_name|file_path|path|notebook_path|command|pattern|glob'
+declare -A JSON_RAW=()
+JSON_BULK_DONE=0
+
+# json_bulk_init <payload> — 위 키들의 **원문**(이스케이프를 풀기 전)을 grep 한 번으로
+# 모읍니다. JSON 문자열 리터럴 안에는 날 개행이 올 수 없으므로 매치 하나가 한 줄입니다.
+json_bulk_init() {
+  [[ "${JSON_BULK_DONE}" -eq 0 ]] || return 0
+  JSON_BULK_DONE=1
+  local line key rest
+  while IFS= read -r line; do
+    key="${line#\"}"
+    key="${key%%\"*}"
+    # 처음 나온 값이 이깁니다. 필드마다 `head -n 1` 을 쓰던 때와 같은 규칙입니다.
+    [[ -z "${JSON_RAW[${key}]+x}" ]] || continue
+    rest="${line#*:}"
+    while [[ "${rest}" == [[:space:]]* ]]; do rest="${rest#?}"; done
+    # 앞뒤의 따옴표만 벗깁니다. 안쪽은 아직 JSON 이스케이프 상태입니다.
+    JSON_RAW["${key}"]="${rest:1:${#rest}-2}"
+  done < <(printf '%s' "${1-}" \
+    | grep -oE "\"(${JSON_BULK_KEYS})\"[[:space:]]*:[[:space:]]*\"(\\\\.|[^\"\\\\])*\"" \
+    || true)
+}
+
+# json_field_var <출력변수> <payload> <jq-path> <grep-key>
+# 값을 변수에 직접 담습니다. 부르는 쪽이 명령 치환으로 받으면 그 치환이 서브셸을 띄워
+# 필드마다 fork 가 1회씩 다시 늘어납니다.
+json_field_var() {
+  local __out="$1" payload="$2" jq_path="$3" grep_key="$4" value=""
   if command -v jq >/dev/null 2>&1; then
     value="$(printf '%s' "${payload}" | jq -r "${jq_path} // empty" 2>/dev/null || true)"
   fi
   if [[ -z "${value}" ]]; then
-    raw="$(printf '%s' "${payload}" \
-      | grep -oE "\"${grep_key}\"[[:space:]]*:[[:space:]]*\"(\\\\.|[^\"\\\\])*\"" \
-      | head -n 1 \
-      | sed -E 's/^"[^"]*"[[:space:]]*:[[:space:]]*"//; s/"$//' || true)"
-    value="$(json_unescape "${raw}")"
+    json_bulk_init "${payload}"
+    json_unescape_var value "${JSON_RAW[${grep_key}]:-}"
   fi
-  printf '%s' "${value}"
+  printf -v "${__out}" '%s' "${value}"
 }
 
-TOOL_NAME="$(json_field "${PAYLOAD}" '.tool_name' 'tool_name')"
+# json_field <payload> <jq-path> <grep-key> — 문자열 값을 출력합니다(기존 계약).
+json_field() {
+  local __v=""
+  json_field_var __v "$1" "$2" "$3"
+  printf '%s' "${__v}"
+}
+
+json_field_var TOOL_NAME "${PAYLOAD}" '.tool_name' 'tool_name'
 [[ -n "${TOOL_NAME}" ]] || TOOL_NAME="(알수없음)"
 
 # --- 위임(번들 가드에 stdin 을 그대로 넘김) ------------------------------------------
@@ -177,7 +227,7 @@ classify_token() {
 
 # --- 경로 그대로인 필드: 값 전체가 경로입니다 -----------------------------------------
 for _field in file_path path notebook_path; do
-  _v="$(json_field "${PAYLOAD}" ".tool_input.${_field}" "${_field}")"
+  json_field_var _v "${PAYLOAD}" ".tool_input.${_field}" "${_field}"
   classify_token "${_v}"
 done
 
@@ -210,7 +260,7 @@ program_position_tokens() {
 
 # --- 자유 텍스트 필드: 경로가 문장 안에 섞여 옵니다 -----------------------------------
 for _field in command pattern glob; do
-  _v="$(json_field "${PAYLOAD}" ".tool_input.${_field}" "${_field}")"
+  json_field_var _v "${PAYLOAD}" ".tool_input.${_field}" "${_field}"
   [[ -n "${_v}" ]] || continue
   _PROGRAMS=""
   if [[ "${_field}" == "command" ]]; then
