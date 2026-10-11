@@ -1,0 +1,49 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-11-001
+date: 2026-10-11
+status: candidate
+symptom: CI 결과를 기다리는 장치가 두 가지 방식으로 거짓을 냈다 — 폴링 루프가 이벤트 0건으로 만료했고(2회, 그때 CI 는 이미 끝나 있었다), `gh pr checks --watch` 는 push 직후 **직전 커밋의 초록**을 내며 즉시 exit 0 으로 끝났다(1회). 전자는 모호하고 후자는 틀린 근거로 병합을 통과시킨다
+evidence: |
+  2026-10-10 PR #134: `gh pr checks 134` 를 폴링하는 루프를 30분 걸어 두었고 이벤트가
+  0건으로 만료됐다. 직접 `gh pr checks 134` 를 부르자 세 검사가 모두 끝나 있었다.
+  2026-10-11 PR #136: 같은 모양의 루프가 다시 30분 만료, 이벤트 0건. 직접 조회하니
+  `verify` 가 4분 6초로 이미 pass 였다. 즉 두 번 모두 **신호가 아니라 관측이 없었다**.
+  루프의 모양(두 번 같음):
+    cur=$(gh pr checks N --json name,bucket | jq -r '... | "\(.name): \(.bucket)"' | sort)
+    comm -13 <(echo "$prev") <(echo "$cur")
+  실패 지점이 둘이다. (1) `comm` 은 **정렬된 두 입력**을 전제하는데 `prev` 는 첫 회차에
+  빈 문자열이고 `echo ""` 는 빈 줄 하나를 내므로 비교가 어긋난다. (2) 루프 본문의
+  어느 명령이 비영으로 끝나도 `set -e` 없이도 파이프라인 전체가 조용히 아무것도 내지
+  않는다 — 오류가 stdout 에 나타나지 않으므로 이벤트가 생기지 않는다.
+  두 경우 모두 사람이 보는 것은 "조용함" 하나이고, 그것은 "변화 없음" 과 구별되지 않는다.
+  이 저장소 안에서 같은 교훈이 이미 한 번 적혔다 — docs/step_results/p3-5.md 는
+  "모니터의 침묵은 변화 없음의 증거가 아니다" 를 보고 문장으로 남겼지만, 그 교훈이
+  다음 실행의 절차를 바꾸지는 않았다(그래서 2회가 됐다).
+  같은 날 제안 (1)을 바로 적용해 보고 **(1)만으로는 부족하다**는 것이 드러났다. PR #137
+  에 새 커밋을 push 한 직후 `gh pr checks 137 --watch` 가 **즉시 exit 0** 으로 끝나며
+  `verify pass 3m52s` 를 냈는데, 그것은 **직전 커밋의 결과**였다. 같은 시점에 커밋
+  sha 로 조회하면 `verify in_progress` 다:
+    gh api repos/<o>/<r>/commits/<sha>/check-runs
+      → 비밀값 스캔 completed success / 보호 파일 변경 검토 completed success
+        verify in_progress null
+  이것은 침묵보다 나쁘다. 침묵은 모호하지만 **낡은 초록은 틀린 근거로 병합을 통과시킨다**.
+  원인은 PR 단위 조회가 "이 PR 에 붙은 최신 check run" 을 보고 그 run 이 어느 커밋의
+  것인지 보장하지 않는다는 것이다 — push 와 워크플로 등록 사이의 창에서 어긋난다.
+root_cause: "대기 장치의 출력이 **무엇에 대한 결과인지** 를 담지 않는다. 폴링 루프의 침묵은 '대기 중' 과 '고장' 을 구별하지 않고, PR 단위 조회는 '어느 커밋' 을 구별하지 않는다. 판정의 대상(커밋 sha)과 판정의 상태(완료/진행)를 함께 확인하지 않는 한, 두 실패 모드 중 하나는 반드시 남는다"
+fix: 두 번 모두 사후에 `gh pr checks <N>` 을 직접 불러 상태를 확인하고 병합했다. 루프 자체는 고치지 않았다
+recurrence_risk: high
+harness_element: HE-15
+proposed_harness_change: "(사람 결정) (1) 병합 판정의 근거는 **커밋 sha 로 조회한** check run 이다 — `gh api repos/<o>/<r>/commits/$(git rev-parse HEAD)/check-runs`. PR 단위 조회(`gh pr checks`)와 `--watch` 는 어느 커밋의 결과인지 보장하지 않으므로 대기용으로만 쓰고 근거로 쓰지 않는다(2026-10-11 실측: push 직후 --watch 가 직전 커밋의 초록으로 즉시 exit 0). (2) 손으로 폴링하면 **회차마다 한 줄을 반드시 출력**해 침묵 자체가 고장 신호가 되게 한다 — `[11] verify@e391a56: completed success` 처럼 sha 를 줄에 넣는다. (3) 보고에 '통과' 를 적을 때는 그 판정이 **어느 sha** 의 것인지 함께 적는다"
+preferred_enforcement: doc
+trust: untrusted
+regression_check: |
+  대상: 다음 PR 3건의 병합.
+  기준: (a) 병합 전 근거가 **sha 로 조회한** check run 출력이고, 보고에 그 sha 가 적혀
+  있다. (b) 대기 장치가 만료했거나 즉시 끝났을 때 그 사실과 sha 조회 결과를 함께
+  적는다 — 만료를 "변화 없음" 으로, 즉시 초록을 "이 커밋이 통과" 로 적지 않는다.
+  (c) 폴링 루프를 쓴 경우 회차마다 sha 가 든 한 줄이 나온다.
+  반대 확인(2026-10-11 1회 완료): push 직후 `gh pr checks --watch` 가 직전 커밋의
+  초록으로 즉시 끝나는 것을 재현했고, 같은 시점의 sha 조회가 `in_progress` 를 냈다.
+  남은 반대 확인: 일부러 깨진 폴링 루프(없는 PR 번호)를 걸어 이벤트가 나오는지 본다.
+owner: unassigned
+expires: 2027-01-11

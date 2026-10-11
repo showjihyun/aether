@@ -168,23 +168,60 @@ harness_scope_fingerprint() {
     patterns=(${HARNESS_SCOPE_DOC_PATTERNS[@]+"${HARNESS_SCOPE_DOC_PATTERNS[@]}"})
   fi
 
+  # 계열에 속한 경로만 모읍니다. 해시는 아래에서 git 을 **한 번** 불러 받습니다 —
+  # 파일마다 프로세스를 띄우면 비용이 파일 수에 비례합니다(이 저장소 801개 파일에서
+  # 38.5초, 단계를 하나도 돌리지 않는 실행에도 들었습니다. improvement-log
+  # 2026-10-09-001).
+  local -a kept=()
+  while IFS= read -r -d '' p; do
+    [[ -f "$root/$p" ]] || continue
+    # 하네스 상태 디렉터리는 입력이 아니라 산출물입니다. 실행마다 생기고 사라지는
+    # 파일(verify.lock/owner 등)이 지문에 들어가면 "코드가 바뀌었다" 로 오판합니다.
+    case "$p" in .harness/*) continue ;; esac
+    is_doc=0
+    for pat in "${patterns[@]}"; do
+      # shellcheck disable=SC2053
+      if [[ "$p" == $pat ]]; then is_doc=1; break; fi
+    done
+    if [[ "$want" == "docs" && "$is_doc" -eq 0 ]]; then continue; fi
+    if [[ "$want" == "code" && "$is_doc" -eq 1 ]]; then continue; fi
+    kept+=("$p")
+  done < <(git -C "$root" ls-files -z --cached --others --exclude-standard 2>/dev/null)
+
+  if [[ ${#kept[@]} -eq 0 ]]; then
+    printf '' | "$hasher" | awk '{print $1}'
+    return 0
+  fi
+
+  # 경로에 줄바꿈이 있으면 --stdin-paths 가 한 경로를 둘로 읽습니다. 병적인 이름이지만
+  # 정확성을 비용보다 앞에 두어, 그 경우에만 파일마다 부릅니다.
+  local batch=1
+  for p in "${kept[@]}"; do
+    case "$p" in *$'\n'*) batch=0; break ;; esac
+  done
+
+  # LC_ALL=C sort 가 **순서 불변**을 만듭니다. 이것이 없으면
+  # `ls-files --cached --others` 가 비추적 파일을 추적 파일보다 **먼저** 내보내므로,
+  # git add 로 비추적이 추적으로 옮겨가는 것만으로 내용이 하나도 안 바뀌어도 지문이
+  # 달라졌습니다(2026-10-11 실측) — 위 주석이 약속한 "커밋·stage 에 불변" 이 깨져
+  # 있었고, 그래서 --changed 가 커밋마다 코드 범위를 다시 골랐습니다.
+  # harness_tree_fingerprint 는 처음부터 이 sort 를 거칩니다.
   {
-    while IFS= read -r -d '' p; do
-      [[ -f "$root/$p" ]] || continue
-      # 하네스 상태 디렉터리는 입력이 아니라 산출물입니다. 실행마다 생기고 사라지는
-      # 파일(verify.lock/owner 등)이 지문에 들어가면 "코드가 바뀌었다" 로 오판합니다.
-      case "$p" in .harness/*) continue ;; esac
-      is_doc=0
-      for pat in "${patterns[@]}"; do
-        # shellcheck disable=SC2053
-        if [[ "$p" == $pat ]]; then is_doc=1; break; fi
+    if [[ "$batch" -eq 1 ]]; then
+      local -a hashed=()
+      mapfile -t hashed < <(
+        printf '%s\n' "${kept[@]}" | git -C "$root" hash-object --stdin-paths 2>/dev/null
+      )
+      local i=0
+      for ((i = 0; i < ${#kept[@]}; i++)); do
+        printf '%s %s\n' "${kept[$i]}" "${hashed[$i]:-unhashable}"
       done
-      if [[ "$want" == "docs" && "$is_doc" -eq 0 ]]; then continue; fi
-      if [[ "$want" == "code" && "$is_doc" -eq 1 ]]; then continue; fi
-      printf '%s\0' "$p"
-      git -C "$root" hash-object -- "$p" 2>/dev/null || printf 'unhashable\0'
-    done < <(git -C "$root" ls-files -z --cached --others --exclude-standard 2>/dev/null)
-  } | "$hasher" | awk '{print $1}'
+    else
+      for p in "${kept[@]}"; do
+        printf '%s %s\n' "$p" "$(git -C "$root" hash-object -- "$p" 2>/dev/null || printf 'unhashable')"
+      done
+    fi
+  } | LC_ALL=C sort | "$hasher" | awk '{print $1}'
 }
 
 harness_tree_fingerprint() {
