@@ -21,10 +21,10 @@
 
 | 항목 | 값 |
 | --- | --- |
-| 제품 Phase | **Phase 3 진행 중**(Context Compiler / RAG) — intent [0004](../intents/0004-phase-3-context-compiler.md) 승인 2026-10-05, P3-2a·P3-1·P3-2b 병합(PR #117·#118·#120), P3-3 진행. Phase 2 는 2026-10-03, Phase 1 은 2026-09-16, Phase 0 은 2026-09-11 완료. 상태의 정본은 [../intents/mvp-backlog.md](../intents/mvp-backlog.md), 각 단위가 무엇을 구현했는지는 [step_results/](step_results/README.md) |
-| 하네스 도입 단계 | **AD-2** — 2026-09-11 P0-7 로 진입. 제품 단계 11개(2026-09-16 smoke 추가) + 임계값 80 + improvement-log 25건 — [../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) |
-| 하네스 성숙도 | **L2 Eval Loop 진입 시도** — 평가 기준(계층 가중치·임계값·성능 기준 150 ms)과 반복 예산은 있고, 평가 기준선(REP 실행)은 아직 — [../harness/references/maturity-levels.md](../harness/references/maturity-levels.md) |
-| 저장소에 있는 코드 | `apps/api`(healthz·인증·Agent Registry·Run API·SSE·상태 투영), `apps/worker`(Streams 소비자 → 실행·heartbeat), `packages/runtime`(상태 기계·lease·model gateway·Planner/Executor 루프·도구·이벤트·OTel), `apps/web`(Next + shadcn 셸), `packages/sdk`, 그 밖 `packages/*` 빈 껍데기, `infra/docker`(compose 7서비스 + llm 프로파일 + 오프라인 probe) |
+| 제품 Phase | **Phase 3 완료 2026-10-10**(Context Compiler / RAG) — intent [0004](../intents/0004-phase-3-context-compiler.md), 단위 여섯 전부 병합(PR #117·#118·#120·#133·#134·#135)과 D-13 수동 확인 1회. 다음 Phase 는 intent 승인 뒤 시작합니다. Phase 2 는 2026-10-03, Phase 1 은 2026-09-16, Phase 0 은 2026-09-11 완료. 상태의 정본은 [../intents/mvp-backlog.md](../intents/mvp-backlog.md), 각 단위가 무엇을 구현했는지는 [step_results/](step_results/README.md) |
+| 하네스 도입 단계 | **AD-2** — 2026-09-11 P0-7 로 진입. 전체 20단계(자기 점검 6 + 제품 14, 2026-10-07 에 `api-unit` 을 셋으로 쪼갠 뒤) + 임계값 80 + improvement-log 57건(`candidate` 41 · `validating` 16, `promoted` 0) — [../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) |
+| 하네스 성숙도 | **L2 Eval Loop 진입 시도** — 평가 기준(계층 가중치·임계값·성능 기준 150 ms)과 반복 예산이 있고, 평가 기준선도 생겼습니다(대표 task 8건 전부 실행 가능, 기준선은 [../evaluation/runs/README.md](../evaluation/runs/README.md) 가 소유). L2 도달 판정 자체는 사람 몫입니다 — [../harness/references/maturity-levels.md](../harness/references/maturity-levels.md) |
+| 저장소에 있는 코드 | `apps/api`(healthz·인증·Agent Registry·Run API·SSE·상태 투영), `apps/worker`(Streams 소비자 → 실행·heartbeat), `packages/runtime`(상태 기계·lease·model gateway·Planner/Executor 루프·도구·이벤트·OTel), `packages/mcp`·`packages/policy`(Phase 2 — Gateway·Firewall 자리·기본 deny 판정), `packages/context`·`packages/memory`(Phase 3 — Compiler·적재·검색·Memory), `apps/web`(Next + shadcn 셸), `packages/sdk`, 아직 빈 껍데기는 `packages/workflow`·`packages/evaluation` 둘, `infra/docker`(compose 7서비스 + llm 프로파일 + 오프라인 probe) |
 
 `harness.config` 의 검증 단계는 그 파일이 소유합니다 — 2026-10-07 에 `api-unit` 을 셋으로 쪼개 20단계가 되었습니다(근거: `improvement-log/2026-10-06-002`). 로컬 약 580초, CI verify job 약 4분. 다음 단계(e2e·load)는 해당 Phase 의 단위가 더합니다 — 없는 코드를 검사하는 단계를 미리 적지 않습니다.
 

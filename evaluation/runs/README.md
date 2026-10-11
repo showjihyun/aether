@@ -86,3 +86,28 @@ REP-1 · REP-4 · REP-8 의 입력을 improvement log `2026-09-17-002` 에 따�
 세 건 모두 not-run 이 아니므로 `2026-09-17-002` 의 회귀 확인 기준(입력 개정 뒤 not-run 0건)은 충족했습니다. 이 세트로 비교할 때의 기준선은 **REP-1 · 2 · 3 · 5 · 7 pass, REP-4 · 8 fail** 입니다.
 
 이번 실행에서 평가자는 브랜치 이름에 task ID 를 쓰지 않았고, 앞선 증거 브랜치를 저장소 밖으로 옮겼습니다. 그래도 REP-8 은 `../README.md` 의 성능 기준 행("넘으면 REP-8 실패")에서 task ID 를 알았습니다 — `2026-09-17-001` 의 근거에 더했습니다. 산출물은 같은 폴더의 `rerun-rep1.bundle` · `rerun-rep4.bundle` · `rerun-rep8.bundle` 에 있습니다.
+
+
+### Phase 3 완료 시점 계층 평가 (2026-10-10, 20단계)
+
+위의 두 계층 평가 표는 **18단계**일 때의 것입니다. Phase 3 가 `harness.config` 를 두 번 건드려(2026-10-03·2026-10-07) 단계가 20개가 되었으므로, 그 표를 지금 값과 비교하면 계층별 단계 수가 맞지 않습니다. Phase 3 완료 판정에서 `verify.sh` → `eval.sh --reuse` 를 한 번 돌려 다시 고정합니다.
+
+실행: `main` 의 `c26b78f` 위에서 문서만 고친 작업 트리, Windows 11 + Docker Desktop, `TESTCONTAINERS_RYUK_DISABLED=true`. verify 결과 `pass`(필수 실패 0 · 선택 실패 0), 합계 **545,184 ms** / 예산 600,000 ms, `budget_exceeded: false`, `wall_clock_suspect: false`.
+
+| layer | weight | score | 비고 |
+| --- | --- | --- | --- |
+| correctness | 0.315 | 100 | 5/5 단계 (`syntax` · `api-unit` · `api-integration` 포함) |
+| architecture | 0.21 | 100 | **4/4 단계** — 18단계 때는 3개였습니다(`harness-arch` 가 늘었습니다) |
+| quality | 0.21 | 100 | **8/8 단계** — 18단계 때는 7개였습니다(`harness-scripts` 가 늘었습니다) |
+| behavior | 0.157 | 100 | 2/2 단계 (`protection` · `smoke`) |
+| performance | 0.105 | 100 | 1/1 단계 — Run 생성 p50 25.6 · p95 **28.0** · max 30.1 ms(로컬, n=180, fake 어댑터), 기준 150 ms |
+| subjective | 0.00 | null | 단계 없음 — 가중치는 나머지에 재분배 |
+
+총점 100, 합격선 80, `failed_required` 0. 가중치는 18단계 때와 같습니다(계층 가중치는 단계 수가 아니라 `harness.config` 가 소유합니다). 바뀐 것은 `architecture` 와 `quality` 의 분모뿐입니다.
+
+이 숫자를 기준선으로 쓸 때의 한계입니다.
+
+- **계층 점수 100 은 "20단계가 전부 통과했다" 는 말을 다시 쓴 것입니다.** 단계가 하나도 실패하지 않는 동안 이 표는 어떤 변화도 보여주지 않습니다 — 품질이 올라갔는지는 이 표가 답하지 않습니다. `subjective` 가 `null` 인 것이 그 공백을 그대로 드러냅니다.
+- **대표 task(REP-*) 판정은 Phase 3 에서 다시 돌리지 않았습니다.** 위 기준선(REP-1 · 2 · 3 · 5 · 7 pass, REP-4 · 8 fail, REP-6 pass)이 여전히 비교 기준입니다. Phase 3 는 `packages/context`·`packages/memory` 를 새로 채웠으므로 그 코드를 겨냥한 task 는 아직 없습니다 — 기록이 없다는 것은 회귀가 없다는 뜻이 아니라 **판정하지 않았다**는 뜻입니다.
+- **`performance` 는 여전히 Run 생성 지연 하나입니다.** Phase 3 가 더한 비용(임베딩 호출, 벡터 검색, Context 조립)은 이 계층에 연결되지 않았습니다. `bench` 는 fake 어댑터로 돌므로 임베딩 지연은 측정 대상에 없습니다.
+- **`harness-scripts` 가 이 실행에서 261,353 ms 였습니다** — 합계의 48%입니다. 같은 단계의 하루 사이 실측은 219.8 / 242.0 / 259.6 / 261.4 / 303.6초로 **84초(38%) 흔들립니다**(후보 `2026-10-09-001`). 이 실행의 합계는 예산의 91%이고, 같은 날의 다른 실행은 592,021 ms — **여유 8초**였습니다. 남은 여유는 제품이 아니라 하네스 자신의 테스트 시간에 달려 있습니다.

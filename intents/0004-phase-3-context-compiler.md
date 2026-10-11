@@ -5,9 +5,10 @@
 | 번호 | 0004 |
 | 작성일 | 2026-10-05 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 3 (Week 9~12) — 원본 로드맵 8장 |
-| 상태 | 승인됨 |
+| 상태 | 완료 |
 | 승인 | showjihyun, 2026-10-05 |
-| 후속 spec | [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인 대기) |
+| 완료 | 2026-10-10 — P3-2a·P3-1·P3-2b·P3-3·P3-4·P3-5 전부 병합(마지막 PR #135). spec 개정 1~7 이 실행 중에 찾은 구멍을 메웠고, D-13 의 수동 확인 1회를 같은 날 실행했습니다([../docs/step_results/phase-3.md](../docs/step_results/phase-3.md)) |
+| 후속 spec | [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05, 개정 1~7) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 P3-1 ~ P3-5 가 소유합니다. 이 문서는 그 다섯 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
 
