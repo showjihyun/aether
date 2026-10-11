@@ -1,0 +1,43 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-11-002
+date: 2026-10-11
+status: candidate
+symptom: PreToolUse 가드가 **모든 Bash 도구 호출마다** 2.2~3.3초를 씁니다. 무해한 `echo hello` 에도 같은 비용이 듭니다. 에이전트 작업의 단위가 셸 명령이므로 이 상수는 세션 전체에 곱해집니다 — 명령 100건이면 약 4분이 판정이 아니라 가드 시작에 듭니다
+evidence: |
+  2026-10-11 실측(Windows 11 + Git Bash, 이 저장소):
+    payload {"tool_name":"Bash","tool_input":{"command":"echo hello"}}
+      bash scripts/guard-protected.sh  →  2.39 / 2.24 / 2.25초
+    보호 경로를 건드리는 payload(차단되는 경우)  →  3.31 / 3.24 / 3.24초
+  bash -x 프로파일(258줄, span 2.2초)의 내역:
+    1.224초  guard-protected.sh:116 — 번들 가드 위임
+             (`bash harness/hooks/guard-evaluation-tampering.sh` 한 프로세스가 스택
+              감지 + 언어 팩 6개 병합을 매번 다시 한다)
+    약 1.0초 guard-protected.sh:95-99 — json_field 가 필드마다
+             `printf | grep -oE | head | sed` 파이프라인(프로세스 4개)을 새로 띄운다.
+             jq 가 있으면 한 번에 끝나는데 이 환경에는 jq 가 없어 전량 fallback 이다.
+  이 비용이 보이지 않았던 이유: 가드는 verify 단계가 아니라 도구 호출마다 도는 훅이라
+  `.harness/verify.json` 의 어느 숫자에도 나타나지 않는다. 20단계 합계가 471초일 때도
+  그 바깥에서 명령마다 2.3초가 따로 들고 있었다.
+  이 후보는 2026-10-09-001 의 2순위("`_copy_bundle` 약 35초")를 **대체**한다. 그 가설은
+  틀렸다 — copytree 는 실측 0.08초이고(파일 90개, 968 KB), 12건 전부 합쳐 1초가 안 된다.
+  guard 테스트 1건이 2.5~3.3초인 것은 복사가 아니라 **가드 호출 자체**였다.
+root_cause: 가드가 호출마다 처음부터 시작한다. 스택 감지와 언어 팩 병합은 저장소가 바뀌지 않는 동안 같은 답을 내는데 매 호출 다시 계산하고, JSON 필드 추출은 jq 가 없는 환경에서 필드 수만큼 프로세스를 띄운다
+fix: 아직 고치지 않았다. 측정만 했다 — 가드 사슬은 에이전트를 제약하는 쪽이고, 제약받는 쪽이 자기 제약을 성능 명목으로 고치는 것은 사람 검토 없이 하지 않는다
+recurrence_risk: high
+harness_element: HE-10
+proposed_harness_change: "(사람 결정) (1) `scripts/guard-protected.sh` 의 `json_field` 를 **한 번의 추출**로 바꾼다 — 필요한 필드를 한 파이프라인에서 모두 뽑거나, 값 추출을 한 프로세스(awk 한 번)로 끝낸다. 의미는 바뀌지 않아야 하고, 기존 12건이 그 보증이다. 여기는 보호 파일이 아니다. (2) 번들 가드(`harness/hooks/*`, 보호 파일)의 스택 감지·언어 팩 병합 결과를 **호출 사이에 재사용**한다 — 캐시 키는 `harness.config` 와 언어 팩 파일들의 지문이고, 키가 다르면 다시 계산한다. 캐시가 틀리면 보호 목록이 낡아 가드가 **덜 막는** 쪽으로 틀릴 수 있으므로, 키 계산이 틀렸을 때 안전한 쪽(전량 재계산)으로 떨어지는 설계만 받는다. (3) 어느 쪽도 '빠른 경로' 로 판정을 건너뛰지 않는다 — 무해해 보이는 명령을 검사 없이 통과시키는 최적화는 받지 않는다. 비용이 아니라 검출력이 이 훅의 존재 이유다"
+preferred_enforcement: hook
+trust: untrusted
+regression_check: |
+  대상: (1) 또는 (2)를 적용한 뒤.
+  기준: (a) `tests/scripts/test_guard_protected.py` 12건과
+  `test_guard_docker_volumes.py` 19건, `test_guard_eval_blind.py` 22건이 전부 통과한다
+  — 하나라도 빠지면 비용과 검출력을 교환한 것이다.
+  (b) 가드 스크립트에 변이를 1건 주입(보호 패턴 하나를 지움)했을 때 해당 테스트가
+  실패한다 — 캐시가 변이를 덮어 통과시키지 않는지 보는 것이 (2)의 핵심 확인이다.
+  (c) `echo hello` payload 의 소요가 1초 미만으로 내려간다.
+  (d) 캐시 키를 일부러 어긋나게 만들었을 때(`harness.config` 를 고친 직후) 가드가
+  전량 재계산하고 새 보호 목록으로 판정한다(1회 확인).
+  반대 확인: 캐시 파일을 손으로 지워도 판정 결과가 같다.
+owner: unassigned
+expires: 2027-01-11
