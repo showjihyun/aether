@@ -165,6 +165,33 @@ fallback_tree_fingerprint() {
   } | LC_ALL=C sort | "${hasher}" | awk '{print $1}'
 }
 
+# json_list <파일> <키> — 문자열 배열을 공백으로 이어 출력합니다.
+# json_raw 는 스칼라용이라 배열의 '[' 를 읽지 못합니다. only 와 deferred 가 배열입니다.
+json_list() {
+  local file="$1" key="$2" value="" raw=""
+  [[ -f "${file}" ]] || return 0
+  if command -v jq >/dev/null 2>&1; then
+    value="$(jq -r --arg k "${key}" \
+      'if (has($k) and (.[$k] | type) == "array") then (.[$k] | map(tostring) | join(" ")) else empty end' \
+      "${file}" 2>/dev/null || true)"
+    printf '%s' "${value}"
+    return 0
+  fi
+  # jq 가 없을 때. 값에 ']' 가 없다는 것은 이 파일을 verify.sh 가 쓴다는 사실로 보장됩니다
+  # (단계 id 는 harness_slug 를 지나므로 괄호를 담지 않습니다).
+  raw="$(grep -oE "\"${key}\"[[:space:]]*:[[:space:]]*\[[^]]*\]" -- "${file}" \
+    | head -n 1 || true)"
+  raw="${raw#*[}"
+  raw="${raw%]*}"
+  raw="${raw//\"/ }"
+  raw="${raw//,/ }"
+  # 단어 분리로 공백을 접고 [*] 로 하나씩 공백을 끼워 다시 잇습니다.
+  local -a parts=()
+  # shellcheck disable=SC2206
+  parts=(${raw})
+  printf '%s' "${parts[*]-}"
+}
+
 tree_fingerprint_of() {
   if declare -F harness_tree_fingerprint >/dev/null 2>&1; then
     harness_tree_fingerprint "$1"
@@ -246,6 +273,23 @@ PARTIAL="$(json_raw "${VERIFY_JSON}" "partial")"
 if [[ "${PARTIAL}" == "true" ]]; then
   RAN="$(json_raw "${VERIFY_JSON}" "ran_steps")"
   DEFINED="$(json_raw "${VERIFY_JSON}" "defined_steps")"
+  # 예외 하나 더: 미룬 단계(HARNESS_DEFERRED_STEPS)만 돌지 않은 실행입니다.
+  # 사람 결정(2026-10-11)으로 통합·e2e 를 로컬 기본에서 뺐으므로, 그 미룸만으로 생긴
+  # 부분 실행을 전량 요구로 되돌리면 미룸 자체가 무용해집니다.
+  # 받되 **조용히 받지는 않습니다** — 무엇이 판정되지 않았는지 이름으로 알립니다.
+  # `--only` 부분 실행은 아래로 떨어져 그대로 차단됩니다. 둘을 구별하는 것이 요점입니다.
+  DEFERRED_IDS="$(json_list "${VERIFY_JSON}" "deferred")"
+  ONLY_IDS_RECORDED="$(json_list "${VERIFY_JSON}" "only")"
+  if [[ -n "${DEFERRED_IDS}" && -z "${ONLY_IDS_RECORDED}" ]]; then
+    DEFERRED_COUNT=0
+    for _d in ${DEFERRED_IDS}; do DEFERRED_COUNT=$((DEFERRED_COUNT + 1)); done
+    if [[ -n "${RAN}" && -n "${DEFINED}" && $((RAN + DEFERRED_COUNT)) -eq "${DEFINED}" ]]; then
+      emit "[harness] 미룬 단계가 있습니다: ${DEFERRED_IDS}"
+      emit "이 단계들은 돌지 않았습니다 — 통과한 것이 아닙니다. 판정은 CI 의 verify.sh --full 이 합니다."
+      emit "로컬에서 지금 보려면: ./harness/scripts/verify.sh --full"
+      exit 0
+    fi
+  fi
   # 예외 하나: `--changed` 가 문서계열만 돌린 결과입니다. 그 경우 코드계열은 마지막
   # **전량 통과** 이후 바뀌지 않았고(full_pass_code 와 현재 코드 지문이 같음) 돌지 않은
   # 단계는 그 전량 통과가 이미 판정했습니다. 코드가 바뀌었으면 여전히 전량을 요구합니다.

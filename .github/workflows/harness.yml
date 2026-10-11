@@ -74,7 +74,11 @@ jobs:
       - name: 하네스 검증
         env:
           SMOKE_NO_BUILD: "1"
-        run: ./harness/scripts/verify.sh
+        # --full: harness.config 의 HARNESS_DEFERRED_STEPS(통합·e2e·벤치)까지 돕니다.
+        # 로컬 기본은 그것을 미루므로, 이 한 줄이 "로컬만 빠르게" 와 "게이트를 약화" 를
+        # 가르는 자리입니다. CI 를 환경변수로 자동 감지하지 않습니다 — 동작이 파일에
+        # 보이지 않으면 다음 사람이 읽을 수 없습니다.
+        run: ./harness/scripts/verify.sh --full
 
       - name: 결과 파일
         if: always()
