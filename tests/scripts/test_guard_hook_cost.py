@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -256,53 +257,81 @@ _CORE_WARN = 5
 """코어 목록(`harness/hooks/lib/guard-lib.sh`)의 패턴 수. 위 골든에서 이만큼을 빼면
 언어 팩이 기여한 수가 되고, 그것이 병합이 실제로 일어났는지의 확인이 된다."""
 
-_MERGE_FORK_BUDGET = 10
-"""병합 한 벌(protected + warn)이 써도 되는 fork 횟수.
+_MERGE_PATH_FUNCTIONS = (
+    "harness_lang_validate_packs",
+    "_lang_all_patterns",
+    "lang_all_security_patterns",
+    "_lang_array_lines",
+    "_lang_is_array",
+)
+"""가드 호출마다 지나가는 병합 경로의 함수들. 여기서 fork 를 하면 비용이 팩 수에 비례한다."""
 
-수정 직전 구현은 팩 6개 × (팩 1 + kind 2) × 목록 2벌 만큼 명령 치환을 했고, 실측 fork
-**50회분**(631ms)이었다. 한 번에 모으면 남는 것은 호출자의 프로세스 치환 2개뿐이라
-실측 fork 1~4회분(약 40ms)이다. 10 은 그 사이에 넉넉히 둔 값이다.
 
-처음에 6 으로 두었더니 한 번 흔들렸다 — fork 1회 비용이 11~29ms 로 2.6배 움직이는
-환경이라 분모가 작게 나온 회차에서 예산이 같이 줄었다. 흔들림을 임계로 메우지 않고
-분모 쪽 표본을 늘린 뒤(_FORK_SAMPLES) 양쪽 모두에서 다섯 배 이상 여유가 남는 값으로
-올렸다. 여유를 줘도 되돌아가면(50회분) 반드시 걸린다.
+def _function_body(source: str, name: str) -> str:
+    """`name() {` 부터 열 안 닫힌 `}` 까지. 이 파일의 함수는 모두 그 모양이다."""
+    match = re.search(rf"^{re.escape(name)}\(\) \{{\n(.*?)^\}}", source, re.S | re.M)
+    assert match, f"{name}() 를 찾지 못했습니다 — 이름이 바뀌었으면 이 목록도 고칩니다"
+    return match.group(1)
+
+
+def test_pattern_merge_path_has_no_command_substitution() -> None:
+    """병합 경로에 명령 치환이 없다.
+
+    이것이 이 변경의 성질이고, **시간으로는 이식성 있게 고정할 수 없다.** 처음에는
+    "fork 1회 비용을 재고 그 배수로 판정" 하도록 썼는데 CI(Linux)에서 흔들렸다 —
+    fork 가 0.52ms 인 환경에서는 병합의 **고정 비용**(배열을 잇는 bash 작업, 약 7ms)이
+    fork 비용을 압도해서, 분모로 나누면 고친 코드조차 "fork 15회분" 이 된다. 임계를
+    올려 덮는 대신 모델을 바꿨다: 고정하려던 것은 시간이 아니라 **fork 를 하지 않는다**
+    였으므로 그것을 직접 본다.
+
+    `$((` 는 산술 확장이라 fork 하지 않으므로 세지 않는다.
+    """
+    source = DETECT_STACK.read_text(encoding="utf-8")
+    offenders = {}
+    for name in _MERGE_PATH_FUNCTIONS:
+        body = _function_body(source, name)
+        count = body.count("$(") - body.count("$((")
+        if count > 0:
+            offenders[name] = count
+
+    assert not offenders, (
+        f"병합 경로에 명령 치환이 남아 있습니다: {offenders}. "
+        "순수 bash 연산을 명령 치환으로 감싸면 fork 가 팩 수에 비례해 늘고, "
+        "그 비용은 verify 가 아니라 도구 호출마다 듭니다"
+    )
+
+
+_MERGE_CEILING_MS = 250
+"""병합 한 벌(protected + warn)의 벽시계 상한.
+
+위 구조 테스트가 **성질**을 고정하고, 이 상한은 그 성질이 깨졌을 때 **실제로 돈이 드는
+플랫폼**에서 한 번 더 잡는다. 수정 직전 Windows 실측 631ms, 수정 후 40ms 다.
+
+이 상한은 fork 가 비싼 플랫폼에서만 날카롭다는 것을 밝혀 둔다 — Linux 에서는 수정 직전
+구현도 약 26ms 라 이 상한에 걸리지 않는다. 거기서는 이 결함이 호출당 약 19ms 이고,
+문제가 되는 곳은 fork 1회가 20ms 인 Windows 다. 흔들리는 비례 임계보다 "느슨하지만
+흔들리지 않는 상한 + 흔들리지 않는 구조 테스트" 가 낫다고 판단했다.
 """
 
-_FORK_SAMPLES = 40
-"""fork 1회 비용을 재는 표본 수. 이 값이 작으면 분모가 흔들려 테스트가 비용이 아니라
-그때의 부하를 재게 된다."""
 
-
-def test_pattern_merge_costs_at_most_a_few_forks() -> None:
-    """패턴 병합은 **파일을 읽는 일이 아니라 배열을 잇는 일**이므로 fork 가 거의 없어야 한다.
-
-    fork 1회 비용을 먼저 재고 그 배수로 판정한다. 절대 ms 로 재면 Windows(fork 약 20ms)와
-    Linux(약 1ms)에서 임계가 달라져, 한쪽에서는 흔들리고 다른 쪽에서는 공허해진다.
-    """
+def test_pattern_merge_stays_under_the_wall_clock_ceiling() -> None:
+    """병합이 상한 안에 들고, 그 전에 병합이 실제로 일어났는지부터 확인한다."""
     script = f"""
 set -euo pipefail
 source "{DETECT_STACK.as_posix()}" 2>/dev/null || true
 harness_lang_load_packs || true
 now() {{ date +%s%N; }}
 
-# fork 1회 비용({_FORK_SAMPLES}회 평균). printf 는 내장이므로 재는 것은 명령 치환의 fork 다.
 t0=$(now)
-for _ in $(seq 1 {_FORK_SAMPLES}); do _v="$(printf x)"; done
-t1=$(now)
-
-t2=$(now)
 _n=0
 while IFS= read -r _p; do _n=$((_n + 1)); done < <(lang_all_protected_patterns)
 while IFS= read -r _p; do _n=$((_n + 1)); done < <(lang_all_warn_patterns)
-t3=$(now)
+t1=$(now)
 
-printf 'fork_ns=%s\\nmerge_ns=%s\\npatterns=%s\\n' \
-  $(( (t1 - t0) / {_FORK_SAMPLES} )) $(( t3 - t2 )) "$_n"
+printf 'merge_ns=%s\\npatterns=%s\\n' $(( t1 - t0 )) "$_n"
 """
     out = _bash(script, cwd=REPO_ROOT)
     values = dict(line.split("=", 1) for line in out.strip().splitlines())
-    fork_ns = int(values["fork_ns"])
     merge_ns = int(values["merge_ns"])
     patterns = int(values["patterns"])
 
@@ -311,12 +340,8 @@ printf 'fork_ns=%s\\nmerge_ns=%s\\npatterns=%s\\n' \
         f"팩 패턴 수가 달라졌습니다: {patterns} (기대 {expected}). "
         "비용을 재기 전에 병합이 실제로 일어났는지부터 확인합니다"
     )
-    assert fork_ns > 0, "fork 비용을 재지 못했습니다 — 임계를 만들 수 없습니다"
-    budget_ns = fork_ns * _MERGE_FORK_BUDGET
-    assert merge_ns <= budget_ns, (
-        f"패턴 병합이 {merge_ns / 1e6:.0f}ms(fork {merge_ns / fork_ns:.0f}회분)를 썼습니다. "
-        f"예산은 fork {_MERGE_FORK_BUDGET}회분({budget_ns / 1e6:.0f}ms)입니다 — "
-        "순수 bash 연산을 명령 치환으로 감싸면 비용이 팩 수에 비례합니다"
+    assert merge_ns <= _MERGE_CEILING_MS * 1_000_000, (
+        f"패턴 병합이 {merge_ns / 1e6:.0f}ms 를 썼습니다 (상한 {_MERGE_CEILING_MS}ms)"
     )
 
 
