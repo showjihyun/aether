@@ -29,17 +29,20 @@ Build → Connect → Contextualize → Verify → Execute → Evaluate
 
 ## 3. 의존 방향 규칙
 
+이 절의 번호는 AR-1 ~ AR-7 과 **AR-13** 입니다 — 패키지 **사이**의 방향이고, AR-13 은 Phase 4 에서 더해졌으므로 번호가 3.1 뒤로 밀려 있습니다(3.1 은 패키지 **안**의 AR-8 ~ AR-12). 번호를 다시 매기지 않는 이유는 그 번호가 `.importlinter` 의 계약 이름과 improvement-log·spec 의 인용에 이미 박혀 있기 때문입니다.
+
 이 절과 3.1 이 `arch-test` 단계가 기계로 판정할 계약입니다. 지금은 코드가 없어 검사가 비활성이며, Phase 0 에서 `packages/` 가 생기는 즉시 `.importlinter`(Python)와 `.dependency-cruiser.cjs`(TypeScript)로 옮겨 적습니다. 자연어로 남겨 두면 리뷰 이후에야 위반이 드러납니다([../harness/references/harness-elements.md](../harness/references/harness-elements.md) HE-4).
 
 | ID | 규칙 |
 | --- | --- |
 | AR-1 | `apps/web` 은 `apps/api` 의 HTTP 계약만 압니다. `packages/*` 를 직접 import 하지 않습니다(공용 타입은 `packages/sdk` 경유). |
 | AR-2 | `apps/api` 는 `packages/*` 를 씁니다. `packages/*` 는 `apps/*` 를 알지 못합니다. |
-| AR-3 | `packages/runtime` 은 `packages/mcp` 와 `packages/context` 를 씁니다. 역방향 참조를 만들지 않습니다. |
+| AR-3 | `packages/runtime` 은 `packages/mcp`·`packages/context`·`packages/memory` 를 씁니다. 역방향 참조를 만들지 않습니다. |
 | AR-4 | `packages/policy`(Trust)는 어느 계층에서도 호출될 수 있으나 스스로는 `runtime`·`mcp`·`context` 를 호출하지 않습니다. 판정만 하고 실행하지 않습니다. |
 | AR-5 | 모델 호출은 `packages/runtime` 의 model gateway 한 곳을 지납니다. 다른 패키지에서 LLM SDK 를 직접 부르지 않습니다. Model-agnostic 원칙이 여기서 성립합니다. |
 | AR-6 | 외부 시스템 접근은 전부 `packages/mcp` 를 지납니다. 우회 경로를 만들면 MCP Firewall 이 관측하지 못합니다. |
 | AR-7 | Control Plane 은 Data Plane 을 **호출하지 않고 선언만** 합니다. On-Prem 에서 Data Plane 이 고객 데이터센터 안에만 있어도 성립해야 하기 때문입니다. |
+| AR-13 | `packages/workflow` 는 `packages/runtime` 을 씁니다. `packages/runtime` 은 `packages/workflow` 를 알지 못합니다. 알게 되면 Workflow Run 을 Agent Run 과 합치는 설계가 가능해지고 두 패키지가 서로를 참조합니다(spec 0005 D-1·D-10, 2026-10-12 추가). |
 
 ### 3.1 패키지 안의 의존 방향 (AR-8 ~ AR-12)
 
