@@ -450,7 +450,9 @@ plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 
 
 ## Phase 4 — Workflow Engine
 
-Intent: [0005](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). Spec: [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12 — D-1 ~ D-16 이 공통 결정입니다). Plan: 아직 없습니다. 기간: Week 13~16.
+Intent: [0005](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). Spec: [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12 — D-1 ~ D-16 이 공통 결정입니다). Plan: [../plans/0005-phase-4-workflow-engine.md](../plans/0005-phase-4-workflow-engine.md) (**초안 2026-10-13, 승인 대기**). 기간: Week 13~16.
+
+plan 0005 초안은 P4-2 를 **2a·2b** 로 쪼개고 **P4-4 를 P4-3 앞**에 두자고 제안합니다(범위의 합은 불변). 아래 표의 행을 그 모양으로 고치는 것은 **plan 승인과 같은 커밋**에서 합니다 — 승인 전에 순서를 정본에 적지 않습니다.
 
 **Phase 완료 판정** — START → AGENT → CONDITION 분기 → HUMAN 승인 → AGENT → END 인 Workflow 가 worker 에서 실행되고, 승인에서 멈췄다가 사람의 승인 API 호출로 재개되며, PARALLEL·LOOP·WAIT 노드가 동작합니다.
 
