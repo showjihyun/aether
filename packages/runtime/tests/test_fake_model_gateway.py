@@ -173,3 +173,52 @@ def test_embed_is_deterministic_and_has_eight_dimensions() -> None:
     assert first == second
     assert len(first[0]) == 8
     assert all(isinstance(value, float) for value in first[0])
+
+
+def test_embed_dimensions_are_configurable_for_the_deployed_dim() -> None:
+    """spec 0004 2.9, R-7: fake 어댑터로도 **적재가 돌아야** 합니다.
+
+    8 은 spec 0002 2.5 가 정한 기본값이고 그때는 아무도 그 벡터를 소비하지 않았습니다
+    ("Phase 3 소비 전까지 값 자체의 의미는 없습니다"). Phase 3 이 소비하기 시작하자
+    `data.knowledge_chunks` 의 열은 `AETHER_EMBED_DIM`(기본 768)이고, 8차원 벡터를 쓰면
+    pgvector 가 `expected 768 dimensions, not 8` 로 거절합니다 — 즉 **기본 어댑터로는
+    적재가 아예 되지 않았습니다.** 2026-10-12 smoke 에 적재 시나리오를 넣으면서 처음
+    드러났습니다(그전까지 R-7 의 게이트 커버리지는 0 이었습니다).
+
+    그래서 차원을 배포 설정에서 받습니다. 기본값은 8 그대로 둡니다 — spec 0002 2.5 의
+    문서와 위 테스트가 그것을 고정하고 있고, 조립 지점(worker)이 명시로 넘깁니다.
+    """
+    gateway = FakeModelGateway([], embedding_dimensions=768)
+
+    first = gateway.embed(["hello", "world"])
+    second = gateway.embed(["hello", "world"])
+
+    assert [len(vector) for vector in first] == [768, 768]
+    assert first == second, "같은 입력은 같은 벡터여야 합니다(R-1 의 전제)"
+    assert first[0] != first[1], "다른 입력이 같은 벡터가 되면 검색이 무의미합니다"
+    assert all(0.0 <= value <= 1.0 for value in first[0])
+
+
+def test_echo_passes_the_embedding_dimensions_through() -> None:
+    """worker 의 조립 지점은 `FakeModelGateway.echo()` 를 씁니다 — 거기로도 차원이
+    넘어가야 합니다. 넘어가지 않으면 적재만 조용히 8차원으로 돌아갑니다."""
+    gateway = FakeModelGateway.echo(embedding_dimensions=768)
+
+    assert len(gateway.embed(["x"])[0]) == 768
+
+
+def test_embed_dimensions_beyond_one_digest_stay_deterministic() -> None:
+    """sha256 은 32바이트뿐이라 768차원을 한 번의 digest 로 만들 수 없습니다.
+
+    늘리는 방식이 결정적이지 않으면(예: 난수 패딩) 같은 텍스트가 실행마다 다른 벡터가
+    되어 R-1 의 전제가 깨집니다. 32를 넘는 경계에서 그것을 확인합니다.
+    """
+    gateway = FakeModelGateway([], embedding_dimensions=40)
+
+    first = gateway.embed(["boundary"])[0]
+    second = gateway.embed(["boundary"])[0]
+
+    assert len(first) == 40
+    assert first == second
+    # 앞 32개를 그대로 반복한 것이면 뒤 8개가 앞 8개와 같습니다 — 그건 정보가 없는 패딩입니다.
+    assert first[32:40] != first[0:8]

@@ -14,6 +14,14 @@
                    deny, D-14) 한 뒤 `FakeModelGateway.echo()` 의 `TOOL_CALL` 마커
                    (plan 0003 P2-5)로 실제 도구 호출을 일으켜 `succeeded` 까지
                    폴링합니다. `{run_id, agent_id, agent_version, status}` 한 줄 JSON.
+  scenario_knowledge
+                -- spec 0004 R-7, 2.9.1 (P3-3): Knowledge Set 을 만들고 worker 이미지에
+                   구워진 디렉터리(`/srv/knowledge-smoke`)를 적재한 뒤, 그 집합을
+                   바인딩한 agent 로 run 을 돌려 `succeeded` 까지 폴링합니다.
+                   `{run_id, trace_id, status, knowledge_set_id, ingestion_id}` 한 줄 JSON.
+                   검색이 실제로 Context 에 들어갔는지는 smoke.sh 가 collector 출력의
+                   `context.tokens.knowledge` **값**으로 확인합니다 — 응답 본문은 제품이
+                   어느 API 로도 내지 않기 때문입니다(spec 0004 D-11).
   bench         -- 같은 agent 에 순차 200 회 run 요청, 처음 20 회(워밍업) 제외 180 회의
                    응답 지연으로 `{p50_ms, p95_ms, max_ms, n, warmup}` 한 줄 JSON.
 
@@ -45,6 +53,12 @@ REQUEST_TIMEOUT_SECONDS = 10.0
 # spec 0003 R-7, D-8: worker.Dockerfile 이 빌드 시점에 만들어 두는 고정 파일(smoke
 # 전용) — Filesystem MCP Server(허용 디렉터리 `/srv/mcp-filesystem`)로 읽습니다.
 SMOKE_TOOL_FIXTURE_PATH = "/srv/mcp-filesystem/smoke.txt"
+
+# spec 0004 R-7, 2.9.1: worker.Dockerfile 이 굽는 적재용 디렉터리. api 컨테이너에는
+# 없어도 됩니다 — 이 경로를 **읽는 것은 worker** 이고, 클라이언트는 문자열로만 넘깁니다.
+SMOKE_KNOWLEDGE_SOURCE = "/srv/knowledge-smoke"
+SMOKE_KNOWLEDGE_TOP_K = 2
+INGESTION_TIMEOUT_SECONDS = 120.0
 MCP_FILESYSTEM_SERVER_NAME = "filesystem"
 MCP_FILESYSTEM_TOOL_NAME = "read_text_file"
 
@@ -125,6 +139,63 @@ def create_smoke_agent(api_key: str) -> str:
     }
     response = _request(f"{API_BASE_URL}/agents", "POST", api_key, body)
     return str(response["id"])
+
+
+def knowledge_agent_body(knowledge_set_name: str) -> dict[str, Any]:
+    """spec 0004 2.2, D-5: 적재한 집합을 **이름으로** 바인딩한 agent 정의.
+
+    바인딩이 없으면 Run 은 성공하지만 검색을 하지 않습니다 — 그러면
+    `context.tokens.knowledge` 가 아예 없고 시나리오는 "성공했지만 아무것도 확인하지
+    않은" 상태가 됩니다. 순수 함수로 꺼내 둔 이유는 그 조용한 구멍을 컨테이너 없이
+    테스트에서 막기 위해서입니다(tests/scripts/test_smoke_knowledge.py).
+
+    `memory_enabled` 는 켜지 않습니다. 이 단계가 보는 것은 Knowledge 이고, Memory 를
+    함께 켜면 `context.tokens.knowledge` 가 0 이어도 total 이 커져 사람이 로그를
+    오독할 수 있습니다.
+    """
+    return {
+        "name": f"smoke-knowledge-{_random_suffix()}",
+        "definition": {
+            "schema_version": 1,
+            "system_prompt": "You answer only from the knowledge blocks you are given.",
+            "tools": [],
+            "knowledge": [knowledge_set_name],
+            "knowledge_top_k": SMOKE_KNOWLEDGE_TOP_K,
+        },
+    }
+
+
+def create_knowledge_set(api_key: str) -> dict[str, Any]:
+    body = {"name": f"smoke-docs-{_random_suffix()}"}
+    return _request(f"{API_BASE_URL}/knowledge-sets", "POST", api_key, body)
+
+
+def request_ingestion(api_key: str, knowledge_set_id: str) -> dict[str, Any]:
+    return _request(
+        f"{API_BASE_URL}/knowledge-sets/{knowledge_set_id}/ingestions",
+        "POST",
+        api_key,
+        {"source": SMOKE_KNOWLEDGE_SOURCE},
+    )
+
+
+def wait_for_ingestion(api_key: str, ingestion_id: str, timeout_seconds: float) -> dict[str, Any]:
+    """spec 0004 2.4: `succeeded` 까지 폴링합니다. `failed` 는 **즉시** 올립니다 —
+    기다려도 바뀌지 않는 상태를 타임아웃까지 기다리면 사유가 타임아웃으로 바뀝니다."""
+    deadline = time.monotonic() + timeout_seconds
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        last = _request(f"{API_BASE_URL}/knowledge-ingestions/{ingestion_id}", "GET", api_key, None)
+        status = str(last.get("status"))
+        if status == "succeeded":
+            return last
+        if status == "failed":
+            raise RuntimeError(f"ingestion failed: {json.dumps(last)}")
+        time.sleep(SCENARIO_POLL_INTERVAL_SECONDS)
+    raise TimeoutError(
+        f"ingestion {ingestion_id} did not finish within {timeout_seconds}s "
+        f"(last status: {last.get('status')!r})"
+    )
 
 
 def request_run(api_key: str, agent_id: str) -> dict[str, Any]:
@@ -265,6 +336,35 @@ def scenario() -> dict[str, Any]:
     }
 
 
+def scenario_knowledge() -> dict[str, Any]:
+    """spec 0004 R-7, 2.9.1: 적재 → 그 집합을 바인딩한 Run → `succeeded`.
+
+    "검색 1건 성공" 은 이 함수가 아니라 smoke.sh 가 판정합니다 — 검색 결과가 Context 에
+    들어갔다는 사실은 collector 출력의 `context.tokens.knowledge` 에만 있고, 그 파일은
+    호스트에 있습니다(이 함수는 api 컨테이너 안에서 돕니다). 여기서는 적재가
+    `succeeded` 라는 것까지 확인해 넘깁니다. 빈 적재가 조용히 통과하지 않게 하는 것은
+    smoke.sh 의 청크 수 확인입니다 — 적재 상태 API 가 청크 수를 내지 않기 때문입니다.
+    """
+    api_key = _require_api_key()
+    knowledge_set = create_knowledge_set(api_key)
+    accepted = request_ingestion(api_key, str(knowledge_set["id"]))
+    wait_for_ingestion(api_key, str(accepted["ingestion_id"]), INGESTION_TIMEOUT_SECONDS)
+    # `GET /knowledge-ingestions/{id}` 은 청크 수를 내지 않습니다(spec 2.4 의 표 그대로).
+    # 그래서 "빈 적재가 아니었나" 는 smoke.sh 가 psql 로 확인합니다 — `data.tool_call_audit`
+    # 의 행 수를 보는 것과 같은 방식입니다(이번 Phase 에 조회 API 가 없는 것도 같습니다).
+    body = knowledge_agent_body(str(knowledge_set["name"]))
+    agent = _request(f"{API_BASE_URL}/agents", "POST", api_key, body)
+    run = request_run(api_key, str(agent["id"]))
+    result = wait_for_succeeded(api_key, str(run["run_id"]), SCENARIO_TIMEOUT_SECONDS)
+    return {
+        "run_id": result["run_id"],
+        "trace_id": result.get("trace_id"),
+        "status": result["status"],
+        "knowledge_set_id": str(knowledge_set["id"]),
+        "ingestion_id": str(accepted["ingestion_id"]),
+    }
+
+
 def bench() -> dict[str, float | int]:
     api_key = _require_api_key()
     agent_id = create_smoke_agent(api_key)
@@ -278,7 +378,9 @@ def bench() -> dict[str, float | int]:
 
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
-        sys.stderr.write("usage: smoke_client.py <scenario|scenario_tool|bench>\n")
+        sys.stderr.write(
+            "usage: smoke_client.py <scenario|scenario_tool|scenario_knowledge|bench>\n"
+        )
         return 2
     command = argv[1]
     try:
@@ -286,6 +388,8 @@ def main(argv: list[str]) -> int:
             result: dict[str, Any] = scenario()
         elif command == "scenario_tool":
             result = scenario_tool()
+        elif command == "scenario_knowledge":
+            result = scenario_knowledge()
         elif command == "bench":
             result = bench()
         else:

@@ -43,10 +43,22 @@ _TOOL_CALL_MARKER = "TOOL_CALL "
 
 
 def _hash_vector(text: str, dimensions: int = _EMBEDDING_DIMENSIONS) -> list[float]:
-    """결정적 벡터 — 같은 텍스트는 항상 같은 벡터(문자열 해시 기반, Phase 3 소비 전까지
-    값 자체의 의미는 없습니다)."""
-    digest = hashlib.sha256(text.encode("utf-8")).digest()
-    return [digest[index] / 255.0 for index in range(dimensions)]
+    """결정적 벡터 — 같은 텍스트는 항상 같은 벡터(문자열 해시 기반).
+
+    spec 0004 R-7: sha256 은 32바이트뿐이라 배포 기본 차원(`AETHER_EMBED_DIM`, 768)을
+    한 번의 digest 로 만들 수 없습니다. 블록 번호를 섞어 digest 를 이어 붙여 늘립니다 —
+    앞을 반복하는 패딩이 아니므로 뒤쪽 차원에도 정보가 있고, 번호가 고정이라 같은
+    텍스트는 항상 같은 벡터입니다(R-1 의 전제).
+    """
+    if dimensions <= 0:
+        raise ValueError("dimensions must be positive")
+    encoded = text.encode("utf-8")
+    raw = bytearray()
+    block = 0
+    while len(raw) < dimensions:
+        raw += hashlib.sha256(encoded + block.to_bytes(4, "big")).digest()
+        block += 1
+    return [raw[index] / 255.0 for index in range(dimensions)]
 
 
 class FakeModelGateway:
@@ -57,18 +69,27 @@ class FakeModelGateway:
         scenario: Sequence[ModelResponse | ModelError] = (),
         *,
         default: ModelResponse | None = None,
+        embedding_dimensions: int = _EMBEDDING_DIMENSIONS,
     ) -> None:
         self._scenario: deque[ModelResponse | ModelError] = deque(scenario)
         self._default = default
+        # spec 0004 R-7: 적재가 fake 어댑터로도 돌아야 하므로 차원을 배포 설정에서 받습니다.
+        # 기본값 8 은 spec 0002 2.5 의 것이고, 조립 지점(worker)이 AETHER_EMBED_DIM 을
+        # 명시로 넘깁니다. 맞지 않으면 pgvector 가 적재를 거절합니다
+        # (2026-10-12 실측: expected 768 dimensions, not 8).
+        self._embedding_dimensions = embedding_dimensions
         self._echo = False
         self.calls: list[ModelRequest] = []
 
     @classmethod
-    def echo(cls) -> FakeModelGateway:
+    def echo(cls, *, embedding_dimensions: int = _EMBEDDING_DIMENSIONS) -> FakeModelGateway:
         """spec 0002 2.5 (P1-5a): 마지막 `user` 메시지를 그대로 돌려주는 기본 응답
         (도구 호출 없음). `default` 와 달리 요청마다 내용이 달라야 하므로 정적
-        `ModelResponse` 로 표현할 수 없어 별도 플래그로 처리합니다."""
-        gateway = cls()
+        `ModelResponse` 로 표현할 수 없어 별도 플래그로 처리합니다.
+
+        `embedding_dimensions` 는 `__init__` 과 같은 이유입니다 — worker 의 조립 지점이
+        이 생성자를 쓰므로, 여기로 넘기지 않으면 적재만 조용히 8차원으로 돌아갑니다."""
+        gateway = cls(embedding_dimensions=embedding_dimensions)
         gateway._echo = True
         return gateway
 
@@ -123,4 +144,4 @@ class FakeModelGateway:
         yield ModelDelta(done=True)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        return [_hash_vector(text) for text in texts]
+        return [_hash_vector(text, self._embedding_dimensions) for text in texts]

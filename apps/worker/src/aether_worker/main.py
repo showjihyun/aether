@@ -151,7 +151,11 @@ def connect_with_backoff[T](
 
 def _build_model_gateway(settings: Settings) -> ModelGateway:
     if settings.model_adapter == "fake":
-        return FakeModelGateway.echo()
+        # spec 0004 R-7: 적재가 fake 어댑터로도 돌아야 하므로 배포 차원을 넘깁니다.
+        # 넘기지 않으면 기본 8차원 벡터가 되고 pgvector 가 적재를 거절합니다
+        # (2026-10-12 실측: expected 768 dimensions, not 8). 이 조합이 기본값이라
+        # 개발 스택에서도 적재가 되지 않았습니다.
+        return FakeModelGateway.echo(embedding_dimensions=settings.embed_dim)
     return OpenAICompatibleGateway(
         settings.model_base_url or "",
         settings.model_id,
