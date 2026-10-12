@@ -37,6 +37,9 @@ done
 OTEL_DIR="infra/docker/out/otel-smoke"
 BENCH_OUT="infra/docker/out/smoke-bench.json"
 CLIENT_SCRIPT="scripts/smoke_client.py"
+# spec 0004 R-11 (P3-5): Context Compiler 가 span 에 싣는 속성 이름. Knowledge 시나리오의
+# 판정이 이 한 줄에 걸려 있으므로 문자열을 흩뿌리지 않습니다.
+KNOWLEDGE_ATTR="context.tokens.knowledge"
 
 # 호스트에서 JSON 을 다룰 파이썬을 고릅니다 — 이름만으로 고르지 않고 실제로 동작하는지
 # 확인합니다. Windows 에서는 "python3" 가 Microsoft Store 스텁으로 깔려 있어 존재는
@@ -177,6 +180,39 @@ sys.exit(1)
 ' "$1" "$2" "$3"
 }
 
+# spec 0004 R-7, 2.9.1 (P3-3): 속성의 **값**을 읽습니다. 존재 검사만 하면 0 토큰도
+# 통과합니다 — 지금 구현에서는 검색 결과가 없으면 속성이 아예 붙지 않지만(compile_context
+# 가 빈 목록이면 항목을 넣지 않습니다) 그것은 구현 세부이고, 여기서 양수를 요구하면
+# 그 세부가 바뀌어도 "검색 1건 성공" 이라는 뜻이 유지됩니다. 없으면 빈 문자열입니다.
+_trace_attribute_value() {
+  "$HOST_PYTHON" -c '
+import json, sys
+trace_id, key, path = sys.argv[1:4]
+with open(path, encoding="utf-8") as handle:
+    for line in handle:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            payload = json.loads(line)
+        except ValueError:
+            continue
+        for resource in payload.get("resourceSpans", []):
+            for scope in resource.get("scopeSpans", []):
+                for span in scope.get("spans", []):
+                    if span.get("traceId") != trace_id:
+                        continue
+                    for attr in span.get("attributes", []):
+                        if attr.get("key") != key:
+                            continue
+                        # OTLP 는 값을 {"stringValue": "..."} 같은 봉투로 싣습니다.
+                        for raw in (attr.get("value") or {}).values():
+                            sys.stdout.write(str(raw))
+                            sys.exit(0)
+sys.exit(1)
+' "$1" "$2" "$3" 2>/dev/null || true
+}
+
 echo "smoke: waiting for context.tokens.total on trace ${TRACE_ID}..." >&2
 ATTR_DEADLINE=$((SECONDS + 30))
 ATTR_FOUND=0
@@ -225,7 +261,67 @@ echo "smoke: data.tool_call_audit rows ${BEFORE_AUDIT_COUNT} -> ${AFTER_AUDIT_CO
 ELAPSED=$SECONDS
 
 if [ "$BENCH" -eq 1 ]; then
-  echo "smoke: running bench (200 sequential run requests, warmup 20)..." >&2
+  # --- spec 0004 R-7, 2.9.1 (P3-3): 적재 → 검색 ---------------------------------------
+# R-7("적재가 오프라인에서 동작한다")은 Phase 3 이 끝날 때까지 게이트 커버리지가 0 이었습니다
+# — 2.9.1 이 그 이유를 적고 있습니다(P3-2b 시점에 검색의 HTTP 경로가 없었습니다).
+# P3-3 이 경로를 만들고 2026-10-12 수동 확인이 실제 모델로 한 번 돌렸으니, 이제 게이트입니다.
+#
+# 검색 **품질**은 보지 않습니다. smoke 는 fake 어댑터로 돌고 그 embed 는 해시 벡터이므로
+# 어느 청크가 1위인지는 의미가 없습니다(품질은 D-13 수동 확인과 api-integration 이 소유).
+# 여기서 보는 것은 셋입니다 — 적재가 succeeded 인가, 청크가 실제로 쌓였는가,
+# 그 집합을 바인딩한 Run 의 Context 에 검색 결과가 **양수 토큰으로** 들어갔는가.
+echo "smoke: running knowledge scenario (ingest dir -> bind -> run -> search in context)..." >&2
+BEFORE_CHUNKS="$(_audit_sql 'SELECT count(*) FROM data.knowledge_chunks')"
+
+KNOWLEDGE_JSON="$("${COMPOSE[@]}" exec -T -e SMOKE_API_KEY api python - scenario_knowledge \
+  <"$CLIENT_SCRIPT")"
+KNOWLEDGE_RUN_ID="$(printf '%s' "$KNOWLEDGE_JSON" | "$HOST_PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["run_id"])')"
+KNOWLEDGE_TRACE_ID="$(printf '%s' "$KNOWLEDGE_JSON" | "$HOST_PYTHON" -c 'import json,sys; print(json.load(sys.stdin).get("trace_id") or "")')"
+KNOWLEDGE_STATUS="$(printf '%s' "$KNOWLEDGE_JSON" | "$HOST_PYTHON" -c 'import json,sys; print(json.load(sys.stdin)["status"])')"
+if [ "$KNOWLEDGE_STATUS" != "succeeded" ]; then
+  echo "smoke: knowledge run ${KNOWLEDGE_RUN_ID} ended as ${KNOWLEDGE_STATUS}" >&2
+  exit 1
+fi
+
+AFTER_CHUNKS="$(_audit_sql 'SELECT count(*) FROM data.knowledge_chunks')"
+echo "smoke: knowledge data.knowledge_chunks rows ${BEFORE_CHUNKS} -> ${AFTER_CHUNKS} chunks" >&2
+if [ "$AFTER_CHUNKS" -le "$BEFORE_CHUNKS" ]; then
+  echo "smoke: ingestion reported succeeded but stored no chunks — is /srv/knowledge-smoke in the worker image?" >&2
+  exit 1
+fi
+
+if [ -z "$KNOWLEDGE_TRACE_ID" ]; then
+  echo "smoke: knowledge run succeeded without a trace_id — cannot verify the search" >&2
+  exit 1
+fi
+
+echo "smoke: waiting for ${KNOWLEDGE_ATTR} on trace ${KNOWLEDGE_TRACE_ID}..." >&2
+KNOWLEDGE_DEADLINE=$((SECONDS + 30))
+KNOWLEDGE_TOKENS=""
+while [ "$SECONDS" -lt "$KNOWLEDGE_DEADLINE" ]; do
+  if [ -f "${OTEL_DIR}/spans.jsonl" ]; then
+    KNOWLEDGE_TOKENS="$(_trace_attribute_value "$KNOWLEDGE_TRACE_ID" "$KNOWLEDGE_ATTR" "${OTEL_DIR}/spans.jsonl")"
+    case "$KNOWLEDGE_TOKENS" in
+      ''|*[!0-9]*) ;;
+      *) [ "$KNOWLEDGE_TOKENS" -gt 0 ] && break ;;
+    esac
+  fi
+  sleep 1
+done
+
+case "$KNOWLEDGE_TOKENS" in
+  ''|*[!0-9]*)
+    echo "smoke: no span on trace ${KNOWLEDGE_TRACE_ID} carries ${KNOWLEDGE_ATTR} within 30s — the run did not search" >&2
+    exit 1
+    ;;
+esac
+if [ "$KNOWLEDGE_TOKENS" -le 0 ]; then
+  echo "smoke: ${KNOWLEDGE_ATTR} is ${KNOWLEDGE_TOKENS} on trace ${KNOWLEDGE_TRACE_ID} — the search returned nothing" >&2
+  exit 1
+fi
+echo "smoke: knowledge search reached the context (${KNOWLEDGE_ATTR}=${KNOWLEDGE_TOKENS} tokens)" >&2
+
+echo "smoke: running bench (200 sequential run requests, warmup 20)..." >&2
   BENCH_JSON="$("${COMPOSE[@]}" exec -T -e SMOKE_API_KEY api python - bench <"$CLIENT_SCRIPT")"
 
   DOCKER_VERSION="$(docker version --format '{{.Server.Version}}')"
@@ -253,5 +349,5 @@ PY
   echo "smoke: bench written to ${BENCH_OUT}" >&2
 fi
 
-echo "smoke: pass (run=${RUN_ID}, trace=${TRACE_ID}, tool_run=${TOOL_RUN_ID}, ${ELAPSED}s)"
+echo "smoke: pass (run=${RUN_ID}, trace=${TRACE_ID}, tool_run=${TOOL_RUN_ID}, knowledge_run=${KNOWLEDGE_RUN_ID}, ${ELAPSED}s)"
 exit 0

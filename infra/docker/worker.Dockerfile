@@ -49,6 +49,21 @@ RUN mkdir -p /srv/mcp-filesystem \
         > /srv/mcp-filesystem/smoke.txt \
     && chmod -R a+rX /srv/mcp-filesystem
 
+# spec 0004 R-7, 2.9.1 (smoke): 적재할 디렉터리도 빌드 시점에 굽습니다.
+# `FilesystemConnector` 는 **worker 에서** 돌고 smoke 의 HTTP 클라이언트는 api 컨테이너
+# 안에서 도므로, 클라이언트가 파일을 써도 worker 는 보지 못합니다. 위 Filesystem MCP
+# fixture 와 같은 이유로 이미지에 둡니다 — 오프라인 판정이 런타임에 아무것도 받지 않고도
+# 성립해야 합니다.
+# 내용은 짧게 둡니다. smoke 는 fake 어댑터로 돌고 그 `embed` 는 해시 벡터이므로
+# 검색 품질은 이 단계가 보는 것이 아닙니다 — 보는 것은 "적재되고 검색이 Context 에
+# 들어갔는가" 입니다. 품질은 수동 확인(D-13)과 api-integration 이 소유합니다.
+RUN mkdir -p /srv/knowledge-smoke \
+    && printf 'Alloy TR-88 must be annealed for six hours before machining (spec 0004 R-7).\n' \
+        > /srv/knowledge-smoke/alloy-spec.txt \
+    && printf 'The Oakmere ferry departs at 06:15 and 17:50 and carries forty-two riders.\n' \
+        > /srv/knowledge-smoke/ferry-schedule.txt \
+    && chmod -R a+rX /srv/knowledge-smoke
+
 ENV UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never \
     UV_PROJECT_ENVIRONMENT=/app/.venv \

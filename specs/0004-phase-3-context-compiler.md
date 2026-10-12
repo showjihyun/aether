@@ -24,7 +24,7 @@ Phase 1·2 의 결정(spec 0002 D-1 ~ D-19, spec 0003 D-1 ~ D-16)은 그대로 �
 | R-4 | `runtime → context` 단방향이 실재하고 위반을 주입하면 아키텍처 단계가 실패합니다 | Outcome 2, AR-3 | `api-arch` + `tests/arch/test_real_importlinter_fires.py` 에 `aether_context/_bad.py`(`import aether_runtime.application`) 주입 케이스 1건 |
 | R-5 | 디렉터리 하나를 적재하면 로컬 Vector DB 에서 검색됩니다 | Outcome 3 (P3-2) | `api-integration`: testcontainers 로 pgvector 를 띄워 문서 3개를 적재하고, 그중 하나의 고유 문장으로 검색해 그 청크가 1위로 나옴 |
 | R-6 | 임베딩은 `ModelGateway.embed` 를 지납니다 | Outcome 3, AR-5 | `api-arch`: `aether_context` 가 `httpx`·벤더 SDK 를 import 하지 않음(AR-5·AR-9). `api-unit`: fake gateway 의 `embed` 호출 수가 청크 수와 일치 |
-| R-7 | 적재가 **오프라인에서** 동작합니다 | Outcome 3, DP-4 | `smoke`: egress 차단 compose 에서 디렉터리 적재 → 검색 1건 성공. 임베딩은 로컬 LLM 서버의 `/v1/embeddings` |
+| R-7 | 적재가 **오프라인에서** 동작합니다 | Outcome 3, DP-4 | `smoke`: 격리된 compose 에서 이미지에 구워진 디렉터리 적재(청크 수 증가) → 그 집합을 바인딩한 Run 의 `context.tokens.knowledge` 가 **양수**(검색 1건 성공). 임베딩은 fake 어댑터의 결정적 벡터이고 차원은 `AETHER_EMBED_DIM` 입니다 — 실제 임베딩 서버는 D-13 수동 확인과 `api-integration` 이 소유합니다(개정 9) |
 | R-8 | 적재된 사실을 묻는 Run 이 **출처와 함께** 답하고, 검색 결과는 신뢰 경계 밖 데이터로 표시됩니다 | Outcome 4 (P3-3) | `api-integration`: fake 모델이 받은 요청에서 Knowledge 블록이 `trust: untrusted` + 출처(문서 경로·청크 id)를 달고 있고 system 메시지에 섞이지 않음. 로컬 LLM 1회 수동 확인(2.10) — **2026-10-12 실행 완료**(개정 8) |
 | R-9 | `Agent Version` 에 Knowledge 집합을 바인딩할 수 있고, 바인딩 변경은 **새 Version** 입니다 | Outcome 4 (P3-3), D-5 | `api-integration`: `PUT /agents/{id}` 로 `knowledge` 만 바꿔 `current_version == 2`, Version 1 불변. 바인딩되지 않은 집합은 검색되지 않음 |
 | R-10 | `Memory` 와 `Knowledge` 가 **같은 테이블·같은 인덱스를 쓰지 않습니다**. Memory 는 Context 에 들어갈 때 "검증 전" 표시가 붙습니다 | Outcome 5 (P3-4), domain 3절 | `api-integration`: 두 테이블 이름과 인덱스 목록이 겹치지 않음을 DB 카탈로그로 확인. `api-unit`: Memory 블록에 `verified: false` 표지가 있고 Knowledge 블록과 다른 표지를 씀 |
@@ -121,6 +121,8 @@ R-7(오프라인 적재 → 검색)은 **P3-3 이후에 `smoke` 에 들어갑니
 어댑터를 직접 부르는 것은 smoke 가 "제품이 쓰는 경로" 를 보는 단계라는 성질을 깨므로 하지
 않습니다. 그 사이의 판정은 `api-integration` 의 pgvector 테스트가 같은 경로를 덮습니다(R-5).
 
+**2026-10-12 에 들어갔습니다**(개정 9). 시나리오는 `scripts/smoke_client.py` 의 `scenario_knowledge` 이고, 적재할 디렉터리(`/srv/knowledge-smoke`)는 Filesystem MCP fixture 와 같은 이유로 `worker.Dockerfile` 이 빌드 시점에 굽습니다 — `Connector` 는 worker 에서 돌고 smoke 의 HTTP 클라이언트는 api 컨테이너 안에서 돌기 때문입니다. 판정은 둘입니다: `data.knowledge_chunks` 행이 늘었는가(빈 적재가 조용히 통과하지 않게), 그 집합을 바인딩한 Run 의 `context.tokens.knowledge` 가 양수인가(검색이 Context 에 닿았는가). 검색 **품질**은 보지 않습니다 — fake 어댑터의 `embed` 는 해시 벡터이므로 어느 청크가 1위인지는 의미가 없습니다. 비용은 `smoke` 94.5초 → 99.7초입니다.
+
 ### 2.10 검증 단계
 
 단계 **수는 늘리지 않습니다.** `smoke` 에 적재·검색 시나리오를 더하고(R-7), 나머지는 `api-integration` 에서 pgvector testcontainer 로 판정합니다(R-5·R-8·R-9·R-10). 로컬 LLM 으로 실제 임베딩을 한 번 확인하는 것은 **사람의 수동 확인**입니다(spec 0002 2.5 와 같은 취급) — 모델 다운로드를 CI 에 넣지 않습니다.
@@ -192,6 +194,7 @@ R-7(오프라인 적재 → 검색)은 **P3-3 이후에 `smoke` 에 들어갑니
 
 | 개정 | 내용 |
 | --- | --- |
+| 개정 9 | [실질] 2026-10-12. **R-7 의 판정을 `smoke` 에 넣었고(2.9.1), 그 과정에서 R-7 의 판정 문구가 성립 불가능했음을 고쳤습니다.** 원래 문구는 "임베딩은 로컬 LLM 서버의 `/v1/embeddings`" 였는데, 그것은 C-7(판정은 fake 어댑터로만)과 D-13(모델 다운로드를 CI 에 넣지 않습니다)과 **동시에 성립할 수 없습니다** — 셋 중 하나는 반드시 틀렸고, 고쳐야 할 것은 R-7 의 판정 문구였습니다. 실제 임베딩 서버의 확인은 D-13 수동 확인(2026-10-10)과 `api-integration` 이 소유합니다. 함께 드러난 결함 하나 — fake 어댑터의 `embed` 는 **8차원** 해시 벡터였고(`_EMBEDDING_DIMENSIONS = 8`, spec 0002 2.5 가 Phase 1 에 정한 값, 주석에 "Phase 3 소비 전까지 값 자체의 의미는 없습니다"), `data.knowledge_chunks` 의 열은 768 이라 **기본 어댑터로는 적재가 아예 되지 않았습니다**(`expected 768 dimensions, not 8`). R-7 의 게이트 커버리지가 0 이어서 Phase 3 이 끝날 때까지 아무도 몰랐습니다. 조립 지점(worker)이 `AETHER_EMBED_DIM` 을 넘기도록 고쳤습니다(spec 0002 개정 10) |
 | 개정 8 | 2026-10-12. **R-8 의 수동 확인(응답 쪽)을 1회 실행했습니다.** 개정 7(D-13)은 임베딩만 확인했으므로 "실제 채팅 모델이 우리가 조립한 Context 를 받고 출처를 달아 답하는가" 는 Phase 3 이 끝날 때까지 미확인이었습니다 — `api-integration` 의 R-8 판정은 fake 모델이 받은 요청의 **모양**만 봅니다. 격리된 compose 프로젝트에서 적재 → 질문 Run → 응답까지 돌려, 응답이 사실과 출처 (`alloy-spec.txt`)를 둘 다 맞혔습니다. 그 문자열은 문서 본문에도 질문에도 없으므로 모델이 얻을 수 있는 곳은 블록의 `source=` 속성뿐입니다. 함께 확인된 것: 2차 Run 의 `context.tokens.memory`(71)로 **2.6 의 Memory 왕복도 실제 모델에서 처음** 확인됐습니다. 숫자·반대 확인·한계는 [../docs/step_results/phase-3.md](../docs/step_results/phase-3.md) "P3-3 수동 확인" 이 소유합니다. 한계 둘을 여기에도 남깁니다 — 배포 기본 모델(`qwen3.8:27b`, 매니페스트 17.7 GB)은 이 기계의 VRAM 12 GB·여유 RAM 5.6 GB 로 올라가지 않아 같은 계열 `qwen3:8b` 로 돌렸고, 본문이 어디로도 나가지 않으므로(D-11) "system 에 섞이지 않음" 은 여전히 `api-integration` 이 소유합니다 |
 | 개정 7 | 2026-10-10. **D-13 의 수동 확인을 1회 실행했습니다**(Phase 3 완료 판정). compose 가 고정한 ollama 이미지(`0.34.0`, digest `684d8674…`)에 `nomic-embed-text` 를 올려 `OpenAICompatibleGateway.embed` → `ModelGatewayEmbedder` → pgvector 로 Knowledge 적재·검색과 Memory 쓰기·읽기를 왕복했습니다. 숫자와 한계는 [../docs/step_results/phase-3.md](../docs/step_results/phase-3.md) "D-13 수동 확인" 이 소유합니다. 이 실행으로 **D-3 이 고친 것이 실제 서버에서 성립함**이 처음 확인됐습니다 — 그전까지 임베딩 경로의 증거는 전부 fake 또는 결정적 해시 임베더였습니다. 함께: spec 0002 2.5 에 그 문서가 D-3 으로 개정됐다는 사실을 남겼습니다(spec 0002 개정 9) |
 | 개정 6 | 2026-10-10. **2.6 의 트리거를 구체화했습니다** — "Run 이 종결할 때 남길 것이 있으면" 과 "Executor 가 명시적으로 넘긴 것만" 은 구현마다 다르게 읽히고, 다르게 읽히는 것은 테스트할 수 없습니다. P3-4 를 시작하기 전에 주 세션이 `memory_enabled` ∧ `succeeded` ∧ "마지막 assistant 본문 그대로" 로 좁혔고, 구현과 테스트가 그것을 고정했습니다. 실행 중에 나온 해석 하나도 함께 적습니다 — `memory_enabled` 가 **읽기도** 막습니다 |
