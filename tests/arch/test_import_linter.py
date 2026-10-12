@@ -25,6 +25,10 @@ FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 # review item until Phase 1, per architecture.md 3.1 "기계 판정").
 EXPECTED_CONTRACT_PREFIXES = {
     "ar2",
+    # spec 0005 D-10 (Phase 4): AR-13 — runtime 은 workflow 를 import 하지 않습니다.
+    # AR-3 이 mcp·context 만 보고 있어 workflow 방향을 막는 계약이 **없었습니다**
+    # (2026-10-12 확인). backlog P4-2 는 그것을 AR-3 이라고 적고 있었습니다.
+    "ar13",
     "ar3",
     "ar4",
     "ar5",

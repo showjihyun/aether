@@ -224,3 +224,61 @@ def test_real_importlinter_contract_bodies_declare_the_expected_forbidden_module
     content = (REPO_ROOT / ".importlinter").read_text(encoding="utf-8")
     assert "httpx" in content
     assert "aether_runtime.application" in content
+
+
+def test_runtime_import_of_workflow_is_rejected_ar13(tmp_path: Path) -> None:
+    """spec 0005 R-15, D-10 (Phase 4): `ar13-runtime-does-not-know-workflow` —
+    `aether_runtime` 은 `aether_workflow` 를 import 하지 않습니다.
+
+    방향은 **workflow → runtime** 입니다. Workflow 실행기가 Agent Run 을 만들고
+    기다리지만, runtime 은 workflow 를 알지 못해야 합니다 — 알게 되면 Workflow Run 을
+    Agent Run 과 합치는 설계가 가능해지고(spec 0005 D-1 이 거부한 것) 두 패키지가
+    서로를 참조하게 됩니다.
+
+    2026-10-12 확인: 이 방향을 막는 계약이 **없었습니다.** `.importlinter` 의
+    `ar3-runtime-direction` 은 `source_modules` 가 `aether_mcp`·`aether_context` 뿐이고,
+    `aether_workflow` 는 `root_packages` 와 AR-2·AR-5·AR-8·AR-9·AR-11·AR-12 의 일반
+    계약에만 있었습니다. `docs/architecture.md` 의 AR-3 문구도 workflow 를 말하지
+    않습니다. 계약을 **P4-1 보다 앞에** 세우는 이유는 그래야 첫 workflow 코드가
+    처음부터 위반할 수 없기 때문입니다.
+    """
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "packages" / "runtime" / "src" / "aether_runtime" / "_bad_workflow.py"
+    bad_module.write_text("import aether_workflow.domain\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, (
+        "AR-13 이 발화하지 않았습니다 — runtime 이 workflow 를 import 해도 통과했습니다:\n" + output
+    )
+    assert "AR-13" in output, output
+
+
+def test_memory_import_of_runtime_is_rejected_ar3(tmp_path: Path) -> None:
+    """spec 0005 D-10: `aether_memory` 도 `aether_runtime` 을 import 하지 않습니다.
+
+    Phase 3 이 `packages/memory` 를 만들면서 AR-3 의 `source_modules` 에 넣지
+    않았습니다 — `aether_context` 와 같은 자리인데 빠졌습니다. 실제 위반은 없습니다
+    (2026-10-12 확인: `aether_memory` 는 자기 자신 외에 아무것도 import 하지 않고,
+    포트는 각 패키지가 자기 시그니처로 선언하며 worker 의 `main` 이 꽂습니다).
+    막는 것이 없을 뿐이고, 그 상태로 두면 다음에 꽂는 사람이 지름길을 찾습니다.
+    """
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "packages" / "memory" / "src" / "aether_memory" / "_bad.py"
+    bad_module.write_text("import aether_runtime.application\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, (
+        "AR-3 이 memory 에서 발화하지 않았습니다 — memory 가 runtime 을 import 해도 "
+        "통과했습니다:\n" + output
+    )
+    assert "AR-3" in output, output
