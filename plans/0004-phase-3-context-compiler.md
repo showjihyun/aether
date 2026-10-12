@@ -117,7 +117,7 @@ P3-2 를 2a·2b 로 쪼갠 것과 P3-2a 를 P3-1 앞에 둔 것이 backlog 번�
 | P3-2a | compose 로 PG 를 띄워 `vector` 확장 존재 확인. 이미지 크기 변화 |
 | P3-1 | 결정성 테스트가 **정렬 제거**로 실제 깨지는지 1회(그 뒤 되돌림) |
 | P3-2b | 로컬 LLM 으로 실제 임베딩 1회(되면), 안 되면 사유 |
-| P3-3 | compose 에서 적재 → 질문 Run → 출처 포함 응답 1회 |
+| P3-3 | compose 에서 적재 → 질문 Run → 출처 포함 응답 1회 — **2026-10-12 실행 완료**([../docs/step_results/phase-3.md](../docs/step_results/phase-3.md) "P3-3 수동 확인") |
 | P3-4 | `\d+` 로 두 표의 인덱스 목록을 눈으로 1회 |
 | P3-5 | collector 출력에서 `context.tokens.*` 1회 |
 
