@@ -450,7 +450,7 @@ plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 
 
 ## Phase 4 — Workflow Engine
 
-Intent: 0005 (미발급). 기간: Week 13~16.
+Intent: [0005](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). Spec: [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12 — D-1 ~ D-16 이 공통 결정입니다). Plan: 아직 없습니다. 기간: Week 13~16.
 
 **Phase 완료 판정** — START → AGENT → CONDITION 분기 → HUMAN 승인 → AGENT → END 인 Workflow 가 worker 에서 실행되고, 승인에서 멈췄다가 사람의 승인 API 호출로 재개되며, PARALLEL·LOOP·WAIT 노드가 동작합니다.
 
@@ -479,7 +479,7 @@ WEBHOOK, SCHEDULE 노드는 인바운드 네트워크와 스케줄러가 필요�
 | 범위 | worker 가 Workflow Run 을 집어 노드를 순서대로 실행. AGENT 노드는 P1-5 의 Run 을 만들고 기다림. CONDITION 은 이전 노드 출력으로 분기. Workflow Run 의 `State` 영속 |
 | 범위 밖 | 병렬, 루프, 사람 |
 | 완료 판정 | 분기 양쪽을 타는 두 테스트. 프로세스 재시작 후 이어 실행되는 테스트 |
-| 걸리는 규칙 | AR-3: workflow 가 runtime 을 쓰고 역방향은 없음 |
+| 걸리는 규칙 | **AR-13**: runtime 이 workflow 를 import 하지 않음. 2026-10-12 확인 — 여기 적혀 있던 AR-3 은 틀렸습니다. AR-3 은 "mcp 와 context 가 runtime 을 import 하지 않음" 이고 `.importlinter` 의 `source_modules` 도 그 둘뿐이라 workflow 방향을 막는 계약이 **없었습니다**. spec 0005 D-10 이 AR-13 을 신설합니다 |
 
 ### P4-3 PARALLEL / LOOP / WAIT
 

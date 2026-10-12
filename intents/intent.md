@@ -2,12 +2,12 @@
 
 | 키 | 값 |
 | --- | --- |
-| 활성 intent | **없습니다** — [0004 — Phase 3: Context Compiler / RAG](0004-phase-3-context-compiler.md) 가 2026-10-10 완료되었습니다. [0005 — Phase 4: Workflow Engine](0005-phase-4-workflow-engine.md) 는 **초안**이고 승인 전이므로 활성이 아닙니다 — 그 Phase 의 단위(P4-1 ~ P4-5)를 시작하지 않습니다. 직전 [0003](0003-phase-2-mcp-gateway.md) 는 완료(2026-10-03) |
-| 상태 | 0004 **완료**(2026-10-10) — 단위 여섯 전부 병합(PR #117·#118·#120·#133·#134·#135)과 D-13 수동 확인 1회. intent·spec 0004 승인 2026-10-05, plan 0004 승인 2026-10-06. **다음 Phase 의 단위는 새 intent 가 승인되기 전에 시작하지 않습니다** |
-| 승인 | showjihyun, 2026-10-05 (0003 은 showjihyun, 2026-09-25) |
-| 후속 spec | [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05, D-1 ~ D-14 · 개정 1~7). 0003 의 것은 [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨, D-1 ~ D-16 · 개정 1~5). 0002 의 것은 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
-| 열린 질문 | **0005 초안의 8건이 열려 있습니다**(Workflow Run 상태 모델, 승인 대기 상태, Run 완료 대기 수단, 저장 평면, 승인자 권한 공백, domain.md 정의 시점, 노드 출력 한계, 방향 계약의 자리) — 전부 사람이 spec 0005 에서 답합니다. 0004 의 6건은 D-1 ~ D-7·D-9 로 닫힘. 0003 의 6건 전부 닫힘 — spec 0003 의 D-1 ~ D-6 이 답입니다(공식 SDK `mcp` 2.2.0 · 바인딩은 definition·감사는 `data` · 이번엔 기록만 · `smoke` 는 Filesystem 하나 · 내부 도구 둘은 MCP Server 로 이전 · 판정은 호출마다). 외부 사실 확인에서 D-7·D-8 이 더해졌습니다. 0002 의 8건도 닫힘(D-1 ~ D-19) |
-| 갱신일 | 2026-10-12 |
+| 활성 intent | [0005 — Phase 4: Workflow Engine](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). 직전 [0004](0004-phase-3-context-compiler.md) 는 완료(2026-10-10) |
+| 상태 | 0005 **승인됨**(2026-10-12) — spec 0005 도 같은 날 승인(D-1 ~ D-16). plan 0005 는 아직 없으므로 **단위 구현을 시작하지 않습니다**(산출물 사슬은 건너뛰지 않습니다). 먼저 갈 것은 `.importlinter` 의 AR-13 뿐이고 그것은 보호 파일 PR 로 사람이 병합합니다(spec 0005 D-10). 0004 **완료**(2026-10-10) — 단위 여섯 전부 병합(PR #117·#118·#120·#133·#134·#135)과 D-13 수동 확인 1회. intent·spec 0004 승인 2026-10-05, plan 0004 승인 2026-10-06. **다음 Phase 의 단위는 새 intent 가 승인되기 전에 시작하지 않습니다** |
+| 승인 | showjihyun, 2026-10-12 (0004 는 showjihyun, 2026-10-05) |
+| 후속 spec | [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12, D-1 ~ D-16). 0004 의 것은 [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05, D-1 ~ D-14 · 개정 1~7). 0003 의 것은 [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨, D-1 ~ D-16 · 개정 1~5). 0002 의 것은 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 열린 질문 | **0005 의 8건 전부 닫힘** — spec 0005 의 D-1 ~ D-10 이 답입니다(Run 모델 분리 · 대기를 두 값으로 · 파킹과 이벤트 재개 · 쓰는 주체로 평면 가름 · 승인은 기록만 하고 권한 공백을 명시 · 용어는 spec 이 고정 · 노드 출력 8 KiB 상한 · AR-13 신설). 가장 확신이 낮은 것은 D-8 이고 되돌리는 조건이 spec 0005 C-3 에 있습니다. 0004 의 6건은 D-1 ~ D-7·D-9 로 닫힘. 0003 의 6건 전부 닫힘 — spec 0003 의 D-1 ~ D-6 이 답입니다(공식 SDK `mcp` 2.2.0 · 바인딩은 definition·감사는 `data` · 이번엔 기록만 · `smoke` 는 Filesystem 하나 · 내부 도구 둘은 MCP Server 로 이전 · 판정은 호출마다). 외부 사실 확인에서 D-7·D-8 이 더해졌습니다. 0002 의 8건도 닫힘(D-1 ~ D-19) |
+| 갱신일 | 2026-10-12 (0005 승인) |
 
 ## 이 파일이 무엇인가
 
@@ -50,9 +50,9 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [Phase 1](../docs/roadmap.md) | 완료 (2026-09-16) | [0002](../specs/0002-phase-1-agent-runtime.md) 승인됨 |
 | [0003](0003-phase-2-mcp-gateway.md) | Phase 2 — Enterprise MCP Gateway | [Phase 2](../docs/roadmap.md) | 완료 (2026-10-03) | [0003](../specs/0003-phase-2-mcp-gateway.md) 승인됨 (개정 1~5) |
 | [0004](0004-phase-3-context-compiler.md) | Phase 3 — Context Compiler / RAG | [Phase 3](../docs/roadmap.md) | 완료 (2026-10-10) | [0004](../specs/0004-phase-3-context-compiler.md) 승인됨 |
-| [0005](0005-phase-4-workflow-engine.md) | Phase 4 — Workflow Engine | [Phase 4](../docs/roadmap.md) | **초안** (2026-10-12, 승인 대기) | 없음 — 승인 전에는 쓰지 않습니다 |
+| [0005](0005-phase-4-workflow-engine.md) | Phase 4 — Workflow Engine | [Phase 4](../docs/roadmap.md) | **승인됨** (2026-10-12) | [0005](../specs/0005-phase-4-workflow-engine.md) 승인됨 (D-1 ~ D-16) |
 
-아직 발급하지 않은 intent(0006, MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 0005 는 발급됐지만 **초안**입니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다 — 초안은 활성이 아닙니다.
+아직 발급하지 않은 intent(0006, MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다 — 지금은 Phase 4(P4-1 ~ P4-5)이고, **plan 0005 가 승인되기 전에는 그 단위도 시작하지 않습니다.**
 
 ## 버전 관리
 

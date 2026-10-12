@@ -5,9 +5,9 @@
 | 번호 | 0005 |
 | 작성일 | 2026-10-12 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 4 (Week 13~16) — 원본 로드맵 9장 |
-| 상태 | 초안 |
-| 승인 | (비어 있습니다 — 승인 전에는 spec 을 쓰지 않습니다) |
-| 후속 spec | (승인 뒤 `specs/0005-phase-4-workflow-engine.md`) |
+| 상태 | 승인됨 |
+| 승인 | showjihyun, 2026-10-12 |
+| 후속 spec | [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12, D-1 ~ D-16) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 P4-1 ~ P4-5 가 소유합니다. 이 문서는 그 다섯 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
 
@@ -87,6 +87,8 @@ Phase 4 가 끝났을 때 다음이 관측 가능합니다. 각 항목은 backlo
 - 기간은 Week 13~16 이고 반복·중단 예산은 [../harness/rules/loop-budget.rule.md](../harness/rules/loop-budget.rule.md) 가 소유합니다.
 
 ## Open Questions
+
+열린 질문 8건은 2026-10-12 승인과 함께 spec 으로 넘어갔습니다 — 답은 [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) 의 D-1 ~ D-10 이 소유합니다. 무엇과 무엇 사이에서 골랐는지는 PR #143 의 결정 기록 코멘트에 있습니다. 아래 표는 무엇을 물었는지의 기록으로 남깁니다.
 
 | # | 질문 | 누가 답하는가 | 언제까지 |
 | --- | --- | --- | --- |
