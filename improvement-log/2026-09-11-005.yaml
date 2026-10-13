@@ -7,16 +7,30 @@ evidence: |
   specs/0001-phase-0-foundation.md 17행 개정 5: "Windows 에서 lint-imports 는 PYTHONUTF8=1 필요(2.11 api-arch)".
   specs/0001-phase-0-foundation.md 244행: "PYTHONUTF8=1 uv run lint-imports (Windows 의 cp949 locale 이 .importlinter 의 UTF-8 주석을 못 읽습니다. Linux 에서는 무해)".
   apps/api/migrations/alembic.ini 6~8행 주석: "Kept ASCII-only: Alembic reads this file with encoding=\"locale\", which is not UTF-8 on every machine (observed: cp949 on a Korean-locale Windows host)."
+
+  2026-10-13, 네 번째 경로이고 **읽기가 아니라 쓰기**입니다. P4-1 에서 openapi 를
+  재생성하려고 `uv run aether-api openapi > openapi.json` 을 돌리자
+  `UnicodeEncodeError: 'cp949' codec can't encode character '—' in position 27935`
+  로 실패했습니다. 원인은 `sys.stdout.write()` 가 쓰는 인코딩을 로캘이 정하는 것이고,
+  이 저장소의 스키마 설명에 한국어와 em dash 가 들어 있습니다(실측: openapi.json 에
+  비 ASCII 414자, cp949 로 인코딩 불가).
+  앞의 세 경로와 다른 점: **우회 지식이 없으면 통과할 방법이 없습니다.** 드리프트
+  테스트가 재생성을 요구하므로, `PYTHONUTF8=1` 을 모르는 사람은 openapi.json 을
+  고칠 수 없습니다. 그리고 같은 결함이 stderr 에도 있어서 `keys create --label '운영'`
+  은 **원문을 stdout 에 내보낸 뒤** 메타데이터 한 줄에서 죽습니다 — 키는 발급됐는데
+  명령은 실패한 것으로 보입니다.
 root_cause: Python·Alembic 생태계의 여러 파일 읽기 경로가 명시적 인코딩을 지정하지 않고 OS 로캘에 의존합니다. 이 저장소의 문서·설정·로그는 UTF-8(한국어 포함)로 작성되는데, Windows 한국어 로캘의 기본값은 cp949 라 이 가정이 세 곳에서 독립적으로 깨졌습니다.
-fix: PYTHONUTF8=1 을 api-arch 검증 명령 앞에 붙이고(spec 2.11), alembic.ini 의 sqlalchemy.url 자리표시자를 ASCII 전용으로 유지하며 그 이유를 파일 머리에 주석으로 남겼습니다.
+fix: "PYTHONUTF8=1 을 api-arch 검증 명령 앞에 붙이고(spec 2.11), alembic.ini 의 sqlalchemy.url 자리표시자를 ASCII 전용으로 유지하며 그 이유를 파일 머리에 주석으로 남겼습니다. 2026-10-13(네 번째 경로): 환경변수를 더 붙이지 않고 **코드가 인코딩을 정하게** 했습니다 — cli 의 stdout·stderr 쓰기 13곳을 `_write()` 하나로 모아 `sys.stdout.buffer` 에 UTF-8 바이트로 씁니다. 로캘이 무엇이든 출력이 같습니다(실측: PYTHONIOENCODING=cp949 로 exit 0, 커밋된 openapi.json 과 바이트 동일)."
 recurrence_risk: high
 harness_element: HE-11
-proposed_harness_change: Windows 개발 환경에서 UTF-8 을 가정하는 모든 검증·마이그레이션 명령 앞에 PYTHONUTF8=1(또는 동등한 로캘 고정)을 붙이는 것을 이 저장소의 Windows 개발 환경 규약으로 한 곳에 모으고, 새 Python 진입점을 추가할 때 이 규약을 점검 항목으로 둡니다.
+proposed_harness_change: "(사람 결정) 2026-10-13 에 방향을 수정합니다. 환경변수 규약을 넓히는 것이 첫 제안이었지만, 네 번째 경로가 **환경변수를 아는 사람만 통과할 수 있는** 실패였습니다 — 규약은 그것을 아는 사람에게만 작동합니다. 그래서 (1) 저장소의 Python 진입점은 **코드가 인코딩을 정합니다**(읽기는 `encoding=\"utf-8\"`, 쓰기는 `stream.buffer` 에 UTF-8 바이트). 2026-10-13 에 cli 의 13곳을 그렇게 고쳤습니다. (2) 외부 도구가 로캘을 읽는 자리(lint-imports·Alembic)는 여전히 환경변수·ASCII 제한이 유일한 수단이므로 그 둘은 그대로 둡니다. (3) 새 진입점이 비 ASCII 를 출력할 때 cp949 stdout 에서 죽지 않는지 보는 테스트를 그 진입점과 함께 둡니다 — `apps/api/tests/test_cli_stdout_encoding.py` 가 그 모양입니다. 자연어 규약보다 테스트가 싸고 확실합니다."
 preferred_enforcement: script
 trust: untrusted
 regression_check: |
   대상: REP-5(프로젝트 고유 규약을 따르는 작업, 지금 가능)
   기준: Windows 세션에서 PYTHONUTF8 규약이 신규 진입점에도 적용된 흔적이 발견 경로(spec 2.13 또는 진입점 문서)에서 확인됨. api-arch 단계가 Windows 에서 계속 exit 0.
-  근거 파일: specs/0001-phase-0-foundation.md 2.11·2.13, apps/api/migrations/alembic.ini
+  근거 파일: specs/0001-phase-0-foundation.md 2.11·2.13, apps/api/migrations/alembic.ini, apps/api/tests/test_cli_stdout_encoding.py
+  반대 확인(2026-10-13 1회 완료): `_write()` 가 `buffer` 를 쓰지 않게 변이시키자 비 ASCII
+  를 내는 세 테스트가 전부 `UnicodeEncodeError` 로 실패했습니다. 원복 확인(cmp) 후 4건 통과.
 owner: unassigned
 expires: 2026-12-10

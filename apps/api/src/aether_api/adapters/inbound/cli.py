@@ -40,6 +40,29 @@ from aether_api.domain.agent import AgentNotFound, AgentVersionNotFound
 _EVENTS_SCHEMA_URI = "https://json-schema.org/draft/2020-12/schema"
 
 
+def _write(stream: Any, text: str) -> None:
+    """`text` 를 **UTF-8 로** `stream` 에 씁니다 — 로케일에 맡기지 않습니다.
+
+    `_write(sys.stdout, )` 가 쓰는 인코딩은 실행 환경의 로케일이 정합니다. 이 저장소의
+    스키마와 라벨은 한국어와 em dash(`—`)를 담으므로 Windows 한국어 콘솔(cp949)에서
+    `UnicodeEncodeError` 로 죽습니다 — 2026-10-13 실측: `aether-api openapi >
+    openapi.json` 이 `'cp949' codec can't encode character '—'` 로 실패했습니다.
+    `PYTHONUTF8=1` 로 우회할 수 있지만 그 변수를 **아는 사람만** 재생성할 수 있고,
+    드리프트 테스트는 재생성을 요구합니다. On-Prem·Air-Gapped 가 제품 요구이므로
+    "내 셸에서는 된다" 는 근거가 되지 않습니다.
+
+    `.buffer` 가 없는 stdout(일부 캡처·래퍼)에서는 그대로 텍스트로 씁니다 — 그 환경은
+    UTF-8 보장을 받지 못하지만 죽는 것보다 낫습니다.
+    """
+    buffer = getattr(stream, "buffer", None)
+    if buffer is None:
+        stream.write(text)
+        return
+    stream.flush()
+    buffer.write(text.encode("utf-8"))
+    buffer.flush()
+
+
 def build_parser() -> argparse.ArgumentParser:
     """`aether-api openapi` / `aether-api events-schema` / `aether-api keys create
     --label` / `aether-api agents get-version --agent-id --version` 의 argparse 정의."""
@@ -96,7 +119,7 @@ def openapi(app: FastAPI) -> None:
     P0-3 의 `packages/sdk` 생성과 드리프트 테스트가 이 출력에 기댑니다.
     """
     schema = app.openapi()
-    sys.stdout.write(json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
+    _write(sys.stdout, json.dumps(schema, ensure_ascii=False, indent=2) + "\n")
 
 
 def _events_schema_payload() -> dict[str, Any]:
@@ -132,7 +155,7 @@ def events_schema() -> None:
     (R-12 드리프트 검사 대상).
     """
     schema = _events_schema_payload()
-    sys.stdout.write(json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
+    _write(sys.stdout, json.dumps(schema, ensure_ascii=False, indent=2, sort_keys=True) + "\n")
 
 
 def keys_create(issue: IssueApiKey, label: str) -> None:
@@ -142,8 +165,8 @@ def keys_create(issue: IssueApiKey, label: str) -> None:
     로그에도 원문을 남기지 않습니다.
     """
     issued = issue(label)
-    sys.stdout.write(issued.raw_key + "\n")
-    sys.stderr.write(f"id={issued.key.id} label={issued.key.label}\n")
+    _write(sys.stdout, issued.raw_key + "\n")
+    _write(sys.stderr, f"id={issued.key.id} label={issued.key.label}\n")
 
 
 def agents_get_version(get_agent_version: GetAgentVersion, agent_id: UUID, version: int) -> None:
@@ -158,17 +181,18 @@ def agents_get_version(get_agent_version: GetAgentVersion, agent_id: UUID, versi
     try:
         agent_version = get_agent_version(agent_id, version)
     except AgentNotFound:
-        sys.stderr.write("error: agent_not_found\n")
+        _write(sys.stderr, "error: agent_not_found\n")
         raise SystemExit(1) from None
     except AgentVersionNotFound:
-        sys.stderr.write("error: agent_version_not_found\n")
+        _write(sys.stderr, "error: agent_version_not_found\n")
         raise SystemExit(1) from None
 
     definition_json = agent_version.definition.model_dump(mode="json")
-    sys.stdout.write(json.dumps(definition_json, ensure_ascii=False, indent=2) + "\n")
-    sys.stderr.write(
+    _write(sys.stdout, json.dumps(definition_json, ensure_ascii=False, indent=2) + "\n")
+    _write(
+        sys.stderr,
         f"agent_id={agent_version.agent_id} version={agent_version.version} "
-        f"created_at={agent_version.created_at.isoformat()}\n"
+        f"created_at={agent_version.created_at.isoformat()}\n",
     )
 
 
@@ -196,7 +220,7 @@ def agents_list(
         ],
         "next_cursor": page.next_cursor,
     }
-    sys.stdout.write(json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
+    _write(sys.stdout, json.dumps(payload, ensure_ascii=False, indent=2) + "\n")
 
 
 def permissions_set(
@@ -217,12 +241,13 @@ def permissions_set(
     try:
         set_tool_permission(agent_id, version, server, tool, decision)
     except AgentNotFound:
-        sys.stderr.write("error: agent_not_found\n")
+        _write(sys.stderr, "error: agent_not_found\n")
         raise SystemExit(1) from None
     except AgentVersionNotFound:
-        sys.stderr.write("error: agent_version_not_found\n")
+        _write(sys.stderr, "error: agent_version_not_found\n")
         raise SystemExit(1) from None
 
-    sys.stderr.write(
-        f"agent_id={agent_id} version={version} server={server} tool={tool} decision={decision}\n"
+    _write(
+        sys.stderr,
+        f"agent_id={agent_id} version={version} server={server} tool={tool} decision={decision}\n",
     )
