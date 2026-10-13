@@ -35,6 +35,7 @@ from aether_api.adapters.inbound.http.events import build_events_router
 from aether_api.adapters.inbound.http.healthz import build_router
 from aether_api.adapters.inbound.http.knowledge import build_knowledge_router
 from aether_api.adapters.inbound.http.runs import build_runs_router
+from aether_api.adapters.inbound.http.workflows import build_workflows_router
 from aether_api.adapters.inbound.stream.ingestion_status_consumer import (
     IngestionStatusConsumer,
 )
@@ -49,6 +50,7 @@ from aether_api.adapters.outbound.db.knowledge_declaration_store import (
 )
 from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
 from aether_api.adapters.outbound.db.tool_permissions import PostgresToolPermissionStore
+from aether_api.adapters.outbound.db.workflow_repository import PostgresWorkflowRepository
 from aether_api.adapters.outbound.otel_request_tracing import OtelRequestTracing
 from aether_api.adapters.outbound.redis.knowledge_ingestion_notifier import (
     RedisKnowledgeIngestionNotifier,
@@ -64,10 +66,13 @@ from aether_api.application.usecases.authenticate import AuthenticateUseCase
 from aether_api.application.usecases.cancel_run import CancelRunUseCase
 from aether_api.application.usecases.create_agent import CreateAgentUseCase
 from aether_api.application.usecases.create_knowledge_set import CreateKnowledgeSetUseCase
+from aether_api.application.usecases.define_workflow import DefineWorkflowUseCase
 from aether_api.application.usecases.get_agent import GetAgentUseCase
 from aether_api.application.usecases.get_agent_version import GetAgentVersionUseCase
 from aether_api.application.usecases.get_ingestion import GetIngestionUseCase
 from aether_api.application.usecases.get_run import GetRunUseCase
+from aether_api.application.usecases.get_workflow import GetWorkflowUseCase
+from aether_api.application.usecases.get_workflow_version import GetWorkflowVersionUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
@@ -76,6 +81,7 @@ from aether_api.application.usecases.request_run import RequestRunUseCase
 from aether_api.application.usecases.run_exists import RunExistsUseCase
 from aether_api.application.usecases.set_tool_permission import SetToolPermissionUseCase
 from aether_api.application.usecases.update_agent import UpdateAgentUseCase
+from aether_api.application.usecases.update_workflow import UpdateWorkflowUseCase
 from aether_api.settings import Settings
 
 logger = logging.getLogger(__name__)
@@ -96,6 +102,11 @@ def _postgres_api_key_store(settings: Settings) -> PostgresApiKeyStore:
 def _postgres_agent_repository(settings: Settings) -> PostgresAgentRepository:
     """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
     return PostgresAgentRepository(lambda: psycopg.connect(settings.psycopg_dsn))
+
+
+def _postgres_workflow_repository(settings: Settings) -> PostgresWorkflowRepository:
+    """호출될 때마다 새 연결을 여는 팩토리를 건넵니다 — 여기서는 연결을 열지 않습니다(H-3)."""
+    return PostgresWorkflowRepository(lambda: psycopg.connect(settings.psycopg_dsn))
 
 
 def _postgres_run_declaration_store(settings: Settings) -> PostgresRunDeclarationStore:
@@ -324,6 +335,17 @@ def create_app(
             CreateKnowledgeSetUseCase(knowledge_declaration_store),
             RequestIngestionUseCase(knowledge_declaration_store, knowledge_ingestion_notifier),
             GetIngestionUseCase(knowledge_declaration_store),
+        )
+    )
+
+    workflow_repository = _postgres_workflow_repository(settings)
+    app.include_router(
+        build_workflows_router(
+            require_principal(authenticate),
+            DefineWorkflowUseCase(workflow_repository),
+            GetWorkflowUseCase(workflow_repository),
+            UpdateWorkflowUseCase(workflow_repository),
+            GetWorkflowVersionUseCase(workflow_repository),
         )
     )
     return app

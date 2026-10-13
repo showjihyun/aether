@@ -59,6 +59,7 @@ source = { editable = "apps/api" }
 dependencies = [
     { name = "aether-policy" },
     { name = "aether-runtime" },
+    { name = "aether-workflow" },
     { name = "alembic" },
     { name = "fastapi" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
@@ -74,6 +75,7 @@ dependencies = [
 requires-dist = [
     { name = "aether-policy", editable = "packages/policy" },
     { name = "aether-runtime", editable = "packages/runtime" },
+    { name = "aether-workflow", editable = "packages/workflow" },
     { name = "alembic", specifier = ">=1.20.0" },
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.45.0" },

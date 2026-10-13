@@ -144,6 +144,23 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 
 검색의 HTTP 경로는 아직 없습니다. 이 단위는 포트와 어댑터까지이고, Context 에 넣는 것과 그 경로는 P3-3 입니다.
 
+## 8. Workflow 정의 (P4-1)
+
+전부 인증 뒤입니다(P0-9). 이 절은 **정의**뿐입니다 — 실행·승인 경로는 P4-2a·P4-4 입니다.
+
+| 메서드·경로 | 요청 | 성공 | 오류 |
+| --- | --- | --- | --- |
+| `POST /workflows` | `{ name, nodes[], edges[] }` | `201 { id, name, current_version, nodes, edges }` | `400 invalid_workflow_graph` + `violations[]`, `401`, `422`(요청 모양) |
+| `GET /workflows/{id}` | — | `200`(최신 Version 포함) | `404 workflow_not_found` |
+| `PUT /workflows/{id}` | `{ nodes[], edges[] }` | `200` — **새 Version** | `400`, `404 workflow_not_found` |
+| `GET /workflows/{id}/versions/{version}` | — | `200 { workflow_id, version, nodes, edges }` | `404 workflow_version_not_found` |
+
+**`PUT` 은 고치지 않고 더합니다.** `Workflow Version` 은 불변이고(spec 0005 D-12) 실행 중인 Run 은 시작 당시 Version 을 계속 가리킵니다 — `AgentDefinition` 의 `PUT`(2절)과 같은 규칙이며, 불변성은 앱의 예의가 아니라 **DB 트리거**가 지킵니다([data-model.md](data-model.md) 3절).
+
+**검증은 저장 시점**입니다. 거부는 `400` 이고 본문이 `{"detail": "invalid_workflow_graph", "violations": [{ "reason", "node_id" }]}` 입니다 — 1절의 `{"detail": "<코드>"}` 에 `violations` 를 더한 모양입니다. `422` 를 쓰지 않은 이유는 FastAPI 의 요청 모양 검증이 그 코드를 이미 쓰고, 둘이 겹치면 클라이언트가 "그래프가 틀렸다" 와 "JSON 이 틀렸다" 를 구별할 수 없기 때문입니다.
+
+`reason` 은 여덟 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`. 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1).
+
 ## 관련 문서
 
 - [README.md](README.md) — 문서 지도

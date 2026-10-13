@@ -246,6 +246,31 @@ Phase 3 의 선언 두 표입니다(spec 0004 2.8, P3-2a). `knowledge_sets` 는 
 제외합니다** — 위의 Knowledge 와 다른 점입니다. Knowledge 는 조직이 소유한 사실이라
 재적재를 요구하는 오류로 드러내지만, 기억은 실행 부산물이라 사람에게 요구할 것이 없습니다.
 
+### `control.workflows` · `control.workflow_versions` · `control.workflow_runs` · `control.workflow_approvals`
+
+Phase 4 의 Control Plane 네 표입니다(spec 0005 2.9, P4-1). 평면을 가른 규칙은 **쓰는 주체**입니다 — 정의·Version·Run 투영·**승인 기록**은 api 가 쓰므로 `control` 이고, 노드 실행 기록은 worker 가 쓰므로 `data` 입니다(spec 0005 D-5, 마이그레이션 0001 의 역할·GRANT 가 정한 규칙).
+
+| 표 | 담는 것 | 불변성 |
+| --- | --- | --- |
+| `workflows` | 이름과 `current_version` | 가변 |
+| `workflow_versions` | `nodes`·`edges`(jsonb), `unique(workflow_id, version)` | **트리거로 불변** |
+| `workflow_runs` | `status`(enum `control.workflow_run_status`), `status_seq`, `current_node_id`, `waiting_run_id`, 시각 열 | 가변 |
+| `workflow_approvals` | `workflow_run_id`·`node_execution_id`·`approved_by`·`approved_at`·`note` | **트리거로 append-only** |
+
+**상태 enum 은 새로 만들었습니다** — `control.workflow_run_status` 의 일곱 값이고 `data.run_execution_status`(0001)는 건드리지 않았습니다(spec 0005 D-1·D-2). `timed_out` 은 없습니다 — Phase 4 는 Workflow 전체 타임아웃을 만들지 않고, 자식 Agent Run 의 타임아웃은 그 Run 의 것이며 Workflow 는 그것을 `failed` 로 받습니다.
+
+`aether_data` 는 `workflow_versions`·`workflow_runs` 에 **SELECT 만** 가집니다(worker 가 실행할 그래프와 Run 선언을 읽어야 합니다). `workflows`·`workflow_approvals` 에는 **아무 권한이 없습니다** — worker 는 이름도 승인 기록도 읽을 이유가 없습니다. `workflow_approvals` 는 승인을 **기록**만 하고 권한 판정은 하지 않습니다(spec 0005 D-6, 그 공백은 Phase 8).
+
+`workflow_approvals.node_execution_id` 에는 **FK 를 두지 않았습니다** — `control` 에서 `data` 로의 참조는 평면 경계를 거스릅니다. 지목한 실행이 실제로 `waiting_approval` 인지는 **P4-4 의 애플리케이션 판정**입니다(spec 0005 R-12).
+
+### `data.workflow_node_executions`
+
+노드 실행 하나가 한 행입니다. `unique(workflow_run_id, node_id, iteration)` 이 **같은 노드가 두 번 전진하는 것을 DB 에서** 막습니다 — `iteration` 은 `LOOP` 가 쓰는 회차이고, 멱등 재개(spec 0005 R-8)의 마지막 방어선입니다.
+
+자식 Agent Run 과의 연결은 **이 표의** `agent_run_id` 입니다(spec 0005 D-3). Run 쪽에 "이 Run 은 어느 Workflow 노드의 것" 을 두면 `aether_runtime` 이 workflow 를 알아야 하고 그것이 AR-13 위반입니다. cross-schema FK 의 수명은 4절과 같습니다.
+
+`output`(jsonb)과 `output_truncated` 는 P4-2b 가 씁니다 — **8 KiB 상한은 애플리케이션이 지키고** 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다 — 실행기를 만드는 P4-2a 가 그 집합을 정하면 그때 enum 으로 좁힙니다.
+
 ### PostgreSQL 이미지
 
 Phase 3 부터 `pgvector/pgvector:pg16`(다이제스트 핀)입니다. 이전은 `postgres:16-alpine` 이었고,
@@ -258,6 +283,8 @@ Phase 3 부터 `pgvector/pgvector:pg16`(다이제스트 핀)입니다. 이전은
 | 트리거 | 테이블 | 시점 | 동작 |
 | --- | --- | --- | --- |
 | `agent_versions_immutable` | `control.agent_versions` | `BEFORE UPDATE OR DELETE`, 행 단위 | `control.reject_agent_version_mutation()` 함수가 `RAISE EXCEPTION` |
+| `workflow_versions_immutable` | `control.workflow_versions` | `BEFORE UPDATE OR DELETE`, 행 단위 | `control.reject_workflow_versions_mutation()` — Version 불변(spec 0005 D-12)을 앱이 아니라 DB 가 지킵니다 |
+| `workflow_approvals_immutable` | `control.workflow_approvals` | `BEFORE UPDATE OR DELETE`, 행 단위 | `control.reject_workflow_approvals_mutation()` — 승인 기록은 append-only 입니다(spec 0005 2.6) |
 
 ## 4. cross-schema FK 의 수명 (spec C-8)
 

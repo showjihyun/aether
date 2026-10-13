@@ -1,0 +1,142 @@
+"""spec 0005 2.9, D-12: `WorkflowRepository` 의 PostgreSQL 구현.
+
+`connect` 는 연결 **팩토리**입니다(`PostgresAgentRepository` 와 같은 패턴) — 메서드마다 새
+연결을 열고 `with connect() as conn:` 이 커밋·롤백·닫기를 맡습니다. `aether_control` 역할로
+접속합니다(마이그레이션 0005 GRANT).
+
+`add_version` 은 **한 트랜잭션**에서 `workflows` 행을 `SELECT … FOR UPDATE` 로 잠근 뒤
+`current_version + 1` 로 `workflow_versions` 를 INSERT 하고 `current_version` 을 갱신합니다.
+기존 Version 행은 읽지도 바꾸지도 않습니다 — DB 트리거도 UPDATE·DELETE 를 거부합니다(D-12).
+
+`nodes`·`edges` 는 `jsonb` 로 저장하고 `aether_workflow.domain` 의 값 객체로 복원합니다.
+"""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Callable
+from typing import Any
+from uuid import UUID
+
+import psycopg
+from aether_workflow.domain.node import Edge, Node, NodeKind
+from aether_workflow.domain.workflow_version import WorkflowVersion
+
+from aether_api.domain.workflow import WorkflowNotFound, WorkflowView
+
+
+def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
+    return json.dumps(
+        [{"id": n.id, "kind": n.kind.value, "max_iterations": n.max_iterations} for n in nodes]
+    )
+
+
+def _edges_to_json(edges: tuple[Edge, ...]) -> str:
+    return json.dumps([{"source": e.source, "target": e.target, "label": e.label} for e in edges])
+
+
+def _version_from_row(
+    number: int, nodes_raw: list[dict[str, Any]], edges_raw: list[dict[str, Any]]
+) -> WorkflowVersion:
+    return WorkflowVersion(
+        number=number,
+        nodes=tuple(
+            Node(id=n["id"], kind=NodeKind(n["kind"]), max_iterations=n["max_iterations"])
+            for n in nodes_raw
+        ),
+        edges=tuple(
+            Edge(source=e["source"], target=e["target"], label=e["label"]) for e in edges_raw
+        ),
+    )
+
+
+class PostgresWorkflowRepository:
+    """`control.workflows`·`control.workflow_versions` 에 대한 outbound 포트 구현."""
+
+    def __init__(self, connect: Callable[[], psycopg.Connection]) -> None:
+        self._connect = connect
+
+    def create(self, name: str, nodes: tuple[Node, ...], edges: tuple[Edge, ...]) -> WorkflowView:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("INSERT INTO control.workflows (name) VALUES (%s) RETURNING id", (name,))
+            row = cur.fetchone()
+            if row is None:  # pragma: no cover - INSERT ... RETURNING always yields a row
+                raise RuntimeError("INSERT ... RETURNING control.workflows returned no row")
+            workflow_id: UUID = row[0]
+            cur.execute(
+                """
+                INSERT INTO control.workflow_versions (workflow_id, version, nodes, edges)
+                VALUES (%s, 1, %s, %s)
+                """,
+                (workflow_id, _nodes_to_json(nodes), _edges_to_json(edges)),
+            )
+        return WorkflowView(
+            id=workflow_id,
+            name=name,
+            latest_version=WorkflowVersion(number=1, nodes=nodes, edges=edges),
+        )
+
+    def add_version(
+        self, workflow_id: UUID, nodes: tuple[Node, ...], edges: tuple[Edge, ...]
+    ) -> WorkflowView:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT name, current_version FROM control.workflows WHERE id = %s FOR UPDATE",
+                (workflow_id,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                raise WorkflowNotFound(workflow_id)
+            name, current_version = row
+            new_number = current_version + 1
+            cur.execute(
+                """
+                INSERT INTO control.workflow_versions (workflow_id, version, nodes, edges)
+                VALUES (%s, %s, %s, %s)
+                """,
+                (workflow_id, new_number, _nodes_to_json(nodes), _edges_to_json(edges)),
+            )
+            cur.execute(
+                "UPDATE control.workflows SET current_version = %s, updated_at = now() "
+                "WHERE id = %s",
+                (new_number, workflow_id),
+            )
+        return WorkflowView(
+            id=workflow_id,
+            name=name,
+            latest_version=WorkflowVersion(number=new_number, nodes=nodes, edges=edges),
+        )
+
+    def get(self, workflow_id: UUID) -> WorkflowView | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT w.name, v.version, v.nodes, v.edges
+                FROM control.workflows w
+                JOIN control.workflow_versions v
+                  ON v.workflow_id = w.id AND v.version = w.current_version
+                WHERE w.id = %s
+                """,
+                (workflow_id,),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        name, number, nodes_raw, edges_raw = row
+        return WorkflowView(
+            id=workflow_id,
+            name=name,
+            latest_version=_version_from_row(number, nodes_raw, edges_raw),
+        )
+
+    def get_version(self, workflow_id: UUID, number: int) -> WorkflowVersion | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                "SELECT version, nodes, edges FROM control.workflow_versions "
+                "WHERE workflow_id = %s AND version = %s",
+                (workflow_id, number),
+            )
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return _version_from_row(*row)
