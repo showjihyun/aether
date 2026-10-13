@@ -450,19 +450,22 @@ plan 0004 리뷰로 P3-2 → **P3-2a·P3-2b** 로 분할했고(범위의 합은 
 
 ## Phase 4 — Workflow Engine
 
-Intent: [0005](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). Spec: [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12 — D-1 ~ D-16 이 공통 결정입니다). Plan: [../plans/0005-phase-4-workflow-engine.md](../plans/0005-phase-4-workflow-engine.md) (**초안 2026-10-13, 승인 대기**). 기간: Week 13~16.
+Intent: [0005](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). Spec: [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12 — D-1 ~ D-16 이 공통 결정입니다). Plan: [../plans/0005-phase-4-workflow-engine.md](../plans/0005-phase-4-workflow-engine.md) (승인됨 2026-10-13 — 6 단위, 사람 손 둘). 기간: Week 13~16.
 
-plan 0005 초안은 P4-2 를 **2a·2b** 로 쪼개고 **P4-4 를 P4-3 앞**에 두자고 제안합니다(범위의 합은 불변). 아래 표의 행을 그 모양으로 고치는 것은 **plan 승인과 같은 커밋**에서 합니다 — 승인 전에 순서를 정본에 적지 않습니다.
+plan 0005 리뷰로 P4-2 → **P4-2a·P4-2b** 로 분할했고(범위의 합은 불변), 순서는 plan 이 소유합니다 — **파킹과 재개(P4-2a)가 노드보다 먼저**이고 **승인(P4-4)이 PARALLEL·LOOP·WAIT(P4-3)보다 먼저**입니다. 대기하면서 worker 슬롯을 쥐는 실행기가 `main` 에 남는 구간을 만들지 않고(spec 0005 D-4·R-7), Phase 완료 판정 시나리오에 PARALLEL·LOOP·WAIT 가 없기 때문입니다.
 
 **Phase 완료 판정** — START → AGENT → CONDITION 분기 → HUMAN 승인 → AGENT → END 인 Workflow 가 worker 에서 실행되고, 승인에서 멈췄다가 사람의 승인 API 호출로 재개되며, PARALLEL·LOOP·WAIT 노드가 동작합니다.
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| P4-1 | Workflow 모델과 영속 (START/END/AGENT/CONDITION) | P0-8 | — | 대기 |
-| P4-2 | Workflow 실행기: 순차와 CONDITION | P4-1, P1-5 | — | 대기 |
-| P4-3 | PARALLEL / LOOP / WAIT | P4-2 | — | 대기 |
-| P4-4 | 🔒 HUMAN / APPROVAL (HITL) | P4-2 | — | 대기 |
-| P4-5 | LLM / MCP / TOOL 노드 | P4-2, P2-3 | — | 대기 |
+| P4-1 | Workflow 모델과 영속 · 마이그레이션 0005(다섯 표) | P0-8 | — | 대기 |
+| P4-2a | Workflow 실행기 골격 · AGENT 노드 · 파킹과 재개 | P4-1, P1-5 | — | 대기 |
+| P4-2b | 노드 출력(8 KiB)과 CONDITION 분기 | P4-2a | — | 대기 |
+| P4-4 | 🔒 HUMAN / APPROVAL (HITL) | P4-2a | — | 대기 |
+| P4-3 | PARALLEL / JOIN / LOOP / WAIT | P4-2a | — | 대기 |
+| P4-5 | LLM / MCP / TOOL 노드 | P4-2a, P2-3 | — | 대기 |
+
+행의 순서가 실행 순서입니다 — **P4-4 가 P4-3 앞**입니다. 근거는 plan 0005 1절이고, 순서는 plan 이 소유합니다.
 
 WEBHOOK, SCHEDULE 노드는 인바운드 네트워크와 스케줄러가 필요해 오프라인 MVP 시나리오 밖입니다. Public Beta 전에 붙입니다.
 
@@ -474,14 +477,23 @@ WEBHOOK, SCHEDULE 노드는 인바운드 네트워크와 스케줄러가 필요�
 | 범위 밖 | 실행. UI(Phase 5) |
 | 완료 판정 | 잘못된 그래프(END 없음, 고아 노드)가 검증에서 거부되는 테스트 |
 
-### P4-2 Workflow 실행기
+### P4-2a Workflow 실행기 골격 · AGENT 노드 · 파킹과 재개
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | worker 가 Workflow Run 을 집어 노드를 순서대로 실행. AGENT 노드는 P1-5 의 Run 을 만들고 기다림. CONDITION 은 이전 노드 출력으로 분기. Workflow Run 의 `State` 영속 |
-| 범위 밖 | 병렬, 루프, 사람 |
-| 완료 판정 | 분기 양쪽을 타는 두 테스트. 프로세스 재시작 후 이어 실행되는 테스트 |
-| 걸리는 규칙 | **AR-13**: runtime 이 workflow 를 import 하지 않음. 2026-10-12 확인 — 여기 적혀 있던 AR-3 은 틀렸습니다. AR-3 은 "mcp 와 context 가 runtime 을 import 하지 않음" 이고 `.importlinter` 의 `source_modules` 도 그 둘뿐이라 workflow 방향을 막는 계약이 **없었습니다**. spec 0005 D-10 이 AR-13 을 신설합니다 |
+| 범위 | worker 가 Workflow Run 을 집어 lease 를 걸고 노드를 순서대로 실행. AGENT 노드는 P1-5 의 Run 을 만들고 **파킹**해 기다림 — 상태만 남기고 worker 슬롯과 lease 를 놓습니다. 재개 경로는 `run.finished` 이벤트와 **스위퍼**(안전망) 둘이고 **멱등**입니다. Workflow 자기 이벤트 어휘 |
+| 범위 밖 | CONDITION 과 노드 출력(P4-2b), 병렬·루프·대기, 사람 |
+| 완료 판정 | 프로세스 재시작 후 이어 실행되고 마친 노드의 실행 기록이 1건. 대기 중인 Workflow Run 이 worker 슬롯을 점유하지 않고 lease 가 비어 있음. 같은 깨우는 신호 두 번에 노드가 한 번만 전진 |
+| 걸리는 규칙 | **AR-13**: runtime 이 workflow 를 import 하지 않음. 2026-10-12 확인 — 여기 적혀 있던 AR-3 은 틀렸습니다. AR-3 은 "mcp 와 context 가 runtime 을 import 하지 않음" 이고 `.importlinter` 의 `source_modules` 도 그 둘뿐이라 workflow 방향을 막는 계약이 **없었습니다**. spec 0005 D-10 이 AR-13 을 신설했고 PR #144 로 병합됐습니다. **이벤트만 믿는 구현은 반려**입니다(spec 0005 2.5) |
+
+### P4-2b 노드 출력과 CONDITION 분기
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | 노드 출력 — JSON 객체, 8 KiB 상한, 자르면 잘렸다는 사실을 함께 기록. AGENT 노드의 출력은 자식 Run 의 마지막 assistant 본문을 상한까지 자른 것. CONDITION 은 **선언된 필드 경로 + 선언된 연산자**로 분기 |
+| 범위 밖 | 임의 표현식 평가, 모델에게 판정을 묻는 것. 출력을 span·감사·보고에 넣는 것 |
+| 완료 판정 | 같은 Workflow 를 두 입력으로 돌려 분기 양쪽을 타는 두 테스트. 상한 + 1 바이트 출력이 잘리고 잘림 표시가 남음. 출력이 span·감사·보고에 나타나지 않음 |
+| 걸리는 규칙 | spec 0005 **C-3** — 이것이 새 제품 표면이고 되돌리는 조건이 적혀 있습니다. 출력의 소비자는 CONDITION 과 노드 실행 조회 **둘뿐**이어야 하고, 세 번째가 생기면 보고에 적습니다 |
 
 ### P4-3 PARALLEL / LOOP / WAIT
 

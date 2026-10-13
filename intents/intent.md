@@ -3,11 +3,11 @@
 | 키 | 값 |
 | --- | --- |
 | 활성 intent | [0005 — Phase 4: Workflow Engine](0005-phase-4-workflow-engine.md) (승인됨 2026-10-12). 직전 [0004](0004-phase-3-context-compiler.md) 는 완료(2026-10-10) |
-| 상태 | 0005 **승인됨**(2026-10-12) — spec 0005 도 같은 날 승인(D-1 ~ D-16). plan 0005 는 **초안**(2026-10-13)이고 **승인 전에는 단위 구현을 시작하지 않습니다**(산출물 사슬은 건너뛰지 않습니다). AR-13 은 끝났습니다 — 보호 파일 PR #144, 2026-10-12(spec 0005 D-10, plan 0005 Wave 0). 0004 **완료**(2026-10-10) — 단위 여섯 전부 병합(PR #117·#118·#120·#133·#134·#135)과 D-13 수동 확인 1회. intent·spec 0004 승인 2026-10-05, plan 0004 승인 2026-10-06. **다음 Phase 의 단위는 새 intent 가 승인되기 전에 시작하지 않습니다** |
+| 상태 | 0005 **승인됨**(2026-10-12) — spec 0005 도 같은 날 승인(D-1 ~ D-16). plan 0005 도 **승인됨**(2026-10-13) — 사슬이 열렸으므로 **P4-1 부터 시작합니다**(순서는 plan 이 소유합니다: P4-1 → P4-2a → P4-2b → P4-4 → P4-3 → P4-5). AR-13 은 끝났습니다 — 보호 파일 PR #144, 2026-10-12(spec 0005 D-10, plan 0005 Wave 0). 0004 **완료**(2026-10-10) — 단위 여섯 전부 병합(PR #117·#118·#120·#133·#134·#135)과 D-13 수동 확인 1회. intent·spec 0004 승인 2026-10-05, plan 0004 승인 2026-10-06. **다음 Phase 의 단위는 새 intent 가 승인되기 전에 시작하지 않습니다** |
 | 승인 | showjihyun, 2026-10-12 (0004 는 showjihyun, 2026-10-05) |
 | 후속 spec | [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12, D-1 ~ D-16). 0004 의 것은 [../specs/0004-phase-3-context-compiler.md](../specs/0004-phase-3-context-compiler.md) (승인됨 2026-10-05, D-1 ~ D-14 · 개정 1~7). 0003 의 것은 [../specs/0003-phase-2-mcp-gateway.md](../specs/0003-phase-2-mcp-gateway.md) (승인됨, D-1 ~ D-16 · 개정 1~5). 0002 의 것은 [../specs/0002-phase-1-agent-runtime.md](../specs/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
 | 열린 질문 | **0005 의 8건 전부 닫힘** — spec 0005 의 D-1 ~ D-10 이 답입니다(Run 모델 분리 · 대기를 두 값으로 · 파킹과 이벤트 재개 · 쓰는 주체로 평면 가름 · 승인은 기록만 하고 권한 공백을 명시 · 용어는 spec 이 고정 · 노드 출력 8 KiB 상한 · AR-13 신설). 가장 확신이 낮은 것은 D-8 이고 되돌리는 조건이 spec 0005 C-3 에 있습니다. 0004 의 6건은 D-1 ~ D-7·D-9 로 닫힘. 0003 의 6건 전부 닫힘 — spec 0003 의 D-1 ~ D-6 이 답입니다(공식 SDK `mcp` 2.2.0 · 바인딩은 definition·감사는 `data` · 이번엔 기록만 · `smoke` 는 Filesystem 하나 · 내부 도구 둘은 MCP Server 로 이전 · 판정은 호출마다). 외부 사실 확인에서 D-7·D-8 이 더해졌습니다. 0002 의 8건도 닫힘(D-1 ~ D-19) |
-| 갱신일 | 2026-10-13 (plan 0005 초안) |
+| 갱신일 | 2026-10-13 (plan 0005 승인) |
 
 ## 이 파일이 무엇인가
 
@@ -23,7 +23,7 @@ Anthropic 의 AI-Native SDLC Playbook 은 구현 이전 단계를 `intent.md` �
 | --- | --- | --- | --- | --- |
 | 1. Intent | 무엇을 왜 (proto-spec) | `intents/<NNNN>-<슬러그>.md` — 활성 건은 이 파일이 가리킵니다 | 사람 | 0004 완료 2026-10-10. 0003 완료 2026-10-03. 0002 완료 2026-09-16. 0001 완료 |
 | 2. Spec | 요구사항과 설계 | `specs/<같은 슬러그>.md` | 사람 | 0004 승인됨 2026-10-05 (D-1 ~ D-14 · 개정 1~7). 0003 승인됨 2026-09-25 (D-1 ~ D-16 · 개정 1~5). 0002 승인됨 2026-09-12 (D-1 ~ D-19). 0001 승인됨 2026-09-09 |
-| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | **0005 초안 2026-10-13**([../plans/0005-phase-4-workflow-engine.md](../plans/0005-phase-4-workflow-engine.md), 6 단위 — P4-2 를 2a·2b 로 쪼개고 P4-4 를 P4-3 앞에, 사람 손 둘). 0004 승인됨 2026-10-06([../plans/0004-phase-3-context-compiler.md](../plans/0004-phase-3-context-compiler.md), 6 단위, 개정 1). 0003 승인됨 2026-09-25([../plans/0003-phase-2-mcp-gateway.md](../plans/0003-phase-2-mcp-gateway.md), 7 단위·3 접촉, 리뷰 F-1 ~ F-7 반영). 0002 승인됨 2026-09-12. 0001 승인됨 2026-09-09 |
+| 3. Plan | 어느 파일을 어떻게 (Plan Mode) | `plans/<같은 슬러그>.md` | 사람 | **0005 승인됨 2026-10-13**([../plans/0005-phase-4-workflow-engine.md](../plans/0005-phase-4-workflow-engine.md), 6 단위 — P4-2 를 2a·2b 로 쪼개고 P4-4 를 P4-3 앞에, 사람 손 둘). 0004 승인됨 2026-10-06([../plans/0004-phase-3-context-compiler.md](../plans/0004-phase-3-context-compiler.md), 6 단위, 개정 1). 0003 승인됨 2026-09-25([../plans/0003-phase-2-mcp-gateway.md](../plans/0003-phase-2-mcp-gateway.md), 7 단위·3 접촉, 리뷰 F-1 ~ F-7 반영). 0002 승인됨 2026-09-12. 0001 승인됨 2026-09-09 |
 | 4. Implementation | 코드 | `apps/`, `packages/` | `./harness/scripts/verify.sh` | **완료.** 0002 의 11 단위가 전부 `verify.sh` 17단계 통과 + PR 병합(마지막 PR #29, 2026-09-16). 0001 도 완료(2026-09-11). **Phase 2 도 완료**(2026-10-03) — 일곱 단위와 사람 손 둘이 전부 병합됐습니다 |
 
 `specs/` 와 `plans/` 는 각각 0001 의 첫 산출물이 나오면서 생겼습니다. 빈 디렉터리를 미리 만들지 않은 것은 의도였습니다 — 쓸모가 그 단계에 도달해야 생기는 산출물은 미리 만들지 않습니다([../harness/references/harness-adoption.md](../harness/references/harness-adoption.md) AD-P2). 빈 디렉터리는 "여기 뭔가 있어야 한다" 는 압력만 남기고, 그 압력은 근거 없는 문서로 채워집니다.
@@ -52,7 +52,7 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | [0004](0004-phase-3-context-compiler.md) | Phase 3 — Context Compiler / RAG | [Phase 3](../docs/roadmap.md) | 완료 (2026-10-10) | [0004](../specs/0004-phase-3-context-compiler.md) 승인됨 |
 | [0005](0005-phase-4-workflow-engine.md) | Phase 4 — Workflow Engine | [Phase 4](../docs/roadmap.md) | **승인됨** (2026-10-12) | [0005](../specs/0005-phase-4-workflow-engine.md) 승인됨 (D-1 ~ D-16) |
 
-아직 발급하지 않은 intent(0006, MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다 — 지금은 Phase 4(P4-1 ~ P4-5)이고, **plan 0005 가 승인되기 전에는 그 단위도 시작하지 않습니다.**
+아직 발급하지 않은 intent(0006, MVP 통합)와 그 안의 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 미리 적어 두었습니다. 그 문서의 단위는 활성 intent 의 Phase 안에서만 집습니다 — 지금은 Phase 4 이고 plan 0005 가 승인됐으므로(2026-10-13) **P4-1 부터** 집습니다. 단위 번호는 plan 의 분할을 따릅니다 — P4-2 는 **P4-2a·P4-2b** 입니다.
 
 ## 버전 관리
 
