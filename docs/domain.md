@@ -69,6 +69,24 @@
 | `Data Plane` | 실행 평면. 고객 데이터가 실제로 흐르는 곳 |
 | `Offline Release Bundle` | 인터넷 없이 설치·갱신할 수 있게 묶은 산출물(Phase 11) |
 
+## 7. 흐름 (Workflow Engine · HITL)
+
+Phase 4 에서 생긴 용어입니다. **`Agent Run` 과 `Workflow Run` 은 다른 것**입니다 — 표도, 상태 enum 도, 이벤트 어휘도 따로입니다(spec 0005 D-1).
+
+| 용어 | 뜻 | 혼동하기 쉬운 것 |
+| --- | --- | --- |
+| `Workflow` | 이름과 `Workflow Version` 목록을 가진 **정의**. 실행 단위가 아닙니다 | `Workflow Run` |
+| `Workflow Version` | 노드와 간선의 **불변** 집합. 정의를 바꾸면 새 Version 이 되고, 실행 중인 Run 의 정의는 바뀌지 않습니다 | `Agent Version`(같은 규칙, 다른 표) |
+| `Node` | Workflow 의 한 단계. 종류는 `START`·`END`·`AGENT`·`CONDITION`·`PARALLEL`·`JOIN`·`LOOP`·`WAIT`·`LLM`·`MCP`·`TOOL` 열 하나입니다 | `Task`(그것은 Agent Run 안의 단위입니다) |
+| `Edge` | 노드 id 둘을 잇는 방향 간선. `CONDITION` 의 분기에는 label 이 붙습니다 | — |
+| `Workflow Run` | 한 `Workflow Version` 의 한 번의 실행. 상태는 `queued`·`running`·`waiting_run`·`waiting_approval`·`succeeded`·`failed`·`cancelled` | `Agent Run`(상태 enum 이 **별개**입니다) |
+| `Node Execution` | 노드 한 번의 실행 기록. 출력은 상한 있는 JSON 이고 `data` 평면에만 있습니다 | `Task`·`Observation` |
+| `Approval` | 사람이 특정 `Node Execution` 의 전진을 허락한 **기록**. 누가 언제 했는지만 남습니다 | `Permission`(그것은 판정입니다) |
+
+**대기를 두 값으로 나눈 것**이 이 절의 핵심입니다. `waiting_run` 은 자식 `Agent Run` 을 기다리는 것이고 `waiting_approval` 은 **사람**을 기다리는 것입니다. 사유 컬럼 하나로 두면 "무엇을 기다리는가" 를 보려고 모든 조회가 두 칼럼을 봐야 합니다(spec 0005 D-2).
+
+**`Approval` 은 기록이고 판정이 아닙니다.** v1 은 **인증된 주체 누구나** 승인할 수 있습니다 — 누가 승인했는지는 남기고 **누가 승인할 수 있는지는 묻지 않습니다.** 그 공백은 의도된 것이고 4절의 `Policy`·`Permission` 이 메울 자리입니다(Phase 8, spec 0005 2.6·C-4).
+
 ## 관련 문서
 
 - [architecture.md](architecture.md)

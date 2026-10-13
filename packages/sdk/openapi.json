@@ -650,6 +650,222 @@
           }
         }
       }
+    },
+    "/workflows": {
+      "post": {
+        "summary": "Define Workflow Route",
+        "operationId": "define_workflow_route_workflows_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateWorkflowRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_workflow_graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidWorkflowGraphResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflows/{workflow_id}": {
+      "get": {
+        "summary": "Get Workflow Route",
+        "operationId": "get_workflow_route_workflows__workflow_id__get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Update Workflow Route",
+        "operationId": "update_workflow_route_workflows__workflow_id__put",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWorkflowBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_workflow_graph",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InvalidWorkflowGraphResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflows/{workflow_id}/versions/{version}": {
+      "get": {
+        "summary": "Get Workflow Version Route",
+        "operationId": "get_workflow_version_route_workflows__workflow_id__versions__version__get",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Id"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowVersionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_version_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -969,6 +1185,65 @@
         "title": "CreateKnowledgeSetRequest",
         "description": "`POST /knowledge-sets` 의 요청 본문."
       },
+      "CreateWorkflowRequest": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NodeModel"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeModel"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "nodes",
+          "edges"
+        ],
+        "title": "CreateWorkflowRequest",
+        "description": "`POST /workflows` 의 요청 본문."
+      },
+      "EdgeModel": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "title": "Source"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "target"
+        ],
+        "title": "EdgeModel"
+      },
       "FailureReason": {
         "type": "string",
         "enum": [
@@ -1143,6 +1418,28 @@
         "title": "IngestionDetailResponse",
         "description": "`GET /knowledge-ingestions/{id}` 의 성공 응답 — 선언·투영만 읽습니다."
       },
+      "InvalidWorkflowGraphResponse": {
+        "properties": {
+          "detail": {
+            "type": "string",
+            "title": "Detail"
+          },
+          "violations": {
+            "items": {
+              "$ref": "#/components/schemas/ViolationModel"
+            },
+            "type": "array",
+            "title": "Violations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "detail",
+          "violations"
+        ],
+        "title": "InvalidWorkflowGraphResponse",
+        "description": "400 본문: `detail` 은 항상 `invalid_workflow_graph`."
+      },
       "KnowledgeSetResponse": {
         "properties": {
           "id": {
@@ -1242,6 +1539,51 @@
         "type": "object",
         "title": "ModelRef",
         "description": "`model.id` 가 `null` 이면 배포 설정 `AETHER_MODEL_ID` 를 씁니다."
+      },
+      "NodeKind": {
+        "type": "string",
+        "enum": [
+          "START",
+          "END",
+          "AGENT",
+          "CONDITION",
+          "PARALLEL",
+          "JOIN",
+          "LOOP",
+          "WAIT",
+          "LLM",
+          "MCP",
+          "TOOL"
+        ],
+        "title": "NodeKind"
+      },
+      "NodeModel": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/NodeKind"
+          },
+          "max_iterations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Iterations"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind"
+        ],
+        "title": "NodeModel"
       },
       "Policy": {
         "properties": {
@@ -1494,6 +1836,31 @@
         "title": "UpdateAgentRequest",
         "description": "`PUT /agents/{id}` 의 요청 본문 — `definition` 만. `name` 은 Phase 1 불변(D-9)."
       },
+      "UpdateWorkflowBody": {
+        "properties": {
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NodeModel"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeModel"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "nodes",
+          "edges"
+        ],
+        "title": "UpdateWorkflowBody",
+        "description": "`PUT /workflows/{id}` 의 요청 본문 — 이름은 바꾸지 않습니다(새 Version 만)."
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1533,6 +1900,108 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "ViolationModel": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Node Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason",
+          "node_id"
+        ],
+        "title": "ViolationModel"
+      },
+      "WorkflowResponse": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "current_version": {
+            "type": "integer",
+            "title": "Current Version"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NodeModel"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeModel"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "current_version",
+          "nodes",
+          "edges"
+        ],
+        "title": "WorkflowResponse",
+        "description": "`POST`·`GET`·`PUT /workflows` 의 성공 응답 — 최신 Version 을 함께 돌려줍니다."
+      },
+      "WorkflowVersionResponse": {
+        "properties": {
+          "workflow_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Id"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "nodes": {
+            "items": {
+              "$ref": "#/components/schemas/NodeModel"
+            },
+            "type": "array",
+            "title": "Nodes"
+          },
+          "edges": {
+            "items": {
+              "$ref": "#/components/schemas/EdgeModel"
+            },
+            "type": "array",
+            "title": "Edges"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_id",
+          "version",
+          "nodes",
+          "edges"
+        ],
+        "title": "WorkflowVersionResponse",
+        "description": "`GET /workflows/{id}/versions/{version}` 의 성공 응답."
       }
     }
   }

@@ -193,6 +193,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Define Workflow Route */
+        post: operations["define_workflow_route_workflows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflows/{workflow_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Route */
+        get: operations["get_workflow_route_workflows__workflow_id__get"];
+        /** Update Workflow Route */
+        put: operations["update_workflow_route_workflows__workflow_id__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflows/{workflow_id}/versions/{version}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Version Route */
+        get: operations["get_workflow_version_route_workflows__workflow_id__versions__version__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -377,6 +429,27 @@ export interface components {
             name: string;
         };
         /**
+         * CreateWorkflowRequest
+         * @description `POST /workflows` 의 요청 본문.
+         */
+        CreateWorkflowRequest: {
+            /** Name */
+            name: string;
+            /** Nodes */
+            nodes: components["schemas"]["NodeModel"][];
+            /** Edges */
+            edges: components["schemas"]["EdgeModel"][];
+        };
+        /** EdgeModel */
+        EdgeModel: {
+            /** Source */
+            source: string;
+            /** Target */
+            target: string;
+            /** Label */
+            label?: string | null;
+        };
+        /**
          * FailureReason
          * @enum {string}
          */
@@ -462,6 +535,16 @@ export interface components {
             failure_reason: string | null;
         };
         /**
+         * InvalidWorkflowGraphResponse
+         * @description 400 본문: `detail` 은 항상 `invalid_workflow_graph`.
+         */
+        InvalidWorkflowGraphResponse: {
+            /** Detail */
+            detail: string;
+            /** Violations */
+            violations: components["schemas"]["ViolationModel"][];
+        };
+        /**
          * KnowledgeSetResponse
          * @description `POST /knowledge-sets` 의 성공 응답.
          */
@@ -516,6 +599,19 @@ export interface components {
         ModelRef: {
             /** Id */
             id?: string | null;
+        };
+        /**
+         * NodeKind
+         * @enum {string}
+         */
+        NodeKind: "START" | "END" | "AGENT" | "CONDITION" | "PARALLEL" | "JOIN" | "LOOP" | "WAIT" | "LLM" | "MCP" | "TOOL";
+        /** NodeModel */
+        NodeModel: {
+            /** Id */
+            id: string;
+            kind: components["schemas"]["NodeKind"];
+            /** Max Iterations */
+            max_iterations?: number | null;
         };
         /** Policy */
         Policy: {
@@ -645,6 +741,16 @@ export interface components {
         UpdateAgentRequest: {
             definition: components["schemas"]["AgentDefinition"];
         };
+        /**
+         * UpdateWorkflowBody
+         * @description `PUT /workflows/{id}` 의 요청 본문 — 이름은 바꾸지 않습니다(새 Version 만).
+         */
+        UpdateWorkflowBody: {
+            /** Nodes */
+            nodes: components["schemas"]["NodeModel"][];
+            /** Edges */
+            edges: components["schemas"]["EdgeModel"][];
+        };
         /** ValidationError */
         ValidationError: {
             /** Location */
@@ -657,6 +763,49 @@ export interface components {
             input?: unknown;
             /** Context */
             ctx?: Record<string, never>;
+        };
+        /** ViolationModel */
+        ViolationModel: {
+            /** Reason */
+            reason: string;
+            /** Node Id */
+            node_id: string | null;
+        };
+        /**
+         * WorkflowResponse
+         * @description `POST`·`GET`·`PUT /workflows` 의 성공 응답 — 최신 Version 을 함께 돌려줍니다.
+         */
+        WorkflowResponse: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Current Version */
+            current_version: number;
+            /** Nodes */
+            nodes: components["schemas"]["NodeModel"][];
+            /** Edges */
+            edges: components["schemas"]["EdgeModel"][];
+        };
+        /**
+         * WorkflowVersionResponse
+         * @description `GET /workflows/{id}/versions/{version}` 의 성공 응답.
+         */
+        WorkflowVersionResponse: {
+            /**
+             * Workflow Id
+             * Format: uuid
+             */
+            workflow_id: string;
+            /** Version */
+            version: number;
+            /** Nodes */
+            nodes: components["schemas"]["NodeModel"][];
+            /** Edges */
+            edges: components["schemas"]["EdgeModel"][];
         };
     };
     responses: never;
@@ -1225,6 +1374,204 @@ export interface operations {
                 content?: never;
             };
             /** @description knowledge_ingestion_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    define_workflow_route_workflows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWorkflowRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description invalid_workflow_graph */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvalidWorkflowGraphResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_route_workflows__workflow_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_workflow_route_workflows__workflow_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateWorkflowBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowResponse"];
+                };
+            };
+            /** @description invalid_workflow_graph */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvalidWorkflowGraphResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_version_route_workflows__workflow_id__versions__version__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowVersionResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_version_not_found */
             404: {
                 headers: {
                     [name: string]: unknown;
