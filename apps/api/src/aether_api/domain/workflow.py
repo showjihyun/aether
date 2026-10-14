@@ -28,3 +28,12 @@ class WorkflowNotFound(Exception):
     def __init__(self, workflow_id: UUID) -> None:
         super().__init__(str(workflow_id))
         self.workflow_id = workflow_id
+
+
+class WorkflowVersionNotFound(Exception):
+    """없는 Workflow Version(Workflow 는 있으나 지정한 번호가 없음)."""
+
+    def __init__(self, workflow_id: UUID, version: int) -> None:
+        super().__init__(f"{workflow_id} v{version}")
+        self.workflow_id = workflow_id
+        self.version = version

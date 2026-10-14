@@ -5,10 +5,15 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
 
-from aether_api.domain.workflow import WorkflowNotFound, WorkflowView
+from aether_api.domain.workflow import WorkflowNotFound, WorkflowVersionNotFound, WorkflowView
+from aether_api.domain.workflow_run import WorkflowRunView
 from aether_workflow.domain.node import Edge, Node
+from aether_workflow.domain.run_status import WorkflowRunStatus
 from aether_workflow.domain.workflow_version import WorkflowVersion
 
 
@@ -51,3 +56,92 @@ class FakeWorkflowRepository:
             if version.number == number:
                 return version
         return None
+
+
+class FakeWorkflowRunDeclarationStore:
+    """`WorkflowRunDeclarationStore` 포트 계약의 인메모리 구현(spec 0005 2.3, 2.9 개정 2).
+
+    `status_seq` 는 `WorkflowRunView` 밖의 내부 부기입니다 — `apply_status` 의 멱등 규칙을
+    재현하려면 마지막으로 적용한 `seq` 를 기억해야 합니다. Version 의 존재는
+    `FakeWorkflowRepository` 로 판정합니다.
+    """
+
+    def __init__(self, repository: FakeWorkflowRepository) -> None:
+        self._repository = repository
+        self._runs: dict[UUID, WorkflowRunView] = {}
+        self._status_seq: dict[UUID, int] = {}
+        self._version_ids: dict[tuple[UUID, int], UUID] = {}
+        self.inputs: dict[UUID, dict[str, Any] | None] = {}
+
+    def create(
+        self, workflow_id: UUID, workflow_version: int, input: dict[str, Any] | None
+    ) -> WorkflowRunView:
+        if self._repository.get_version(workflow_id, workflow_version) is None:
+            raise WorkflowVersionNotFound(workflow_id, workflow_version)
+        version_id = self._version_ids.setdefault((workflow_id, workflow_version), uuid4())
+        run_id = uuid4()
+        view = WorkflowRunView(
+            workflow_run_id=run_id,
+            workflow_id=workflow_id,
+            workflow_version=workflow_version,
+            workflow_version_id=version_id,
+            status=WorkflowRunStatus.QUEUED,
+            current_node_id=None,
+            waiting_run_id=None,
+            requested_at=datetime(2026, 1, 1, tzinfo=UTC),
+            started_at=None,
+            finished_at=None,
+            failure_reason=None,
+        )
+        self._runs[run_id] = view
+        self._status_seq[run_id] = 0
+        self.inputs[run_id] = input
+        return view
+
+    def get(self, workflow_run_id: UUID) -> WorkflowRunView | None:
+        return self._runs.get(workflow_run_id)
+
+    def apply_status(
+        self,
+        workflow_run_id: UUID,
+        *,
+        seq: int,
+        status: WorkflowRunStatus,
+        current_node_id: str | None,
+        waiting_run_id: UUID | None,
+        started_at: datetime | None,
+        finished_at: datetime | None,
+        failure_reason: str | None,
+    ) -> bool:
+        view = self._runs.get(workflow_run_id)
+        if view is None or self._status_seq[workflow_run_id] >= seq:
+            return False
+        self._status_seq[workflow_run_id] = seq
+        self._runs[workflow_run_id] = replace(
+            view,
+            status=status,
+            current_node_id=current_node_id
+            if current_node_id is not None
+            else view.current_node_id,
+            waiting_run_id=waiting_run_id if waiting_run_id is not None else view.waiting_run_id,
+            started_at=started_at if started_at is not None else view.started_at,
+            finished_at=finished_at if finished_at is not None else view.finished_at,
+            failure_reason=failure_reason if failure_reason is not None else view.failure_reason,
+        )
+        return True
+
+
+class FakeWorkflowRunNotifier:
+    """`WorkflowRunNotifier` 포트의 인메모리 구현. `should_fail` 이면 `requested` 가 예외를
+    던집니다 — `StartWorkflowRunUseCase` 가 삼키고 WARNING 을 남기는지 테스트가 증명합니다."""
+
+    def __init__(self, *, should_fail: bool = False) -> None:
+        self.calls: list[tuple[UUID, UUID, str | None]] = []
+        self._should_fail = should_fail
+
+    def requested(
+        self, workflow_run_id: UUID, workflow_version_id: UUID, traceparent: str | None
+    ) -> None:
+        self.calls.append((workflow_run_id, workflow_version_id, traceparent))
+        if self._should_fail:
+            raise RuntimeError("FakeWorkflowRunNotifier: injected requested failure")

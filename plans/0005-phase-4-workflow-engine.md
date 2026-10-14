@@ -156,6 +156,29 @@ backlog 의 Phase 4 완료 판정 + spec 0005 의 R-1 ~ R-15 전부가 통과하
 
 그때 **M** 이 하는 일: intent 0005 의 상태를 `완료` 로, [../intents/intent.md](../intents/intent.md) 의 활성 intent 를 다음 건(0006, MVP 통합)으로, backlog 의 Phase 4 상태 행, [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 행. 그리고 H-2(D-8 되돌리기 판단)에 필요한 숫자를 모아 사람에게 넘깁니다.
 
+## 부록 A — P4-2a 의 실행 설계 (2026-10-14, M)
+
+2절의 P4-2a 표를 **대체하지 않고 좁힙니다.** 착수 전에 GRANT 를 실측해서 2절이 전제한 것 하나가 성립하지 않는 것을 확인했고(아래), 그 결과 이 단위가 만드는 것이 늘어났습니다. 늘어난 만큼 **PR 을 둘로 나눕니다** — 단위는 하나(`Unit: P4-2a`)이고 backlog 의 상태는 둘이 다 병합된 뒤에 `완료` 가 됩니다.
+
+| PR | 범위 | main 에 남는 것 |
+| --- | --- | --- |
+| **A** 실행기 골격 | 마이그레이션 0006(`data.workflow_run_executions`), Workflow Run 시작·조회 API 와 상태 투영, `aether_workflow` 의 전진 유스케이스(`START`→`END`)와 lease, Workflow 자기 이벤트 어휘, worker 의 요청 소비자 | **대기가 전혀 없는** 실행기. 파킹이 없으므로 슬롯을 쥐는 경로도 없습니다(1절 문제 1 을 더 강하게 지킵니다) |
+| **B** AGENT 노드와 파킹 | `AgentRunLauncher`(자식 Run 선언 요청), `waiting_run` 파킹과 lease 놓기, 재개 둘(`run.finished` 소비 + **스위퍼**), 멱등, `node_executions.status` enum 좁히기 | R-6·R-7·R-8 의 판정 |
+
+**왜 나누는가.** 둘을 한 PR 에 넣으면 리뷰 한 번에 마이그레이션·API·실행기·파킹·스위퍼가 같이 들어오고, 그중 하나를 되돌리려면 전부 뜯어야 합니다. 1절 문제 1 의 금지선("대기하면서 슬롯을 쥐는 실행기")은 A 가 **대기 자체를 만들지 않으므로** 더 강하게 지켜집니다 — A 가 지원하는 노드 종류는 `START`·`END` 둘이고, 나머지 종류를 만나면 실행은 `failed` + 구별되는 사유로 끝납니다(절반만 만든 AGENT 노드를 두지 않습니다).
+
+**전제가 틀린 것 하나 — 평면.** 2절은 "상태를 영속" 을 `control.workflow_runs` 로 읽히게 적었습니다. 그런데 실행기는 worker 이고 worker 의 역할(`aether_data`)은 `control` 에 **SELECT 뿐**입니다(마이그레이션 0001·0005 실측). GRANT 를 넓히는 선택은 하지 않습니다 — 평면 규칙(spec D-5)을 거스르고 권한 변경은 사람 검토 대상이며, [../docs/step_results/p4-1.md](../docs/step_results/p4-1.md) 가 이미 "P4-2a 가 이 자리에서 GRANT 를 넓히는 쪽으로 가지 않도록" 적어 두었습니다. 그래서 **spec 개정 2** 로 실행 상태를 `data` 에 두고 `control` 쪽을 투영으로 고정했습니다. 자식 Agent Run 의 선언도 같은 이유로 api 가 만듭니다.
+
+| 이름 | 값 | 자리 |
+| --- | --- | --- |
+| 요청 스트림 | `aether:workflow_runs:requested` | api → worker (Agent Run 과 **다른 스트림**) |
+| 상태 스트림 | `aether:workflow_runs:status` | worker → api (투영) |
+| 자식 Run 선언 요청 | `aether:workflow:agent_runs:requested` | worker → api (**PR B**) |
+| 실행 상태·lease | `data.workflow_run_executions` (마이그레이션 0006) | worker 가 씀 |
+| 스위퍼 주기 | `AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS` 기본 **30** | **PR B** |
+
+**A 에 넣지 않는 것**: 파킹, AGENT·CONDITION·그 밖의 노드 종류, 스위퍼, 취소 API, 노드 출력. 취소는 `control.workflow_runs.cancel_requested_at` 열이 이미 있지만 그것을 쓰는 API 가 없으므로 **A 에서도 만들지 않습니다**(Workflow 취소는 spec 2.3 이 허용한 전이이고, 넣을 단위는 backlog 가 정합니다 — 지금 열 하나 때문에 API 를 발명하지 않습니다).
+
 ## 관련 문서
 
 - [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) — 요구사항·결정

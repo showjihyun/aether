@@ -85,6 +85,8 @@ Phase 4 에서 생긴 용어입니다. **`Agent Run` 과 `Workflow Run` 은 다�
 
 **대기를 두 값으로 나눈 것**이 이 절의 핵심입니다. `waiting_run` 은 자식 `Agent Run` 을 기다리는 것이고 `waiting_approval` 은 **사람**을 기다리는 것입니다. 사유 컬럼 하나로 두면 "무엇을 기다리는가" 를 보려고 모든 조회가 두 칼럼을 봐야 합니다(spec 0005 D-2).
 
+**실행 상태의 정본은 `data` 입니다**(P4-2a). `Workflow Run` 의 상태·lease·현재 노드는 worker 가 `data.workflow_run_executions` 에 쓰고, `control.workflow_runs` 는 그것의 **투영**입니다 — 조회가 보는 값은 상태 스트림이 도착한 뒤에 바뀝니다. `Agent Run` 과 같은 경계입니다([data-model.md](data-model.md), spec 0005 2.9 개정 2). `Node Execution` 의 상태는 `running`·`succeeded`·`failed` 셋이고 실행기가 정했습니다.
+
 **`Approval` 은 기록이고 판정이 아닙니다.** v1 은 **인증된 주체 누구나** 승인할 수 있습니다 — 누가 승인했는지는 남기고 **누가 승인할 수 있는지는 묻지 않습니다.** 그 공백은 의도된 것이고 4절의 `Policy`·`Permission` 이 메울 자리입니다(Phase 8, spec 0005 2.6·C-4).
 
 ## 관련 문서

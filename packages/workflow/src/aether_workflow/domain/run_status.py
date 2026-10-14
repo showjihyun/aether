@@ -38,3 +38,12 @@ _TRANSITIONS: dict[WorkflowRunStatus, frozenset[WorkflowRunStatus]] = {
 def can_transition(source: WorkflowRunStatus, target: WorkflowRunStatus) -> bool:
     """종결 상태에서 나가는 전이는 없습니다. `cancelled` 는 대기 중에도 가능합니다."""
     return target in _TRANSITIONS[source]
+
+
+class IllegalWorkflowTransition(Exception):
+    """전이표에 없는 전이를 시도했습니다. 종결 상태에서 나가는 전이를 포함합니다."""
+
+    def __init__(self, source: WorkflowRunStatus, target: WorkflowRunStatus) -> None:
+        super().__init__(f"illegal workflow transition: {source.value} -> {target.value}")
+        self.source = source
+        self.target = target

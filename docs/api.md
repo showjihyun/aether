@@ -118,9 +118,11 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 | `aether:runs:requested` | Control → Data | `run_id`, `agent_version_id`, `traceparent` | worker consumer group `aether-worker`, `count=1`. 시작 시 자기 PEL 먼저(`XREADGROUP … 0`), 그 뒤 `XAUTOCLAIM`(`min-idle` = `AETHER_WORKER_XAUTOCLAIM_MIN_IDLE_MS`, 기본 65분) → `XREADGROUP >`. 실행이 끝나야 `XACK`. 다른 worker 가 lease 를 쥐고 있으면 ack 하지 않음 | Redis 자동 |
 | `aether:runs:status` | Data → Control | `StatusMessage`: `run_id`, `seq`, `status`, `at`, `started_at?`, `finished_at?`, `failure_reason?`, `trace_id?` (값 없는 선택 필드는 키 없음) | api consumer group `aether-api`(P1-5b) — `seq` 단조 증가로 멱등 투영 | Redis 자동 |
 | `aether:runs:{run_id}:events` | Data → 독자 | `data` = 5절의 봉투 JSON | api SSE 리더(P1-6, 그룹 없음, `XREAD`) | **explicit `<seq>-0`**. 같은 ID 재-XADD(재개 시 재발행)는 어댑터가 성공으로 흡수. `MAXLEN ~ 10000`, `run.finished` 뒤 TTL 24시간 |
-
 | `aether:knowledge:ingestions:requested` | Control → Data | `ingestion_id`, `knowledge_set_id`, `source`, `traceparent` | worker consumer group(적재 전용), `count=1`. Run 과 같은 패턴(자기 PEL → `XAUTOCLAIM` → `XREADGROUP >`). 성공·실패 **모두 ack** — 적재에는 lease 경합이 없습니다(한 적재는 한 worker 가 끝까지 처리) | Redis 자동 |
 | `aether:knowledge:ingestions:status` | Data → Control | `ingestion_id`, `status`, `at`, `chunk_count?`, `failure_reason?` | api consumer group — `control.knowledge_ingestions` 에 투영 | Redis 자동 |
+| `aether:workflow_runs:requested` | Control → Data | `workflow_run_id`, `workflow_version_id`, `traceparent` | worker consumer group `aether-worker`, `count=1`. Run 과 같은 패턴(자기 PEL → `XAUTOCLAIM` → `XREADGROUP >`). lease 를 다른 worker 가 쥐고 있으면 ack 하지 않음 | Redis 자동 |
+| `aether:workflow_runs:status` | Data → Control | `workflow_run_id`, `seq`, `status`, `at`, `current_node_id?`, `waiting_run_id?`, `started_at?`, `finished_at?`, `failure_reason?` (값 없는 선택 필드는 키 없음) | api consumer group `aether-api` — `seq` 단조 증가로 멱등 투영 | Redis 자동 |
+| `aether:workflow_runs:{id}:events` | Data → 독자 | `data` = Workflow 자기 어휘의 봉투 JSON(9절) | **읽는 경로가 아직 없습니다** — SSE 는 Phase 5 | **explicit `<seq>-0`**, `MAXLEN ~`, 종결 뒤 TTL. Run 이벤트와 같은 계약 |
 
 **적재의 상태를 api 가 쓰는 이유**(spec 0004 개정 5): `aether_data` 는 `control.knowledge_ingestions` 에 **SELECT 만** 가집니다(마이그레이션 0004). worker 는 그 표에 쓸 수 없으므로 상태를 스트림으로 되돌려 보내고 api 가 투영합니다 — Run 과 같은 경계입니다(Control 만 `control` 에 씁니다).
 
@@ -160,6 +162,44 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 **검증은 저장 시점**입니다. 거부는 `400` 이고 본문이 `{"detail": "invalid_workflow_graph", "violations": [{ "reason", "node_id" }]}` 입니다 — 1절의 `{"detail": "<코드>"}` 에 `violations` 를 더한 모양입니다. `422` 를 쓰지 않은 이유는 FastAPI 의 요청 모양 검증이 그 코드를 이미 쓰고, 둘이 겹치면 클라이언트가 "그래프가 틀렸다" 와 "JSON 이 틀렸다" 를 구별할 수 없기 때문입니다.
 
 `reason` 은 여덟 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`. 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1).
+
+## 9. Workflow Run (P4-2a)
+
+전부 인증 뒤입니다. 실행은 **선언**이고 전진은 worker 입니다 — Agent Run·Knowledge 적재와 같은 모양입니다(spec 0005 D-1 은 "표가 아니라 패턴을 재사용" 이라고 적었습니다).
+
+| 메서드·경로 | 요청 | 성공 | 오류 |
+| --- | --- | --- | --- |
+| `POST /workflows/{workflow_id}/runs` | `{ input?, workflow_version? }` | `202 { workflow_run_id, workflow_id, workflow_version, status: "queued", requested_at }` | `401`, `404 workflow_not_found`·`workflow_version_not_found`, `422` |
+| `GET /workflow-runs/{workflow_run_id}` | — | `200 { …, workflow_version_id, status, current_node_id?, waiting_run_id?, started_at?, finished_at?, failure_reason? }` | `401`, `404 workflow_run_not_found` |
+
+`workflow_version` 을 주지 않으면 **최신 Version** 으로 시작하고, 시작한 Run 은 그 Version 을 계속 가리킵니다(D-12 — Version 은 불변입니다). 경로가 `/workflow-runs/{id}` 로 **최상위**인 이유는 Agent Run(`/runs/{id}`)과 같습니다 — Run 은 Workflow 의 하위 자원이 아니라 자기 수명을 가집니다.
+
+`status` 는 일곱 값입니다(spec 0005 2.3) — `queued`·`running`·`waiting_run`·`waiting_approval`·`succeeded`·`failed`·`cancelled`. **Agent Run 의 `waiting` 과 다른 enum** 이고 `timed_out` 이 없습니다. 대기를 두 값으로 가른 것이 "무엇을 기다리는가" 를 상태만으로 답하게 합니다(R-13).
+
+**`waiting_run_id` 는 상태에서 유도됩니다** — `waiting_run` 일 때만 값이 있고 다른 상태로 가면 비워집니다. 투영 스트림(6절)은 값을 **지우는** 신호를 실을 수 없으므로(값 없는 선택 필드는 키 자체가 없고, 투영은 `COALESCE(new, old)` 입니다) 이것을 불변식으로 둡니다. 그러지 않으면 `succeeded` 인 Run 이 자식 Run 을 기다리는 것처럼 보입니다.
+
+`GET` 이 보는 것은 `control.workflow_runs` 의 **투영**입니다. 실행 상태의 정본은 `data.workflow_run_executions` 이고(spec 0005 2.9 개정 2) worker 가 씁니다 — 적재의 상태를 api 가 투영하는 것과 같은 경계입니다(6절). 그래서 조회는 상태 메시지가 도착한 뒤에 바뀝니다.
+
+### 9.1 Workflow 이벤트 어휘
+
+Workflow 는 **자기 어휘**를 가집니다(spec 0005 D-13) — Agent Run 의 이벤트 계약(5절)에 섞지 않습니다. 봉투는 같은 모양(`{ v: 1, workflow_run_id, seq, at, type, payload }`)이고 스트림은 `aether:workflow_runs:{id}:events`, 엔트리 ID 는 `<seq>-0` 입니다.
+
+| type | payload |
+| --- | --- |
+| `workflow.status` | `status`, `current_node_id?`, `failure_reason?` |
+| `node.started` | `node_id`, `kind`, `iteration` |
+| `node.finished` | `node_id`, `iteration`, `status`(`running`·`succeeded`·`failed`) |
+| `workflow.finished` | `status` — **항상 마지막** |
+
+`approval.requested`·`approval.granted`(spec 2.10)는 P4-4 에서 더합니다 — 쓰는 코드와 함께 정의합니다.
+
+`seq` 는 Workflow Run 하나 안에서 1부터 단조 증가하고 **이벤트와 상태 통지가 같은 수열**을 씁니다(Agent Run 과 같은 규칙). 정본은 `data.workflow_run_executions.status_seq` 입니다. 비종결 이벤트는 저장한 뒤 발행하므로 재시작이 `seq` 를 **다시 쓰는 일은 없고 빈틈만** 생깁니다. 종결 한 쌍(`workflow.status` + `workflow.finished`)만 반대로 **발행이 먼저**입니다 — 종결 상태를 먼저 저장하면 그 사이에 죽었을 때 재전달이 "종결이면 아무것도 하지 않는다" 에 걸려 투영이 영영 `running` 으로 남습니다. 같은 `seq` 재발행은 어댑터가 성공으로 흡수하고 투영은 `seq` 로 멱등이므로, 중복이 아니라 **빈틈 없음**을 택한 선택입니다.
+
+실패 사유는 셋입니다 — `unsupported_node_kind`(이 단위가 모르는 종류), `unsupported_branching`(나가는 간선이 둘 이상 — 조용히 하나를 고르지 않습니다), `invalid_graph`(START 가 없거나 `END` 아닌 노드에 나가는 간선이 없음 — 저장 때 검증이 막지만 실행기도 조용히 넘기지 않습니다).
+
+**읽는 HTTP 경로는 아직 없습니다.** Agent Run 의 SSE(5절)에 대응하는 Workflow 쪽 경로는 Phase 5 의 화면과 함께 만듭니다 — 지금 만들면 소비자 없는 계약이 하나 늘어납니다.
+
+**이 단위가 실행하는 노드는 `START`·`END` 둘뿐입니다.** 다른 종류를 만나면 Workflow Run 이 `failed` 가 되고 사유가 `unsupported_node_kind` 로 구별됩니다 — 절반만 만든 노드를 두지 않습니다. AGENT 노드와 파킹은 같은 단위의 두 번째 PR 입니다.
 
 ## 관련 문서
 

@@ -175,6 +175,7 @@ dependencies = [
     { name = "aether-mcp" },
     { name = "aether-policy" },
     { name = "aether-runtime" },
+    { name = "aether-workflow" },
     { name = "opentelemetry-exporter-otlp-proto-http" },
     { name = "opentelemetry-sdk" },
     { name = "psycopg", extra = ["binary"] },
@@ -187,6 +188,7 @@ requires-dist = [
     { name = "aether-mcp", editable = "packages/mcp" },
     { name = "aether-policy", editable = "packages/policy" },
     { name = "aether-runtime", editable = "packages/runtime" },
+    { name = "aether-workflow", editable = "packages/workflow" },
     { name = "opentelemetry-exporter-otlp-proto-http", specifier = ">=1.45.0" },
     { name = "opentelemetry-sdk", specifier = ">=1.45.0" },
     { name = "psycopg", extras = ["binary"], specifier = ">=3.3.6" },
@@ -198,6 +200,18 @@ requires-dist = [
 name = "aether-workflow"
 version = "0.0.0"
 source = { editable = "packages/workflow" }
+dependencies = [
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pydantic" },
+    { name = "redis" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "psycopg", extras = ["binary"] },
+    { name = "pydantic" },
+    { name = "redis" },
+]
 
 [[package]]
 name = "alembic"

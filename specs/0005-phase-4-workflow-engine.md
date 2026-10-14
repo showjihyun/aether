@@ -165,6 +165,10 @@ Agent 를 거치지 않고 한 번만 부르는 노드입니다. 통로는 바�
 | `control.workflow_approvals` | `control` | api — **승인 기록, append-only** |
 | `data.workflow_node_executions` | `data` | worker — 노드 실행 기록과 출력(8 KiB 상한) |
 
+**개정 2 (2026-10-14, P4-2a 착수 전 실측).** 실행 상태와 lease 는 `control.workflow_runs` 가 아니라 **`data.workflow_run_executions`**(마이그레이션 0006)에 둡니다. 위 표의 "누가 쓰는가" 가 `control.workflow_runs` 를 api 로 적어 둔 것은 맞지만, **실행기는 worker** 이고 worker 의 역할(`aether_data`)은 `control` 에 **SELECT 뿐**입니다 — 마이그레이션 0001(`GRANT SELECT ON control.runs`·`control.agent_versions`)과 0005(`GRANT SELECT ON control.workflow_versions`·`control.workflow_runs`) 실측. 그래서 worker 는 상태·lease·현재 노드를 `control` 에 쓸 수 없습니다. **GRANT 를 넓히지 않습니다** — D-5 의 평면 규칙을 거스르고 권한 변경은 사람 검토 대상입니다([../AGENTS.md](../AGENTS.md) Loop). 대신 Phase 1·3 이 이미 쓰는 모양을 그대로 씁니다: 실행 상태는 `data`, `control` 쪽은 **투영**이고 `aether:workflow_runs:status` 스트림으로 **api 가** 갱신합니다(`data.run_executions` → `aether:runs:status` → `control.runs` 와 같은 선, `control.knowledge_ingestions` 도 같습니다). `control.workflow_runs` 의 열(`status`·`status_seq`·`current_node_id`·`waiting_run_id`)은 그대로 쓰이고 뜻만 "투영" 으로 고정됩니다.
+
+**자식 Agent Run 의 선언도 같은 이유로 api 가 만듭니다**(2.5). worker 는 `control.runs` 에 INSERT 할 수 없습니다. 실행기가 자식 Run 의 id 를 **정해서** `aether:workflow:agent_runs:requested` 에 싣고, api 가 그 id 로 선언 행을 만들어 `aether:runs:requested` 에 통지합니다 — id 를 실행기가 정하므로 같은 요청이 두 번 가도 선언은 한 행이고(R-8), 파킹은 처음부터 기다릴 대상을 압니다. 스위퍼는 `data.run_executions`(worker 가 소유하는 평면)의 상태를 봅니다 — `control.runs` 의 투영을 기다리지 않습니다.
+
 평면을 가른 규칙은 **쓰는 주체**입니다 — 마이그레이션 0001 의 역할·GRANT 가 이미 그렇게 정해 두었고 Phase 3 이 같은 규칙을 따랐습니다(`control.knowledge_ingestions` / `data.knowledge_chunks`).
 
 자식 Agent Run 과의 연결은 `data.workflow_node_executions.agent_run_id` 입니다 — **workflow 쪽에** 둡니다. Run 쪽에 "이 Run 은 어느 Workflow 노드의 것" 을 두면 `aether_runtime` 이 workflow 를 알아야 하고, 그것이 AR-13 위반입니다(D-1).
@@ -270,5 +274,6 @@ forbidden_modules =
 
 | 개정 | 내용 |
 | --- | --- |
+| 2 | 2026-10-14, **P4-2a 착수 전 GRANT 실측**(2.9). 실행 상태·lease 를 `data.workflow_run_executions`(마이그레이션 0006)로 옮기고 `control.workflow_runs` 를 **투영**으로 고정했습니다 — worker 역할은 `control` 에 SELECT 뿐이라 초안대로는 실행기가 상태를 쓸 수 없습니다. 자식 Agent Run 의 **선언은 api 가** 만들고 실행기는 id 를 정해 요청만 싣습니다. 요구는 약해지지 않습니다 — R-6·R-7·R-8 의 판정 대상이 `control` 에서 `data` 로 옮겨 가고, 평면 규칙(D-5)과 권한 경계는 그대로 지켜집니다. **GRANT 를 넓히지 않은 것이 이 개정의 요점**입니다 |
 | 1 | 2026-10-13, **P4-1 구현 중 발견한 것 셋**(2.2). (1) START 거부를 **두 사유로** 나눴습니다 — R-1 이 "0개·2개 각각" 을 요구하므로 한 사유로는 판정이 서지 않습니다. (2) **같은 id 를 가진 노드 거부를 더했습니다** — 중복 id 가 검증을 통과해 저장에서 PK 충돌로 터지는 구멍이 있었습니다(2026-10-13 실측: 위반 0건으로 통과). 저장 때 4xx 로 잡는 쪽이 500 보다 낫고, 근거는 "간선이 없는 노드 id" 거부와 같습니다. (3) `PARALLEL` ~ `JOIN` 의 **"대응" 을 v1 에서 정의**했습니다 — 하류에 JOIN 이 하나라도 있으면 통과이고 중첩 짝 맞추기는 검사하지 않습니다. 초안이 "대응" 을 정의하지 않아 구현이 해석해야 했습니다. 셋 다 R-1 ~ R-15 를 **약화하지 않습니다** — 거부를 늘리고 판정을 좁힙니다 |
 | 초안 | 2026-10-12. intent 0005 의 열린 질문 8건을 D-1 ~ D-10 으로 닫고, backlog 와 intent 의 제약을 D-11 ~ D-16 으로 고정했습니다. 외부 사실 확인은 없었습니다 — 여덟 질문 전부가 이 저장소의 관측(방향 계약 부재, `waiting` 선점, 평면 규칙, 응답 본문의 표면 부재)으로 답해졌습니다. 가장 확신이 낮은 결정은 **D-8**(노드 출력이 새 제품 표면)이고 되돌리는 조건을 C-3 에 적었습니다 |
