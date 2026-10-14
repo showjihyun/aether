@@ -19,9 +19,15 @@ from aether_api.domain.workflow_run import WorkflowRunView
 
 class WorkflowRunDeclarationStore(Protocol):
     def create(
-        self, workflow_id: UUID, workflow_version: int, input: dict[str, Any] | None
+        self,
+        workflow_id: UUID,
+        workflow_version: int,
+        input: dict[str, Any] | None,
+        requested_by: UUID,
     ) -> WorkflowRunView:
-        """`status = queued`, `status_seq = 0` 로 새 선언 행을 만듭니다. 커밋까지 이 호출 안에서
+        """`status = queued`, `status_seq = 0` 로 새 선언 행을 만듭니다. `requested_by` 는 요청한
+        주체이고 자식 Agent Run 이 물려받습니다(`WorkflowRunView` 에는 싣지 않습니다). 커밋까지 이
+        호출 안에서
         끝납니다. `(workflow_id, workflow_version)` 의 Version 행이 없으면
         `WorkflowVersionNotFound`."""
         ...

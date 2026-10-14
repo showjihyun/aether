@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from uuid import UUID
 
 
 class NodeKind(StrEnum):
@@ -22,11 +23,19 @@ class NodeKind(StrEnum):
 
 @dataclass(frozen=True)
 class Node:
-    """`max_iterations` 는 `LOOP` 에서만 뜻이 있습니다(D-11)."""
+    """노드는 종류별 설정을 가집니다(spec 0005 2.2 개정 3).
+
+    `max_iterations` 는 `LOOP` 에서만 뜻이 있고(D-11), `agent_id`·`agent_version` 은 `AGENT`
+    에서만 뜻이 있습니다 — 같은 자리입니다. 다른 종류의 노드에 있는 값은 거부하지 않고
+    **무시**합니다(`max_iterations` 가 `LOOP` 아닌 노드에서 무시되는 것과 같은 규칙).
+    `agent_version` 이 없으면 실행 시점의 최신 Version 을 뜻합니다.
+    """
 
     id: str
     kind: NodeKind
     max_iterations: int | None = None
+    agent_id: UUID | None = None
+    agent_version: int | None = None
 
 
 @dataclass(frozen=True)

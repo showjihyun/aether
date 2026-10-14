@@ -27,7 +27,29 @@ from aether_api.domain.workflow import WorkflowNotFound, WorkflowView
 
 def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
     return json.dumps(
-        [{"id": n.id, "kind": n.kind.value, "max_iterations": n.max_iterations} for n in nodes]
+        [
+            {
+                "id": n.id,
+                "kind": n.kind.value,
+                "max_iterations": n.max_iterations,
+                "agent_id": str(n.agent_id) if n.agent_id is not None else None,
+                "agent_version": n.agent_version,
+            }
+            for n in nodes
+        ]
+    )
+
+
+def _node_from_json(n: dict[str, Any]) -> Node:
+    """`agent_id`·`agent_version` 은 P4-2a B1 이 더한 키입니다 — 그 전에 저장된 Version(P4-1·A)
+    의 행에는 **없으므로** `.get` 으로 읽고 없으면 `None` 입니다(`KeyError` 로 터지지 않게)."""
+    raw_agent_id = n.get("agent_id")
+    return Node(
+        id=n["id"],
+        kind=NodeKind(n["kind"]),
+        max_iterations=n["max_iterations"],
+        agent_id=UUID(raw_agent_id) if raw_agent_id is not None else None,
+        agent_version=n.get("agent_version"),
     )
 
 
@@ -40,10 +62,7 @@ def _version_from_row(
 ) -> WorkflowVersion:
     return WorkflowVersion(
         number=number,
-        nodes=tuple(
-            Node(id=n["id"], kind=NodeKind(n["kind"]), max_iterations=n["max_iterations"])
-            for n in nodes_raw
-        ),
+        nodes=tuple(_node_from_json(n) for n in nodes_raw),
         edges=tuple(
             Edge(source=e["source"], target=e["target"], label=e["label"]) for e in edges_raw
         ),

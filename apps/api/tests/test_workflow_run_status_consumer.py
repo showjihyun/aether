@@ -9,9 +9,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from threading import Event
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,47 +20,11 @@ from aether_api.domain.workflow_run_status_message import WorkflowRunStatusMessa
 from aether_workflow.domain.run_status import WorkflowRunStatus
 from redis import Redis
 
+from tests.support.stream_fakes import FakeStreamClient
+
 _STREAM = "aether:workflow_runs:status"
 _GROUP = "aether-api"
 _AT = "2026-01-01T00:00:00+00:00"
-
-_Entry = tuple[str, dict[str, str]]
-
-
-class _FakeStreamClient:
-    """`XREADGROUP`·`XACK` 만 흉내 내는 최소 fake. 새 메시지가 바닥나면 `stop` 을 set 해서
-    `run_until` 이 스스로 끝나게 합니다(sleep 없이)."""
-
-    def __init__(self, stop: Event, *, pending: list[_Entry], new: list[_Entry]) -> None:
-        self._stop = stop
-        self._pending = list(pending)
-        self._new = list(new)
-        self.acked: list[str] = []
-        self.group_args: list[tuple[str, str, str]] = []
-
-    def xreadgroup(
-        self,
-        *,
-        groupname: str,
-        consumername: str,
-        streams: Mapping[str, str],
-        count: int | None = None,
-        block: int | None = None,
-    ) -> Any:
-        del count, block
-        (stream, start) = next(iter(streams.items()))
-        self.group_args.append((groupname, consumername, start))
-        source = self._pending if start == "0" else self._new
-        if source:
-            return [(stream, [source.pop(0)])]
-        if start != "0":
-            self._stop.set()
-        return []
-
-    def xack(self, stream: str, group: str, message_id: str) -> int:
-        del stream, group
-        self.acked.append(message_id)
-        return 1
 
 
 class _RecordingApply:
@@ -79,7 +41,7 @@ def _fields(run_id: UUID, **extra: str) -> dict[str, str]:
     return {"workflow_run_id": str(run_id), "seq": "1", "status": "running", "at": _AT, **extra}
 
 
-def _run(client: _FakeStreamClient, apply: _RecordingApply, stop: Event) -> None:
+def _run(client: FakeStreamClient, apply: _RecordingApply, stop: Event) -> None:
     consumer = WorkflowRunStatusConsumer(
         client,  # type: ignore[arg-type]
         apply,
@@ -93,9 +55,7 @@ def _run(client: _FakeStreamClient, apply: _RecordingApply, stop: Event) -> None
 def test_parsed_message_is_applied_and_acked() -> None:
     stop = Event()
     run_id = uuid4()
-    client = _FakeStreamClient(
-        stop, pending=[], new=[("1-0", _fields(run_id, current_node_id="s"))]
-    )
+    client = FakeStreamClient(stop, pending=[], new=[("1-0", _fields(run_id, current_node_id="s"))])
     apply = _RecordingApply()
 
     _run(client, apply, stop)
@@ -111,7 +71,7 @@ def test_malformed_message_is_acked_without_calling_apply(
 ) -> None:
     """독약 메시지: WARNING 과 함께 즉시 ack, `apply` 는 부르지 않는다."""
     stop = Event()
-    client = _FakeStreamClient(
+    client = FakeStreamClient(
         stop,
         pending=[],
         new=[
@@ -132,7 +92,7 @@ def test_malformed_message_is_acked_without_calling_apply(
 def test_ignored_message_is_still_acked() -> None:
     """`apply` 가 `False`(낮거나 같은 seq) 를 돌려줘도 ack 한다 — 멱등 무시."""
     stop = Event()
-    client = _FakeStreamClient(stop, pending=[], new=[("1-0", _fields(uuid4()))])
+    client = FakeStreamClient(stop, pending=[], new=[("1-0", _fields(uuid4()))])
     apply = _RecordingApply(result=False)
 
     _run(client, apply, stop)
@@ -144,7 +104,7 @@ def test_ignored_message_is_still_acked() -> None:
 def test_own_pending_entries_are_processed_before_new_messages() -> None:
     stop = Event()
     first, second = uuid4(), uuid4()
-    client = _FakeStreamClient(
+    client = FakeStreamClient(
         stop, pending=[("1-0", _fields(first))], new=[("2-0", _fields(second))]
     )
     apply = _RecordingApply()

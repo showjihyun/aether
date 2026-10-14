@@ -23,6 +23,8 @@ class WorkflowRunDeclaration:
     edges: tuple[Edge, ...]
     input: dict[str, Any] | None
     cancel_requested_at: datetime | None
+    requested_by: UUID | None = None
+    """Workflow 를 시작한 주체. 0007 이전에 만들어진 행은 `None` 입니다."""
 
 
 class WorkflowRunDeclarationReader(Protocol):

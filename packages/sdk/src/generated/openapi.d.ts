@@ -646,6 +646,10 @@ export interface components {
             kind: components["schemas"]["NodeKind"];
             /** Max Iterations */
             max_iterations?: number | null;
+            /** Agent Id */
+            agent_id?: string | null;
+            /** Agent Version */
+            agent_version?: number | null;
         };
         /** Policy */
         Policy: {

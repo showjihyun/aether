@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+from uuid import UUID
+
 import pytest
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.run_status import (
@@ -13,12 +15,23 @@ from aether_workflow.domain.run_status import (
     can_transition,
 )
 from aether_workflow.domain.serialization import serialize_version
-from aether_workflow.domain.validation import Reason, validate_version
+from aether_workflow.domain.validation import Reason, Violation, validate_version
 from aether_workflow.domain.workflow_version import WorkflowVersion
 
+_AGENT_ID = UUID("00000000-0000-0000-0000-0000000000a1")
 
-def _n(node_id: str, kind: NodeKind, max_iterations: int | None = None) -> Node:
-    return Node(id=node_id, kind=kind, max_iterations=max_iterations)
+
+def _n(
+    node_id: str,
+    kind: NodeKind,
+    max_iterations: int | None = None,
+    agent_id: UUID | None = None,
+) -> Node:
+    """`AGENT` 는 기본으로 Agent 를 가리킵니다 — 다른 사유를 보려는 테스트가 아홉 번째 사유로
+    오염되지 않게 합니다. 참조 없는 `AGENT` 는 `agent_id=None` 을 쓰는 전용 테스트가 만듭니다."""
+    if kind is NodeKind.AGENT and agent_id is None:
+        agent_id = _AGENT_ID
+    return Node(id=node_id, kind=kind, max_iterations=max_iterations, agent_id=agent_id)
 
 
 def _version(nodes: list[Node], edges: list[tuple[str, str]]) -> WorkflowVersion:
@@ -185,11 +198,70 @@ def test_six_rejections_have_distinct_reasons() -> None:
 
     spec 2.2 의 여섯 거부 → 사유 여덟: START 0개/2개 이상을 둘로 나누고(R-1 이
     "각각" 을 요구합니다), spec 목록에 없던 `DUPLICATE_NODE_ID` 를 더했습니다
-    (spec 0005 개정 1). 이 숫자를 늘릴 때는 spec 2.2 의 표도 함께 고칩니다 —
-    그래서 여기 상수로 못 박습니다.
+    (spec 0005 개정 1). 아홉 번째 `AGENT_NODE_WITHOUT_AGENT` 는 개정 3 입니다. 이 숫자를
+    늘릴 때는 spec 2.2 의 표도 함께 고칩니다 — 그래서 여기 상수로 못 박습니다.
     """
-    assert len(list(Reason)) == 8
-    assert len({r.value for r in Reason}) == 8
+    assert len(list(Reason)) == 9
+    assert len({r.value for r in Reason}) == 9
+
+
+def test_agent_node_without_agent_rejected() -> None:
+    """spec 0005 2.2 개정 3: `agent_id` 가 없는 AGENT 노드는 그 노드만 위반이다."""
+    v = _version(
+        [
+            _n("s", NodeKind.START),
+            _n("ok", NodeKind.AGENT),
+            Node(id="bare", kind=NodeKind.AGENT),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "ok"), ("ok", "bare"), ("bare", "e")],
+    )
+
+    assert validate_version(v) == (Violation(Reason.AGENT_NODE_WITHOUT_AGENT, "bare"),)
+
+
+def test_agent_version_alone_does_not_satisfy_the_reference() -> None:
+    """spec 0005 2.2 개정 3: Agent 를 말하는 것은 `agent_id` 이고 `agent_version` 만으로는 부족."""
+    v = _version(
+        [
+            _n("s", NodeKind.START),
+            Node(id="a", kind=NodeKind.AGENT, agent_version=2),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "a"), ("a", "e")],
+    )
+
+    assert _reasons(v) == {Reason.AGENT_NODE_WITHOUT_AGENT}
+
+
+def test_agent_with_id_and_optional_version_passes() -> None:
+    """spec 0005 2.2 개정 3: `agent_version` 은 선택이다(없으면 실행 시점의 최신)."""
+    v = _version(
+        [
+            _n("s", NodeKind.START),
+            Node(id="a", kind=NodeKind.AGENT, agent_id=_AGENT_ID),
+            Node(id="b", kind=NodeKind.AGENT, agent_id=_AGENT_ID, agent_version=3),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "a"), ("a", "b"), ("b", "e")],
+    )
+
+    assert validate_version(v) == ()
+
+
+def test_agent_id_on_a_non_agent_node_is_ignored_not_rejected() -> None:
+    """spec 0005 2.2 개정 3: `max_iterations` 가 LOOP 아닌 노드에서 무시되는 것과 같은 규칙 —
+    없는 거부를 발명하지 않는다."""
+    v = _version(
+        [
+            _n("s", NodeKind.START),
+            Node(id="c", kind=NodeKind.CONDITION, agent_id=_AGENT_ID, max_iterations=5),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "c"), ("c", "e")],
+    )
+
+    assert validate_version(v) == ()
 
 
 def test_serialization_is_byte_identical_and_order_independent() -> None:
@@ -209,6 +281,27 @@ def test_serialization_differs_when_definition_differs() -> None:
     """spec R-2: 정의가 다르면 바이트도 다르다 (빈 직렬화 방지)."""
     other = _version([_n("s", NodeKind.START), _n("e", NodeKind.END)], [("s", "e")])
     assert serialize_version(_valid()) != serialize_version(other)
+
+
+def test_serialization_differs_when_only_the_agent_reference_differs() -> None:
+    """spec R-2: 두 정의가 `agent_id`(또는 `agent_version`)만 다르면 바이트가 달라야 한다 — 이
+    단언이 없으면 새 필드가 직렬화에서 빠져도 R-2 가 공허하게 통과한다."""
+    other_agent = UUID("00000000-0000-0000-0000-0000000000b2")
+
+    def with_agent(agent_id: UUID, agent_version: int | None) -> WorkflowVersion:
+        return _version(
+            [
+                _n("s", NodeKind.START),
+                Node(id="a", kind=NodeKind.AGENT, agent_id=agent_id, agent_version=agent_version),
+                _n("e", NodeKind.END),
+            ],
+            [("s", "a"), ("a", "e")],
+        )
+
+    base = serialize_version(with_agent(_AGENT_ID, None))
+    assert base == serialize_version(with_agent(_AGENT_ID, None))
+    assert base != serialize_version(with_agent(other_agent, None))
+    assert base != serialize_version(with_agent(_AGENT_ID, 1))
 
 
 def test_version_is_immutable() -> None:

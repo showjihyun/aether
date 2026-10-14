@@ -2,8 +2,9 @@
 실제 PostgreSQL(`aether_data` 역할) + 실제 Redis. `START` -> `END` Workflow 를 선언하고 전진시킨다.
 
 구성은 `main._build_production_workflow_handler` 가 하는 것과 같은 어댑터를 손으로 꽂은 것입니다
-(조립 자체는 `test_build_production_handler_wires_workflow.py` 가 증명합니다). 파킹이 없으므로
-전진이 끝난 뒤 lease 열은 **비어** 있어야 합니다 - PR B 의 R-7 이 이 자리에 얹힙니다.
+(조립 자체는 `test_build_production_handler_wires_workflow.py` 가 증명합니다). `START` -> `END`
+에는 파킹이 없으므로 전진이 끝난 뒤 lease 열은 **비어** 있어야 합니다. `AGENT` 노드와 파킹은
+`test_workflow_parking_integration.py` 가 봅니다(P4-2a B2).
 """
 
 from __future__ import annotations
@@ -20,12 +21,14 @@ from aether_worker.application.ports.inbound.handle_workflow_requested import (
 from aether_worker.application.usecases.handle_workflow_requested import (
     HandleWorkflowRequestedUseCase,
 )
+from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
 from aether_workflow.adapters.outbound.db.workflow_run_declaration_reader import (
     PostgresWorkflowRunDeclarationReader,
 )
 from aether_workflow.adapters.outbound.db.workflow_run_state_store import (
     PostgresWorkflowRunStateStore,
 )
+from aether_workflow.adapters.outbound.redis.agent_run_launcher import RedisAgentRunLauncher
 from aether_workflow.adapters.outbound.redis.workflow_event_sink import RedisWorkflowEventSink
 from aether_workflow.adapters.outbound.redis.workflow_status_notifier import (
     RedisWorkflowStatusNotifier,
@@ -69,6 +72,8 @@ class _Env:
             RedisWorkflowEventSink(self.redis),
             RedisWorkflowStatusNotifier(self.redis),
             SystemClock(),
+            agent_runs=PostgresAgentRunReader(self.data),
+            launcher=RedisAgentRunLauncher(self.redis),
             owner=owner,
             lease_ttl_seconds=60.0,
         )
@@ -274,7 +279,7 @@ def test_an_unsupported_node_kind_ends_failed_with_the_reason_persisted_and_noti
     """plan 부록 A: 지원하지 않는 종류는 `failed` + 구별되는 사유 - DB 와 통지에 남는다."""
     run_id, _ = declare_workflow_run(
         env.admin,
-        (Node("start", NodeKind.START), Node("a", NodeKind.AGENT), Node("end", NodeKind.END)),
+        (Node("start", NodeKind.START), Node("a", NodeKind.CONDITION), Node("end", NodeKind.END)),
         (Edge("start", "a"), Edge("a", "end")),
     )
 

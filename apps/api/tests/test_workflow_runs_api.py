@@ -24,10 +24,12 @@ from apps.api.tests.fakes_workflow import (
     FakeWorkflowRunNotifier,
 )
 
+_KEY = uuid4()
+
 
 def _principal(request: Request) -> Principal:
     del request
-    return Principal(key_id=uuid4(), label="unit")
+    return Principal(key_id=_KEY, label="unit")
 
 
 def _client() -> tuple[
@@ -66,7 +68,9 @@ def test_post_returns_202_with_queued_run() -> None:
     assert body["workflow_version"] == 1
     run_id = UUID(body["workflow_run_id"])
     assert store.inputs[run_id] == {"q": "hi"}
+    assert store.requesters[run_id] == _KEY, "principal 이 선언에 기록된다(spec 0005 2.5 개정 3)"
     assert len(notifier.calls) == 1
+    assert "requested_by" not in body, "표면을 넓히지 않는다"
     assert body["requested_at"]
 
 
@@ -117,7 +121,7 @@ def test_post_unknown_version_is_404_workflow_version_not_found() -> None:
 def test_get_returns_200_with_projection_fields() -> None:
     """spec 0005 R-13: 투영된 `waiting_run` 과 기다리는 자식 Run 이 응답 본문에 나타난다."""
     client, repo, store, _notifier = _client()
-    created = store.create(_workflow(repo), 1, None)
+    created = store.create(_workflow(repo), 1, None, _KEY)
     child = uuid4()
     store.apply_status(
         created.workflow_run_id,

@@ -13,7 +13,13 @@ from aether_workflow.domain.workflow_version import WorkflowVersion
 
 def serialize_version(version: WorkflowVersion) -> bytes:
     nodes = [
-        {"id": n.id, "kind": n.kind.value, "max_iterations": n.max_iterations}
+        {
+            "id": n.id,
+            "kind": n.kind.value,
+            "max_iterations": n.max_iterations,
+            "agent_id": str(n.agent_id) if n.agent_id is not None else None,
+            "agent_version": n.agent_version,
+        }
         for n in sorted(version.nodes, key=lambda n: n.id)
     ]
     edges = [

@@ -30,8 +30,28 @@ def test_workflow_streams_can_be_overridden_by_environment(
     assert settings.workflow_status_stream == "x:status"
 
 
-def test_no_new_lease_or_sweeper_variable_is_introduced() -> None:
-    """lease TTL 은 기존 `worker_lease_seconds`, 스위퍼 주기는 PR B 의 몫이다."""
+def test_sweep_interval_defaults_to_30_seconds_and_can_be_overridden(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """spec 0005 2.11 (P4-2a B2): 스위퍼 주기 `AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS`, 기본 30."""
+    assert Settings().workflow_sweep_interval_seconds == 30.0
+
+    monkeypatch.setenv("AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS", "2.5")
+
+    assert Settings().workflow_sweep_interval_seconds == 2.5
+
+
+def test_wake_group_is_the_workflow_only_group_and_not_the_api_projection_group() -> None:
+    """spec 0005 2.5 개정 3: 빠른 경로는 `aether:runs:status` 를 Workflow 전용 group 으로 읽는다 -
+    Agent Run 의 api 쪽 투영 group(`aether-api`)과 다른 이름이다."""
+    settings = Settings()
+
+    assert settings.workflow_wake_group == "aether-workflow"
+    assert settings.workflow_wake_group != "aether-api"
+    assert settings.worker_status_stream == "aether:runs:status"
+
+
+def test_no_new_lease_variable_is_introduced() -> None:
+    """lease TTL 은 새 변수 없이 기존 `worker_lease_seconds` 를 쓴다."""
     names = set(Settings.model_fields)
-    assert not {n for n in names if "sweep" in n}
     assert not {n for n in names if n.startswith("workflow_") and "lease" in n}

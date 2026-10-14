@@ -351,8 +351,26 @@ def auth_headers(control_connection_factory: _Factory) -> dict[str, str]:
     return {"Authorization": f"Bearer {issued.raw_key}"}
 
 
-def _n(node_id: str, kind: str, max_iterations: int | None = None) -> dict[str, Any]:
-    return {"id": node_id, "kind": kind, "max_iterations": max_iterations}
+_AGENT_ID = "00000000-0000-0000-0000-0000000000a1"
+
+
+def _n(
+    node_id: str,
+    kind: str,
+    max_iterations: int | None = None,
+    agent_id: str | None = None,
+    agent_version: int | None = None,
+) -> dict[str, Any]:
+    """`AGENT` 는 기본으로 Agent 를 가리킵니다(spec 0005 2.2 개정 3 — 아니면 400)."""
+    if kind == "AGENT" and agent_id is None:
+        agent_id = _AGENT_ID
+    return {
+        "id": node_id,
+        "kind": kind,
+        "max_iterations": max_iterations,
+        "agent_id": agent_id,
+        "agent_version": agent_version,
+    }
 
 
 def _e(source: str, target: str, label: str | None = None) -> dict[str, Any]:
@@ -373,7 +391,13 @@ def _as_version(number: int, body: dict[str, Any]) -> WorkflowVersion:
     return WorkflowVersion(
         number=number,
         nodes=tuple(
-            Node(id=n["id"], kind=NodeKind(n["kind"]), max_iterations=n["max_iterations"])
+            Node(
+                id=n["id"],
+                kind=NodeKind(n["kind"]),
+                max_iterations=n["max_iterations"],
+                agent_id=uuid.UUID(n["agent_id"]) if n["agent_id"] is not None else None,
+                agent_version=n["agent_version"],
+            )
             for n in body["nodes"]
         ),
         edges=tuple(Edge(e["source"], e["target"], e["label"]) for e in body["edges"]),

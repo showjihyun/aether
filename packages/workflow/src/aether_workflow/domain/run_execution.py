@@ -18,3 +18,4 @@ class WorkflowRunExecution:
     started_at: datetime | None
     finished_at: datetime | None
     failure_reason: str | None
+    waiting_run_id: UUID | None = None

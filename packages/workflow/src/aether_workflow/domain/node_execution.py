@@ -1,9 +1,11 @@
 """spec 0005 2.4, 2.9: 노드 실행 기록(`data.workflow_node_executions`)의 값 객체.
 
 `NodeExecutionStatus` 는 P4-1 이 `status` 를 `text` 로 열어 두고 "실행기가 집합을 정한다" 고
-남긴 그 집합입니다. 지금은 `running`·`succeeded`·`failed` 셋입니다. **컬럼을 enum 으로 좁히는
-것은 PR B** 입니다 — 파킹이 `waiting_run` 을 더하므로 그때 한 번에 좁힙니다(지금 좁히면
-마이그레이션이 두 번 필요합니다).
+남긴 그 집합입니다. `running`·`waiting_run`·`succeeded`·`failed` 넷입니다. 컬럼은 마이그레이션 0007
+이
+`data.workflow_node_execution_status` enum 으로 좁혔습니다(`data.run_execution_status` 와 **다른
+타입**). `waiting_run` 은 자식 Agent Run 을 기다리는 `AGENT` 노드이고, 자식 Run 의 id 는
+`agent_run_id` 에 **발사 전에** 영속됩니다(R-8).
 """
 
 from __future__ import annotations
@@ -16,6 +18,7 @@ from uuid import UUID
 
 class NodeExecutionStatus(StrEnum):
     RUNNING = "running"
+    WAITING_RUN = "waiting_run"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 
@@ -31,3 +34,5 @@ class NodeExecutionRecord:
     status: NodeExecutionStatus
     started_at: datetime
     finished_at: datetime | None
+    agent_run_id: UUID | None = None
+    failure_reason: str | None = None

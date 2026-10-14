@@ -63,12 +63,14 @@ from aether_runtime.adapters.outbound.tool_gateway.mcp import McpToolGateway
 from aether_runtime.application.ports.outbound.model_gateway import ModelGateway
 from aether_runtime.application.ports.outbound.tool_gateway import ToolGateway
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
+from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
 from aether_workflow.adapters.outbound.db.workflow_run_declaration_reader import (
     PostgresWorkflowRunDeclarationReader,
 )
 from aether_workflow.adapters.outbound.db.workflow_run_state_store import (
     PostgresWorkflowRunStateStore,
 )
+from aether_workflow.adapters.outbound.redis.agent_run_launcher import RedisAgentRunLauncher
 from aether_workflow.adapters.outbound.redis.workflow_event_sink import RedisWorkflowEventSink
 from aether_workflow.adapters.outbound.redis.workflow_status_notifier import (
     RedisWorkflowStatusNotifier,
@@ -77,6 +79,10 @@ from aether_workflow.adapters.outbound.system_clock import SystemClock as Workfl
 from aether_workflow.application.usecases.advance_workflow_run import AdvanceWorkflowRunUseCase
 from redis import Redis
 
+from aether_worker.adapters.inbound.schedule.workflow_sweeper import WorkflowSweeper
+from aether_worker.adapters.inbound.stream.agent_run_finished_consumer import (
+    AgentRunFinishedConsumer,
+)
 from aether_worker.adapters.inbound.stream.ingestion_requested_consumer import (
     IngestionRequestedConsumer,
 )
@@ -90,6 +96,9 @@ from aether_worker.adapters.inbound.stream.requested_consumer import (
 from aether_worker.adapters.inbound.stream.workflow_requested_consumer import (
     WorkflowRequestedConsumer,
 )
+from aether_worker.adapters.outbound.db.parked_workflow_finder import (
+    PostgresParkedWorkflowFinder,
+)
 from aether_worker.adapters.outbound.embedder.model_gateway import ModelGatewayEmbedder
 from aether_worker.adapters.outbound.memory.reader import MemoryReaderAdapter
 from aether_worker.adapters.outbound.otel_trace_context import OtelTraceContext
@@ -97,6 +106,7 @@ from aether_worker.adapters.outbound.redis.heartbeat import Heartbeat
 from aether_worker.adapters.outbound.redis.ingestion_status_notifier import (
     RedisKnowledgeIngestionStatusNotifier,
 )
+from aether_worker.adapters.outbound.redis.workflow_requeuer import RedisWorkflowRequeuer
 from aether_worker.adapters.outbound.telemetry import init_telemetry
 from aether_worker.application.ports.inbound.handle_ingestion_requested import (
     HandleIngestionRequested,
@@ -105,12 +115,18 @@ from aether_worker.application.ports.inbound.handle_run_requested import HandleR
 from aether_worker.application.ports.inbound.handle_workflow_requested import (
     HandleWorkflowRequested,
 )
+from aether_worker.application.ports.inbound.resume_parked_workflows import (
+    ResumeParkedWorkflows,
+)
 from aether_worker.application.usecases.handle_ingestion_requested import (
     HandleIngestionRequestedUseCase,
 )
 from aether_worker.application.usecases.handle_run_requested import HandleRunRequestedUseCase
 from aether_worker.application.usecases.handle_workflow_requested import (
     HandleWorkflowRequestedUseCase,
+)
+from aether_worker.application.usecases.resume_parked_workflows import (
+    ResumeParkedWorkflowsUseCase,
 )
 from aether_worker.domain.backoff import BackoffPolicy
 from aether_worker.settings import Settings
@@ -427,9 +443,13 @@ def _build_production_workflow_handler(
 
     `aether_workflow` 는 `aether_worker` 를 import 하지 않으므로(AR-2) 이 조립은 여기(worker 의
     `main`)에서만 합니다. 이벤트 상한·TTL 은 Agent Run 과 같은 설정(`events_*`)을 씁니다 - 새
-    변수를 만들지 않습니다. lease TTL 은 `worker_lease_seconds` 그대로입니다. 이 단계의
-    실행기는 노드를 하나씩 즉시 끝내므로(대기 없음) lease 갱신 장치가 없습니다 - 파킹이
-    들어오는 PR B 가 필요하면 더합니다."""
+    변수를 만들지 않습니다. lease TTL 은 `worker_lease_seconds` 그대로입니다. 실행기는 노드를
+    하나씩 즉시 끝내거나 **파킹하고 돌아가므로**(대기 중에 lease 를 쥐지 않습니다, R-7) lease 갱신
+    장치가 없습니다.
+
+    spec 0005 2.5 개정 3 (P4-2a B2): 자식 Agent Run 의 상태·Version 은 `PostgresAgentRunReader`
+    (`data.run_executions`·`control.agent_versions`, 읽기만)로 보고, 선언은 `RedisAgentRunLauncher`
+    로 api 에 요청합니다(worker 는 `control.runs` 에 INSERT 할 수 없습니다)."""
 
     def connect() -> psycopg.Connection:
         return psycopg.connect(settings.psycopg_dsn)
@@ -442,10 +462,28 @@ def _build_production_workflow_handler(
         ),
         RedisWorkflowStatusNotifier(client, stream=settings.workflow_status_stream),
         WorkflowSystemClock(),
+        agent_runs=PostgresAgentRunReader(connect),
+        launcher=RedisAgentRunLauncher(client),
         owner=settings.worker_consumer,
         lease_ttl_seconds=settings.worker_lease_seconds,
     )
     return HandleWorkflowRequestedUseCase(advance, OtelTraceContext())
+
+
+def _build_production_resume(settings: Settings, client: Redis) -> ResumeParkedWorkflows:
+    """spec 0005 2.5 개정 3 (P4-2a B2): 파킹된 Workflow Run 을 깨우는 유스케이스. 빠른 경로(종결
+    통지
+    소비자)와 안전망(스위퍼)이 **같은 인스턴스**를 씁니다 - 둘이 하는 일은 재큐 하나이고 판정은
+    실행기가
+    합니다. 조회는 `aether_data` 역할의 SELECT 뿐입니다."""
+
+    def connect() -> psycopg.Connection:
+        return psycopg.connect(settings.psycopg_dsn)
+
+    return ResumeParkedWorkflowsUseCase(
+        PostgresParkedWorkflowFinder(connect),
+        RedisWorkflowRequeuer(client, stream=settings.workflow_stream),
+    )
 
 
 def _heartbeat_loop(heartbeat: Heartbeat, interval_seconds: float, stop: Event) -> None:
@@ -464,6 +502,7 @@ def serve(
     handler: HandleRunRequested | None = None,
     ingestion_handler: HandleIngestionRequested | None = None,
     workflow_handler: HandleWorkflowRequested | None = None,
+    resume: ResumeParkedWorkflows | None = None,
 ) -> int:
     """연결(백오프) → consumer group → heartbeat 스레드 → 소비 대기.
 
@@ -481,6 +520,13 @@ def serve(
     spec 0005 2.9 개정 2 (P4-2a A): `aether:workflow_runs:requested` 소비자도 **별도 스레드**
     하나입니다(Agent Run 과 **다른 스트림**, 같은 consumer group 이름). `workflow_handler` 가
     `None` 이면 프로덕션 조립을 씁니다.
+
+    spec 0005 2.5 개정 3 (P4-2a B2): 파킹된 Workflow Run 을 깨우는 스레드가 **둘** 더 뜹니다 - 빠른
+    경로(`aether:runs:status` 를 Workflow 전용 group `aether-workflow` 로 읽는 소비자)와
+    안전망(스위퍼,
+    `AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS`). 둘이 하는 일은 재큐 하나라 같은 Workflow 를 둘 다
+    재큐해도
+    안전합니다. `resume` 이 `None` 이면 프로덕션 조립을 씁니다(테스트는 주입합니다).
 
     `on_ready` 는 `ready` 로그 직후 호출됩니다 — 테스트가 로그 캡처의 타이밍(폴링·
     스레드 경합)에 기대지 않고 `threading.Event` 로 준비 완료를 직접 기다릴 수
@@ -505,6 +551,7 @@ def serve(
     ensure_group(client, settings.worker_stream, settings.worker_group)
     ensure_knowledge_group(client, settings.knowledge_stream, settings.knowledge_group)
     ensure_group(client, settings.workflow_stream, settings.workflow_group)
+    ensure_group(client, settings.worker_status_stream, settings.workflow_wake_group)
 
     active_handler = handler if handler is not None else _build_production_handler(settings, client)
     active_ingestion_handler = (
@@ -518,6 +565,8 @@ def serve(
         if workflow_handler is not None
         else _build_production_workflow_handler(settings, client)
     )
+
+    active_resume = resume if resume is not None else _build_production_resume(settings, client)
 
     heartbeat = Heartbeat(
         client,
@@ -572,6 +621,32 @@ def serve(
     )
     workflow_thread.start()
 
+    wake_consumer = AgentRunFinishedConsumer(
+        client,
+        stream=settings.worker_status_stream,
+        group=settings.workflow_wake_group,
+        consumer=settings.worker_consumer,
+        resume=active_resume,
+    )
+    wake_thread = Thread(
+        target=wake_consumer.run_until,
+        args=(stop,),
+        name="aether-worker-workflow-wake-consumer",
+        daemon=True,
+    )
+    wake_thread.start()
+
+    sweeper = WorkflowSweeper(
+        active_resume, interval_seconds=settings.workflow_sweep_interval_seconds
+    )
+    sweeper_thread = Thread(
+        target=sweeper.run_until,
+        args=(stop,),
+        name="aether-worker-workflow-sweeper",
+        daemon=True,
+    )
+    sweeper_thread.start()
+
     consumer = RequestedConsumer(
         client,
         stream=settings.worker_stream,
@@ -584,6 +659,8 @@ def serve(
     heartbeat_thread.join(_STOP_JOIN_TIMEOUT)
     ingestion_thread.join(_STOP_JOIN_TIMEOUT)
     workflow_thread.join(_STOP_JOIN_TIMEOUT)
+    wake_thread.join(_STOP_JOIN_TIMEOUT)
+    sweeper_thread.join(_STOP_JOIN_TIMEOUT)
     return 0
 
 

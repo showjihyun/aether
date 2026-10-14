@@ -200,6 +200,9 @@ class FakeRunDeclarationStore:
         self._runs: dict[UUID, RunView] = {}
         self._status_seq: dict[UUID, int | None] = {}
         self._clock = clock
+        self._declared_ids: set[UUID] = set()
+        self._declared_status: dict[UUID, RunStatus] = {}
+        self.declared_with_id: list[tuple[UUID, UUID, str, UUID | None]] = []
 
     def create(
         self,
@@ -229,8 +232,31 @@ class FakeRunDeclarationStore:
         self._status_seq[run_id] = None
         return view
 
+    def create_with_id(
+        self, run_id: UUID, agent_version_id: UUID, input: str, requested_by: UUID | None
+    ) -> bool:
+        """멱등 선언(spec 0005 2.5 개정 3). 이 fake 는 `RunView` 가 `requested_by` 를 요구하므로
+        id 만 기억합니다 — 관찰 대상은 "새로 만들었는가" 와 그 호출 기록입니다."""
+        self.declared_with_id.append((run_id, agent_version_id, input, requested_by))
+        if run_id in self._declared_ids or run_id in self._runs:
+            return False
+        self._declared_ids.add(run_id)
+        self._declared_status[run_id] = RunStatus.QUEUED
+        return True
+
     def get(self, run_id: UUID) -> RunView | None:
         return self._runs.get(run_id)
+
+    def status(self, run_id: UUID) -> RunStatus | None:
+        """좁은 문(포트 docstring 참조) — `RunView` 를 조립하지 않습니다."""
+        view = self._runs.get(run_id)
+        if view is not None:
+            return view.status
+        return self._declared_status.get(run_id)
+
+    def mark_declared_run_running(self, run_id: UUID) -> None:
+        """테스트용: 자식 Run 이 worker 에게 집힌 상태를 만듭니다(통지 재발행 판정용)."""
+        self._declared_status[run_id] = RunStatus.RUNNING
 
     def request_cancel(self, run_id: UUID, at: datetime) -> RunView:
         view = self._runs.get(run_id)

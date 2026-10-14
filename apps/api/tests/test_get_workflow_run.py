@@ -25,7 +25,7 @@ def _declared() -> tuple[FakeWorkflowRunDeclarationStore, WorkflowRunView]:
         )
     )
     store = FakeWorkflowRunDeclarationStore(repo)
-    return store, store.create(wf.id, 1, None)
+    return store, store.create(wf.id, 1, None, uuid4())
 
 
 def test_returns_the_declared_view() -> None:

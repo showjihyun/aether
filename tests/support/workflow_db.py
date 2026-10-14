@@ -22,8 +22,10 @@ def declare_workflow_run(
     edges: tuple[Edge, ...],
     *,
     input: dict[str, object] | None = None,
+    requested_by: UUID | None = None,
 ) -> tuple[UUID, UUID]:
-    """`(workflow_run_id, workflow_version_id)` 를 돌려줍니다."""
+    """`(workflow_run_id, workflow_version_id)` 를 돌려줍니다. `requested_by` 는
+    `control.api_keys.id`(FK) 여야 합니다 - 비워 두면 0007 이전 행처럼 요청자가 없는 Run 입니다."""
     conn = admin_connection_factory()
     try:
         with conn.cursor() as cur:
@@ -43,7 +45,13 @@ def declare_workflow_run(
                     workflow_id,
                     json.dumps(
                         [
-                            {"id": n.id, "kind": n.kind.value, "max_iterations": n.max_iterations}
+                            {
+                                "id": n.id,
+                                "kind": n.kind.value,
+                                "max_iterations": n.max_iterations,
+                                "agent_id": str(n.agent_id) if n.agent_id is not None else None,
+                                "agent_version": n.agent_version,
+                            }
                             for n in nodes
                         ]
                     ),
@@ -57,10 +65,10 @@ def declare_workflow_run(
             version_id: UUID = row[0]
             cur.execute(
                 """
-                INSERT INTO control.workflow_runs (workflow_version_id, input)
-                VALUES (%s, %s) RETURNING id
+                INSERT INTO control.workflow_runs (workflow_version_id, input, requested_by)
+                VALUES (%s, %s, %s) RETURNING id
                 """,
-                (version_id, json.dumps(input) if input is not None else None),
+                (version_id, json.dumps(input) if input is not None else None, requested_by),
             )
             row = cur.fetchone()
             assert row is not None
@@ -69,3 +77,21 @@ def declare_workflow_run(
     finally:
         conn.close()
     return run_id, version_id
+
+
+def issue_api_key(admin_connection_factory: Callable[[], psycopg.Connection]) -> UUID:
+    """`control.api_keys` 에 행 하나 - `requested_by` FK 를 만족시키는 주체. 해시는 임의 값이다."""
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO control.api_keys (label, key_hash) VALUES (%s, %s) RETURNING id",
+                (f"test-{uuid.uuid4()}", f"hash-{uuid.uuid4()}"),
+            )
+            row = cur.fetchone()
+            assert row is not None
+            key_id: UUID = row[0]
+        conn.commit()
+    finally:
+        conn.close()
+    return key_id

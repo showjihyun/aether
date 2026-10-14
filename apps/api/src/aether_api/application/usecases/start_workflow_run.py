@@ -63,7 +63,11 @@ class StartWorkflowRunUseCase:
         self._tracing: RequestTracing = tracing if tracing is not None else _NoopRequestTracing()
 
     def __call__(
-        self, workflow_id: UUID, input: dict[str, Any] | None, workflow_version: int | None
+        self,
+        workflow_id: UUID,
+        input: dict[str, Any] | None,
+        workflow_version: int | None,
+        requested_by: UUID,
     ) -> WorkflowRunView:
         workflow = self._workflows.get(workflow_id)
         if workflow is None:
@@ -79,7 +83,7 @@ class StartWorkflowRunUseCase:
             "workflow_run.request",
             {"aether.workflow_id": str(workflow_id), "aether.workflow_version": str(number)},
         ):
-            view = self._store.create(workflow_id, number, input)
+            view = self._store.create(workflow_id, number, input, requested_by)
             traceparent = self._tracing.current_traceparent()
 
             try:

@@ -49,6 +49,14 @@ _EXPECTED_COLUMNS = {
 }
 
 
+def _issue_key(connect: _Factory) -> uuid.UUID:
+    """`control.workflow_runs.requested_by` FK 를 만족시키는 실제 api key (0007)."""
+    from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
+    from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
+
+    return IssueApiKeyUseCase(PostgresApiKeyStore(connect))(f"k-{uuid.uuid4()}").key.id
+
+
 def _seed_workflow_run(connect: _Factory) -> uuid.UUID:
     """`aether_control` 의 저장소로 Workflow → Version 1 → Run 선언을 만들고 run id 를 돌려준다."""
     repository = PostgresWorkflowRepository(connect)
@@ -58,7 +66,7 @@ def _seed_workflow_run(connect: _Factory) -> uuid.UUID:
         (Edge("s", "e"),),
     )
     store = PostgresWorkflowRunDeclarationStore(connect)
-    return store.create(view.id, 1, None).workflow_run_id
+    return store.create(view.id, 1, None, _issue_key(connect)).workflow_run_id
 
 
 def _has_privilege(conn: psycopg.Connection, role: str, table: str, privilege: str) -> bool:
@@ -145,7 +153,12 @@ def test_status_column_reuses_control_enum_and_no_new_enum_exists(
                 "JOIN pg_namespace n ON n.oid = t.typnamespace "
                 "WHERE t.typtype = 'e' AND t.typname LIKE '%workflow%'"
             )
-            assert cur.fetchall() == [("control", "workflow_run_status")]
+            # 0006 은 새 enum 을 만들지 않았다. 목록에 있는 둘째는 0007 이 노드 실행 상태를 좁히며
+            # 만든 것이다(`data.workflow_node_execution_status`, Workflow Run 의 것과 다른 타입).
+            assert sorted(cur.fetchall()) == [
+                ("control", "workflow_run_status"),
+                ("data", "workflow_node_execution_status"),
+            ]
     finally:
         conn.close()
 
@@ -324,7 +337,7 @@ def test_create_declares_a_queued_run_with_status_seq_zero_and_joins_version(
     )
     store = _store(connect)
 
-    created = store.create(view.id, 1, {"k": [1, 2]})
+    created = store.create(view.id, 1, {"k": [1, 2]}, _issue_key(connect))
     fetched = store.get(created.workflow_run_id)
 
     assert fetched == created
@@ -359,9 +372,10 @@ def test_create_with_null_input_and_unknown_version(
     )
     store = _store(connect)
 
-    created = store.create(view.id, 1, None)
+    key = _issue_key(connect)
+    created = store.create(view.id, 1, None, key)
     with pytest.raises(WorkflowVersionNotFound):
-        store.create(view.id, 2, None)
+        store.create(view.id, 2, None, key)
 
     admin = admin_connection_factory()
     try:

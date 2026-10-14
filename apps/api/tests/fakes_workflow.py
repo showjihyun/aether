@@ -72,9 +72,14 @@ class FakeWorkflowRunDeclarationStore:
         self._status_seq: dict[UUID, int] = {}
         self._version_ids: dict[tuple[UUID, int], UUID] = {}
         self.inputs: dict[UUID, dict[str, Any] | None] = {}
+        self.requesters: dict[UUID, UUID] = {}
 
     def create(
-        self, workflow_id: UUID, workflow_version: int, input: dict[str, Any] | None
+        self,
+        workflow_id: UUID,
+        workflow_version: int,
+        input: dict[str, Any] | None,
+        requested_by: UUID,
     ) -> WorkflowRunView:
         if self._repository.get_version(workflow_id, workflow_version) is None:
             raise WorkflowVersionNotFound(workflow_id, workflow_version)
@@ -96,6 +101,7 @@ class FakeWorkflowRunDeclarationStore:
         self._runs[run_id] = view
         self._status_seq[run_id] = 0
         self.inputs[run_id] = input
+        self.requesters[run_id] = requested_by
         return view
 
     def get(self, workflow_run_id: UUID) -> WorkflowRunView | None:
