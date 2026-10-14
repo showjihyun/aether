@@ -10,9 +10,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from threading import Event
-from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -22,46 +20,10 @@ from aether_api.adapters.inbound.stream.workflow_agent_run_consumer import (
 from aether_api.domain.workflow_agent_run_request import WorkflowAgentRunRequest
 from redis import Redis
 
+from tests.support.stream_fakes import FakeStreamClient
+
 _STREAM = "aether:workflow:agent_runs:requested"
 _GROUP = "aether-api"
-
-_Entry = tuple[str, dict[str, str]]
-
-
-class _FakeStreamClient:
-    """`XREADGROUP`·`XACK` 만 흉내 내는 최소 fake. 새 메시지가 바닥나면 `stop` 을 set 해서
-    `run_until` 이 스스로 끝나게 합니다(sleep 없이)."""
-
-    def __init__(self, stop: Event, *, pending: list[_Entry], new: list[_Entry]) -> None:
-        self._stop = stop
-        self._pending = list(pending)
-        self._new = list(new)
-        self.acked: list[str] = []
-        self.group_args: list[tuple[str, str, str]] = []
-
-    def xreadgroup(
-        self,
-        *,
-        groupname: str,
-        consumername: str,
-        streams: Mapping[str, str],
-        count: int | None = None,
-        block: int | None = None,
-    ) -> Any:
-        del count, block
-        (stream, start) = next(iter(streams.items()))
-        self.group_args.append((groupname, consumername, start))
-        source = self._pending if start == "0" else self._new
-        if source:
-            return [(stream, [source.pop(0)])]
-        if start != "0":
-            self._stop.set()
-        return []
-
-    def xack(self, stream: str, group: str, message_id: str) -> int:
-        del stream, group
-        self.acked.append(message_id)
-        return 1
 
 
 class _RecordingDeclare:
@@ -87,7 +49,7 @@ def _fields(run_id: UUID, **extra: str) -> dict[str, str]:
     }
 
 
-def _run(client: _FakeStreamClient, declare: _RecordingDeclare, stop: Event) -> None:
+def _run(client: FakeStreamClient, declare: _RecordingDeclare, stop: Event) -> None:
     consumer = WorkflowAgentRunConsumer(
         client,  # type: ignore[arg-type]
         declare,
@@ -101,7 +63,7 @@ def _run(client: _FakeStreamClient, declare: _RecordingDeclare, stop: Event) -> 
 def test_parsed_message_is_declared_and_acked() -> None:
     stop = Event()
     run_id = uuid4()
-    client = _FakeStreamClient(stop, pending=[], new=[("1-0", _fields(run_id))])
+    client = FakeStreamClient(stop, pending=[], new=[("1-0", _fields(run_id))])
     declare = _RecordingDeclare()
 
     _run(client, declare, stop)
@@ -116,7 +78,7 @@ def test_malformed_message_is_acked_without_calling_declare(
 ) -> None:
     """독약 메시지: WARNING 과 함께 즉시 ack, `declare` 는 부르지 않는다."""
     stop = Event()
-    client = _FakeStreamClient(
+    client = FakeStreamClient(
         stop,
         pending=[],
         new=[
@@ -137,7 +99,7 @@ def test_malformed_message_is_acked_without_calling_declare(
 def test_already_declared_message_is_still_acked() -> None:
     """`declare` 가 `False`(이미 있던 Run) 를 돌려줘도 ack 한다 -- 멱등 무시."""
     stop = Event()
-    client = _FakeStreamClient(stop, pending=[], new=[("1-0", _fields(uuid4()))])
+    client = FakeStreamClient(stop, pending=[], new=[("1-0", _fields(uuid4()))])
     declare = _RecordingDeclare(result=False)
 
     _run(client, declare, stop)
@@ -149,7 +111,7 @@ def test_already_declared_message_is_still_acked() -> None:
 def test_declare_failure_is_raised_and_not_acked() -> None:
     """선언 실패(FK 위반 같은 버그)는 삼키지 않고 올리며, ack 하지 않아 PEL 에 남는다."""
     stop = Event()
-    client = _FakeStreamClient(stop, pending=[], new=[("1-0", _fields(uuid4()))])
+    client = FakeStreamClient(stop, pending=[], new=[("1-0", _fields(uuid4()))])
     declare = _RecordingDeclare(error=RuntimeError("fk violation"))
 
     with pytest.raises(RuntimeError, match="fk violation"):
@@ -162,7 +124,7 @@ def test_declare_failure_is_raised_and_not_acked() -> None:
 def test_own_pending_entries_are_processed_before_new_messages() -> None:
     stop = Event()
     first, second = uuid4(), uuid4()
-    client = _FakeStreamClient(
+    client = FakeStreamClient(
         stop, pending=[("1-0", _fields(first))], new=[("2-0", _fields(second))]
     )
     declare = _RecordingDeclare()
