@@ -187,6 +187,23 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 
 `GET` 이 보는 것은 `control.workflow_runs` 의 **투영**입니다. 실행 상태의 정본은 `data.workflow_run_executions` 이고(spec 0005 2.9 개정 2) worker 가 씁니다 — 적재의 상태를 api 가 투영하는 것과 같은 경계입니다(6절). 그래서 조회는 상태 메시지가 도착한 뒤에 바뀝니다.
 
+### 9.1 파킹과 재개 (P4-2a)
+
+`AGENT` 노드에 닿으면 실행기는 Version 을 해석하고(`control.agent_versions`, 핀이 없으면 최신) 자식 Run 의 **id 를 정해 노드 실행 행에 영속한 뒤** 선언을 요청하고, Workflow Run 을 `waiting_run` + `waiting_run_id` 로 **파킹**합니다. id 를 발사보다 **먼저** 영속하는 순서가 멱등의 축입니다 — 반대로 하면 재전달에서 자식 Run 이 둘이 됩니다(R-8).
+
+**파킹은 lease 를 놓습니다**(`finally`). 대기 중인 Workflow Run 은 worker 슬롯을 점유하지 않고(R-7), `lease_owner`·`lease_until` 이 비어 있습니다.
+
+깨우는 신호는 둘이고 **하는 일은 재큐 하나**입니다 — `aether:workflow_runs:requested` 에 다시 싣고, 판정은 실행기가 합니다.
+
+| 경로 | 무엇 | 왜 |
+| --- | --- | --- |
+| 빠른 경로 | `aether:runs:status` 를 Workflow 전용 group `aether-workflow` 로 소비. 종결 상태가 오면 그 Run 을 기다리는 파킹 건을 찾아 재큐 | api 의 투영 group(`aether-api`)과 **다른 group** 이고 그 투영을 건드리지 않습니다 |
+| 안전망 | **스위퍼** — `AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS`(기본 30)마다 "`waiting_run` 인데 자식이 이미 종결" 을 한 번의 SQL 로 주워 재큐. 시작할 때 1회 | **이벤트만 믿지 않습니다**(spec 0005 2.5). 신호 하나가 유실되면 Workflow 가 영원히 파킹됩니다 — 그 실패를 하네스에서 세 번 겪었습니다(`improvement-log/2026-10-11-001`) |
+
+재큐가 두 번 와도 전진은 한 번입니다. 자식이 아직 종결이 아니면 실행기는 **아무 것도 바꾸지 않습니다** — 이벤트도, `seq` 도, 발사도 없습니다. 자식이 종결이면 노드를 마치고 다음으로 가며, 자식이 `succeeded` 가 아니면 Workflow Run 은 `failed` + `agent_run_failed` 입니다.
+
+실패 사유 셋이 더 생겼습니다 — `agent_run_failed`, `agent_version_not_found`(노드가 가리킨 Agent Version 이 없음), `workflow_run_without_requester`(0007 이전에 만들어진 Run — 요청자를 모르면 자식을 띄우지 않습니다).
+
 ### 9.1 Workflow 이벤트 어휘
 
 Workflow 는 **자기 어휘**를 가집니다(spec 0005 D-13) — Agent Run 의 이벤트 계약(5절)에 섞지 않습니다. 봉투는 같은 모양(`{ v: 1, workflow_run_id, seq, at, type, payload }`)이고 스트림은 `aether:workflow_runs:{id}:events`, 엔트리 ID 는 `<seq>-0` 입니다.
