@@ -866,6 +866,108 @@
           }
         }
       }
+    },
+    "/workflows/{workflow_id}/runs": {
+      "post": {
+        "summary": "Start Workflow Run Route",
+        "operationId": "start_workflow_run_route_workflows__workflow_id__runs_post",
+        "parameters": [
+          {
+            "name": "workflow_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkflowRunRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunAccepted"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_not_found | workflow_version_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/workflow-runs/{workflow_run_id}": {
+      "get": {
+        "summary": "Get Workflow Run Route",
+        "operationId": "get_workflow_run_route_workflow_runs__workflow_run_id__get",
+        "parameters": [
+          {
+            "name": "workflow_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkflowRunDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_run_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1966,6 +2068,192 @@
         ],
         "title": "WorkflowResponse",
         "description": "`POST`·`GET`·`PUT /workflows` 의 성공 응답 — 최신 Version 을 함께 돌려줍니다."
+      },
+      "WorkflowRunAccepted": {
+        "properties": {
+          "workflow_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Run Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Id"
+          },
+          "workflow_version": {
+            "type": "integer",
+            "title": "Workflow Version"
+          },
+          "status": {
+            "type": "string",
+            "const": "queued",
+            "title": "Status",
+            "default": "queued"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_run_id",
+          "workflow_id",
+          "workflow_version",
+          "requested_at"
+        ],
+        "title": "WorkflowRunAccepted",
+        "description": "`POST` 의 성공 응답(202) — Workflow Run 은 항상 `queued` 로 시작합니다."
+      },
+      "WorkflowRunDetailResponse": {
+        "properties": {
+          "workflow_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Run Id"
+          },
+          "workflow_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Id"
+          },
+          "workflow_version": {
+            "type": "integer",
+            "title": "Workflow Version"
+          },
+          "workflow_version_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Version Id"
+          },
+          "status": {
+            "$ref": "#/components/schemas/WorkflowRunStatus"
+          },
+          "current_node_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Node Id"
+          },
+          "waiting_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Run Id"
+          },
+          "requested_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Requested At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_run_id",
+          "workflow_id",
+          "workflow_version",
+          "workflow_version_id",
+          "status",
+          "current_node_id",
+          "waiting_run_id",
+          "requested_at",
+          "started_at",
+          "finished_at",
+          "failure_reason"
+        ],
+        "title": "WorkflowRunDetailResponse",
+        "description": "`GET /workflow-runs/{workflow_run_id}` 의 성공 응답 — `control.workflow_runs` 투영."
+      },
+      "WorkflowRunRequest": {
+        "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "workflow_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workflow Version"
+          }
+        },
+        "type": "object",
+        "title": "WorkflowRunRequest",
+        "description": "`POST /workflows/{workflow_id}/runs` 의 요청 본문."
+      },
+      "WorkflowRunStatus": {
+        "type": "string",
+        "enum": [
+          "queued",
+          "running",
+          "waiting_run",
+          "waiting_approval",
+          "succeeded",
+          "failed",
+          "cancelled"
+        ],
+        "title": "WorkflowRunStatus"
       },
       "WorkflowVersionResponse": {
         "properties": {

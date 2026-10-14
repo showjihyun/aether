@@ -106,6 +106,16 @@ class Settings(BaseSettings):
     와 같은 모양) — api 의 소비자가 `control.knowledge_ingestions` 에 적용합니다(api 만
     control role 로 씁니다, 마이그레이션 0004 GRANT)."""
 
+    workflow_stream: str = "aether:workflow_runs:requested"
+    """spec 0005 2.9 개정 2 (P4-2a A): api -> worker, Workflow Run 선언 통지. Agent Run 의
+    `worker_stream` 과 **다른 스트림**입니다."""
+
+    workflow_group: str = "aether-worker"
+
+    workflow_status_stream: str = "aether:workflow_runs:status"
+    """spec 0005 2.9 개정 2: worker -> api, Workflow Run 상태 투영 통지. api 의 소비자가
+    `control.workflow_runs` 에 적용합니다(api 만 control role 로 씁니다)."""
+
     observation_max_chars: int = 16_000
     """spec 0002 2.6, R-14. 도구 결과를 이 길이로 잘라 `truncated: true` 를 표시합니다."""
 

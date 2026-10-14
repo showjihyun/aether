@@ -254,7 +254,7 @@ Phase 4 의 Control Plane 네 표입니다(spec 0005 2.9, P4-1). 평면을 가�
 | --- | --- | --- |
 | `workflows` | 이름과 `current_version` | 가변 |
 | `workflow_versions` | `nodes`·`edges`(jsonb), `unique(workflow_id, version)` | **트리거로 불변** |
-| `workflow_runs` | `status`(enum `control.workflow_run_status`), `status_seq`, `current_node_id`, `waiting_run_id`, 시각 열 | 가변 |
+| `workflow_runs` | 선언(`workflow_version_id`·`input`·`requested_at`)과 **투영**(`status`·`status_seq`·`current_node_id`·`waiting_run_id`·시각 열) | 가변 |
 | `workflow_approvals` | `workflow_run_id`·`node_execution_id`·`approved_by`·`approved_at`·`note` | **트리거로 append-only** |
 
 **상태 enum 은 새로 만들었습니다** — `control.workflow_run_status` 의 일곱 값이고 `data.run_execution_status`(0001)는 건드리지 않았습니다(spec 0005 D-1·D-2). `timed_out` 은 없습니다 — Phase 4 는 Workflow 전체 타임아웃을 만들지 않고, 자식 Agent Run 의 타임아웃은 그 Run 의 것이며 Workflow 는 그것을 `failed` 로 받습니다.
@@ -263,13 +263,29 @@ Phase 4 의 Control Plane 네 표입니다(spec 0005 2.9, P4-1). 평면을 가�
 
 `workflow_approvals.node_execution_id` 에는 **FK 를 두지 않았습니다** — `control` 에서 `data` 로의 참조는 평면 경계를 거스릅니다. 지목한 실행이 실제로 `waiting_approval` 인지는 **P4-4 의 애플리케이션 판정**입니다(spec 0005 R-12).
 
+### `data.workflow_run_executions`
+
+Workflow Run 의 **실행 상태와 lease** 입니다(마이그레이션 0006, spec 0005 2.9 **개정 2**, P4-2a). `workflow_run_id` 가 PK 이고 `control.workflow_runs.id` 를 참조합니다. `data.run_executions`(Agent Run)와 같은 자리·같은 모양입니다.
+
+| 열 | 뜻 |
+| --- | --- |
+| `status` | `control.workflow_run_status` — **0005 의 enum 을 그대로** 씁니다. 같은 값 집합을 두 타입으로 복제하면 한쪽에만 값이 늘어 어긋납니다. `aether_data` 는 스키마 `control` 에 USAGE 가 있어 그 타입을 쓸 수 있습니다(0001) |
+| `status_seq` | 이 Run 의 상태 수열. 이벤트의 `seq` 와 **같은 수열**이고 투영의 멱등 기준입니다 |
+| `current_node_id`·`waiting_run_id` | 어디까지 왔는가 / 무엇을 기다리는가 |
+| `lease_owner`·`lease_until` | 실행 권한. 조건부 UPDATE 한 문장과 **DB 시계**로 경합을 판정합니다(`data.run_executions` 와 같은 방식) |
+| `started_at`·`finished_at`·`failure_reason`·`updated_at` | 시각과 사유 |
+
+**왜 `control.workflow_runs` 가 아닌가.** 실행기는 worker 이고 worker 의 역할(`aether_data`)은 `control` 에 **SELECT 뿐**입니다(0001·0005 의 GRANT). GRANT 를 넓히면 평면 규칙(spec 0005 D-5)이 무너지고 그것은 권한 변경이라 사람 검토 대상입니다. 그래서 상태는 여기(`data`)에 쓰고 `control` 쪽은 `aether:workflow_runs:status` 스트림으로 api 가 투영합니다 — `data.run_executions` → `aether:runs:status` → `control.runs` 와 같은 선이고, Knowledge 적재도 같습니다([api.md](api.md) 6절).
+
+`aether_control` 에는 이 표에 **아무 권한도 주지 않았습니다**(0001 R-7 유지 — `data` 스키마 USAGE 자체가 없습니다).
+
 ### `data.workflow_node_executions`
 
 노드 실행 하나가 한 행입니다. `unique(workflow_run_id, node_id, iteration)` 이 **같은 노드가 두 번 전진하는 것을 DB 에서** 막습니다 — `iteration` 은 `LOOP` 가 쓰는 회차이고, 멱등 재개(spec 0005 R-8)의 마지막 방어선입니다.
 
 자식 Agent Run 과의 연결은 **이 표의** `agent_run_id` 입니다(spec 0005 D-3). Run 쪽에 "이 Run 은 어느 Workflow 노드의 것" 을 두면 `aether_runtime` 이 workflow 를 알아야 하고 그것이 AR-13 위반입니다. cross-schema FK 의 수명은 4절과 같습니다.
 
-`output`(jsonb)과 `output_truncated` 는 P4-2b 가 씁니다 — **8 KiB 상한은 애플리케이션이 지키고** 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다 — 실행기를 만드는 P4-2a 가 그 집합을 정하면 그때 enum 으로 좁힙니다.
+`output`(jsonb)과 `output_truncated` 는 P4-2b 가 씁니다 — **8 KiB 상한은 애플리케이션이 지키고** 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다. 집합은 P4-2a 의 실행기가 정했습니다(`aether_workflow.domain.node_execution.NodeExecutionStatus`) — 컬럼을 enum 으로 좁히는 것은 파킹이 `waiting_run` 을 더하는 **같은 단위의 두 번째 PR** 로 미룹니다(마이그레이션 하나로 끝내기 위해서입니다).
 
 ### PostgreSQL 이미지
 

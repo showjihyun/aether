@@ -245,6 +245,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflows/{workflow_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Workflow Run Route */
+        post: operations["start_workflow_run_route_workflows__workflow_id__runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow-runs/{workflow_run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Workflow Run Route */
+        get: operations["get_workflow_run_route_workflow_runs__workflow_run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -790,6 +824,91 @@ export interface components {
             /** Edges */
             edges: components["schemas"]["EdgeModel"][];
         };
+        /**
+         * WorkflowRunAccepted
+         * @description `POST` 의 성공 응답(202) — Workflow Run 은 항상 `queued` 로 시작합니다.
+         */
+        WorkflowRunAccepted: {
+            /**
+             * Workflow Run Id
+             * Format: uuid
+             */
+            workflow_run_id: string;
+            /**
+             * Workflow Id
+             * Format: uuid
+             */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
+            /**
+             * Status
+             * @default queued
+             * @constant
+             */
+            status: "queued";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+        };
+        /**
+         * WorkflowRunDetailResponse
+         * @description `GET /workflow-runs/{workflow_run_id}` 의 성공 응답 — `control.workflow_runs` 투영.
+         */
+        WorkflowRunDetailResponse: {
+            /**
+             * Workflow Run Id
+             * Format: uuid
+             */
+            workflow_run_id: string;
+            /**
+             * Workflow Id
+             * Format: uuid
+             */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
+            /**
+             * Workflow Version Id
+             * Format: uuid
+             */
+            workflow_version_id: string;
+            status: components["schemas"]["WorkflowRunStatus"];
+            /** Current Node Id */
+            current_node_id: string | null;
+            /** Waiting Run Id */
+            waiting_run_id: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+        };
+        /**
+         * WorkflowRunRequest
+         * @description `POST /workflows/{workflow_id}/runs` 의 요청 본문.
+         */
+        WorkflowRunRequest: {
+            /** Input */
+            input?: {
+                [key: string]: unknown;
+            } | null;
+            /** Workflow Version */
+            workflow_version?: number | null;
+        };
+        /**
+         * WorkflowRunStatus
+         * @enum {string}
+         */
+        WorkflowRunStatus: "queued" | "running" | "waiting_run" | "waiting_approval" | "succeeded" | "failed" | "cancelled";
         /**
          * WorkflowVersionResponse
          * @description `GET /workflows/{id}/versions/{version}` 의 성공 응답.
@@ -1572,6 +1691,100 @@ export interface operations {
                 content?: never;
             };
             /** @description workflow_version_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_workflow_run_route_workflows__workflow_id__runs_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WorkflowRunRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunAccepted"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_not_found | workflow_version_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_workflow_run_route_workflow_runs__workflow_run_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowRunDetailResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_run_not_found */
             404: {
                 headers: {
                     [name: string]: unknown;
