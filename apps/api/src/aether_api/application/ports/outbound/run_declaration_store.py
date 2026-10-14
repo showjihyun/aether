@@ -35,8 +35,30 @@ class RunDeclarationStore(Protocol):
         끝납니다."""
         ...
 
+    def create_with_id(
+        self, run_id: UUID, agent_version_id: UUID, input: str, requested_by: UUID | None
+    ) -> bool:
+        """주어진 `run_id` 로 선언 행을 만듭니다(`INSERT … ON CONFLICT (id) DO NOTHING`).
+
+        새로 만들었으면 `True`, 이미 있었으면 `False`(멱등, spec 0005 2.5 개정 3). `requested_by`
+        는 Workflow 를 시작한 주체를 그대로 물려받은 값입니다 — 비우면 `GET /runs/{id}` 가 500 이라
+        사람 주체를 발명하지 않고 책임의 사슬을 잇습니다(없으면 NULL, 실행기는 그런 요청을 만들지
+        않습니다). `agent_version_id` 가 없으면
+        (FK 위반) 예외를 그대로 올립니다.
+        """
+        ...
+
     def get(self, run_id: UUID) -> RunView | None:
         """없으면 `None` — 유스케이스가 `RunNotFound` 로 바꿉니다(spec 0001 D-11)."""
+        ...
+
+    def status(self, run_id: UUID) -> RunStatus | None:
+        """선언 행의 상태만 읽습니다. 없으면 `None`.
+
+        `get` 과 나눈 이유(2026-10-14): `RunView` 는 `requested_by` 를 **필수**로 요구하는데
+        Workflow 가 요청한 자식 Run 은 그 값이 비어 있을 수 있습니다. "이미 통지됐는가" 만
+        알고 싶은 자리에서 전체 view 를 조립하면 그 자리에서 터집니다. 좁은 문을 둡니다.
+        """
         ...
 
     def request_cancel(self, run_id: UUID, at: datetime) -> RunView:

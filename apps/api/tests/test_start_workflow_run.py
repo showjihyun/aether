@@ -30,6 +30,7 @@ from apps.api.tests.fakes_workflow import (
 
 _NODES = (Node("s", NodeKind.START), Node("e", NodeKind.END))
 _EDGES = (Edge("s", "e"),)
+_KEY = uuid4()
 _TRACEPARENT = "00-" + "c" * 32 + "-" + "d" * 16 + "-01"
 
 _Built = tuple[
@@ -58,7 +59,7 @@ def test_defaults_to_current_version_and_starts_queued() -> None:
     start, repo, _store, _notifier = _build()
     workflow_id = _workflow_with_two_versions(repo)
 
-    view = start(workflow_id, {"k": "v"}, None)
+    view = start(workflow_id, {"k": "v"}, None, _KEY)
 
     assert view.workflow_id == workflow_id
     assert view.workflow_version == 2
@@ -70,7 +71,7 @@ def test_explicit_version_is_used() -> None:
     start, repo, _store, _notifier = _build()
     workflow_id = _workflow_with_two_versions(repo)
 
-    view = start(workflow_id, None, 1)
+    view = start(workflow_id, None, 1, _KEY)
 
     assert view.workflow_version == 1
 
@@ -80,7 +81,7 @@ def test_input_is_handed_to_the_store() -> None:
     start, repo, store, _notifier = _build()
     workflow_id = _workflow_with_two_versions(repo)
 
-    view = start(workflow_id, {"k": [1, 2]}, None)
+    view = start(workflow_id, {"k": [1, 2]}, None, _KEY)
 
     assert store.inputs[view.workflow_run_id] == {"k": [1, 2]}
 
@@ -90,7 +91,7 @@ def test_unknown_workflow_raises_workflow_not_found() -> None:
     start, _repo, _store, notifier = _build()
 
     with pytest.raises(WorkflowNotFound):
-        start(uuid4(), None, None)
+        start(uuid4(), None, None, _KEY)
     assert notifier.calls == []
 
 
@@ -100,9 +101,20 @@ def test_unknown_version_raises_workflow_version_not_found() -> None:
     workflow_id = _workflow_with_two_versions(repo)
 
     with pytest.raises(WorkflowVersionNotFound):
-        start(workflow_id, None, 3)
+        start(workflow_id, None, 3, _KEY)
     assert notifier.calls == []
     assert store.inputs == {}
+
+
+def test_requester_is_recorded_on_the_declaration() -> None:
+    """spec 0005 2.5 개정 3: Workflow 를 시작한 주체가 선언 행에 남는다 -- 자식 Agent Run 이 그것을
+    물려받는다(비우면 `GET /runs/{id}` 가 500)."""
+    start, repo, store, _notifier = _build()
+    workflow_id = _workflow_with_two_versions(repo)
+
+    view = start(workflow_id, None, None, _KEY)
+
+    assert store.requesters[view.workflow_run_id] == _KEY
 
 
 def test_notifies_once_with_the_declared_run_and_version_id() -> None:
@@ -110,7 +122,7 @@ def test_notifies_once_with_the_declared_run_and_version_id() -> None:
     start, repo, store, notifier = _build()
     workflow_id = _workflow_with_two_versions(repo)
 
-    view = start(workflow_id, None, None)
+    view = start(workflow_id, None, None, _KEY)
 
     assert notifier.calls == [(view.workflow_run_id, view.workflow_version_id, None)]
     assert store.get(view.workflow_run_id) is not None
@@ -124,7 +136,7 @@ def test_notifier_failure_does_not_block_and_logs_warning(
     workflow_id = _workflow_with_two_versions(repo)
 
     with caplog.at_level("WARNING"):
-        view = start(workflow_id, None, None)
+        view = start(workflow_id, None, None, _KEY)
 
     assert view.status == WorkflowRunStatus.QUEUED
     assert store.get(view.workflow_run_id) is not None
@@ -140,7 +152,7 @@ def test_traceparent_from_tracing_is_sent_with_the_notification() -> None:
     start = StartWorkflowRunUseCase(repo, store, notifier, tracing=tracing)
     workflow_id = _workflow_with_two_versions(repo)
 
-    start(workflow_id, None, None)
+    start(workflow_id, None, None, _KEY)
 
     assert notifier.calls[0][2] == _TRACEPARENT
     assert [name for name, _ in tracing.opened] == ["workflow_run.request"]

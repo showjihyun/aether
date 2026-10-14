@@ -1,6 +1,13 @@
 """spec 0005 2.9 개정 2, 2.10, R-6 (P4-2a A): **사슬 하나로** api → 요청 스트림 → 실행기 →
 상태 스트림 → 투영 → `GET`.
 
+PR B2 가 `AGENT` 노드의 사슬을 더합니다(아래 `test_agent_node_*`): api 로 `START → AGENT → END` 를
+만들어 실행하면 실행기가 자식 Run 의 선언을 요청하고(`aether:workflow:agent_runs:requested`), api 의
+선언 소비자가 `control.runs` 에 만들고, worker 의 Agent Run 경로가 실행하고, 종결 통지가 파킹된
+Workflow 를 깨워 `succeeded` 에 닿는다 -- 전부 **프로덕션 조립 그대로**(api `lifespan`, worker
+`serve()`)이고 모델만 fake 입니다. 중간에 `waiting_run` 과 `waiting_run_id` 가 `GET` 에 보이는 것이
+R-13 의 절반입니다.
+
 이 파일이 있는 이유는 **계약이 두 번 구현되기 때문**입니다. `aether:workflow_runs:status` 의
 필드를 worker 쪽(`RedisWorkflowStatusNotifier`)과 api 쪽(`WorkflowRunStatusConsumer`)이 서로를
 import 하지 않고 각자 만듭니다(AR-7). 그래서 한쪽이 `workflow_run_id` 를 `run_id` 로 쓰거나
@@ -16,9 +23,11 @@ import 하지 않고 각자 만듭니다(AR-7). 그래서 한쪽이 `workflow_ru
 from __future__ import annotations
 
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
+from dataclasses import dataclass
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import psycopg
 import pytest
@@ -36,12 +45,17 @@ from aether_api.application.usecases.apply_workflow_run_status import (
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.main import create_app
 from aether_api.settings import Settings as ApiSettings
-from aether_worker.main import serve
+from aether_worker.application.ports.inbound.handle_run_requested import (
+    HandleOutcome,
+    RequestedMessage,
+)
+from aether_worker.main import _build_production_handler, serve
 from aether_worker.settings import Settings as WorkerSettings
 from fastapi.testclient import TestClient
 from redis import Redis
 
 from tests.support.pg import DATA_PASSWORD, DATA_ROLE
+from tests.support.redis import stream_entries
 from tests.support.waiting import wait_until
 
 pytestmark = pytest.mark.integration
@@ -134,3 +148,264 @@ def test_a_run_started_through_the_api_is_executed_and_projected_back(
         stop.set()
         worker_thread.join(_JOIN_TIMEOUT * 2)
         projection_thread.join(_JOIN_TIMEOUT * 2)
+
+
+# --- B2: AGENT 노드 사슬 ----------------------------------------------------------------
+
+_WORKFLOW_REQUESTED = "aether:workflow_runs:requested"
+_AGENT_RUN_REQUESTED = "aether:workflow:agent_runs:requested"
+_CHAIN_TIMEOUT = 30.0
+
+
+@dataclass
+class _Stack:
+    client: TestClient
+    headers: dict[str, str]
+    key_id: UUID
+    redis: Redis
+    admin: Callable[[], psycopg.Connection]
+    release_children: threading.Event
+    agent_id: str
+
+    def start_workflow(self) -> tuple[str, UUID]:
+        """`START -> AGENT -> END` 를 만들고 실행해 `(workflow_run_id, workflow_version_id)` 를
+        돌려준다."""
+        created = self.client.post(
+            "/workflows",
+            json={
+                "name": f"chain-agent-{uuid4()}",
+                "nodes": [
+                    _node("s", "START"),
+                    {**_node("a", "AGENT"), "agent_id": self.agent_id, "agent_version": None},
+                    _node("e", "END"),
+                ],
+                "edges": [
+                    {"source": "s", "target": "a", "label": None},
+                    {"source": "a", "target": "e", "label": None},
+                ],
+            },
+            headers=self.headers,
+        )
+        assert created.status_code == 201, created.text
+        started = self.client.post(
+            f"/workflows/{created.json()['id']}/runs",
+            json={"input": {"q": "hi"}},
+            headers=self.headers,
+        )
+        assert started.status_code == 202, started.text
+        run_id: str = started.json()["workflow_run_id"]
+        (version_id,) = {
+            UUID(f["workflow_version_id"])
+            for _, f in stream_entries(self.redis, _WORKFLOW_REQUESTED)
+            if f["workflow_run_id"] == run_id
+        }
+        return run_id, version_id
+
+    def detail(self, run_id: str) -> dict[str, Any]:
+        response = self.client.get(f"/workflow-runs/{run_id}", headers=self.headers)
+        assert response.status_code == 200, response.text
+        body: dict[str, Any] = response.json()
+        return body
+
+    def query(self, sql: str, *params: object) -> list[tuple[Any, ...]]:
+        conn = self.admin()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                return cur.fetchall()
+        finally:
+            conn.close()
+
+
+@contextmanager
+def _stack(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> Iterator[_Stack]:
+    host, port = db_host_port
+    api_settings = ApiSettings(database_url=control_database_url, redis_url=redis_url)
+    worker_settings = WorkerSettings(
+        database_url=f"postgresql+psycopg://{DATA_ROLE}:{DATA_PASSWORD}@{host}:{port}/aether",
+        worker_consumer=f"test-chain-agent-{uuid4()}",
+        worker_heartbeat_seconds=1,
+        workflow_sweep_interval_seconds=1.0,
+    )
+    issued = IssueApiKeyUseCase(PostgresApiKeyStore(control_connection_factory))(
+        f"test-workflow-chain-agent-{uuid4()}"
+    )
+    # Agent Run 은 프로덕션 핸들러가 그대로 실행하되, 테스트가 풀어 줄 때까지 **집지 않게** 문을
+    # 닫는다 --
+    # 그래야 `waiting_run` 이 관측되는 창이 확정적이다(경쟁 없이 R-13 의 절반을 본다).
+    gate = threading.Event()
+    inner = _build_production_handler(worker_settings, redis_client)
+
+    def gated(message: RequestedMessage) -> HandleOutcome:
+        assert gate.wait(_CHAIN_TIMEOUT), "테스트가 자식 Run 을 풀어 주지 않았습니다"
+        return inner(message)
+
+    stop = threading.Event()
+    ready = threading.Event()
+    worker_thread = threading.Thread(
+        target=lambda: serve(
+            worker_settings,
+            stop=stop,
+            make_client=lambda: redis_client,
+            on_ready=ready.set,
+            handler=gated,
+        ),
+        daemon=True,
+    )
+    worker_thread.start()
+    try:
+        assert ready.wait(_JOIN_TIMEOUT), "worker 가 준비되지 않았습니다"
+        with TestClient(create_app(api_settings)) as client:  # lifespan = 프로덕션 소비자 넷
+            headers = {"Authorization": f"Bearer {issued.raw_key}"}
+            agent = client.post(
+                "/agents",
+                json={
+                    "name": f"chain-agent-{uuid4()}",
+                    "definition": {"schema_version": 1, "system_prompt": "You are a helper."},
+                },
+                headers=headers,
+            )
+            assert agent.status_code == 201, agent.text
+            yield _Stack(
+                client=client,
+                headers=headers,
+                key_id=issued.key.id,
+                redis=redis_client,
+                admin=admin_connection_factory,
+                release_children=gate,
+                agent_id=agent.json()["id"],
+            )
+    finally:
+        gate.set()
+        stop.set()
+        worker_thread.join(_JOIN_TIMEOUT * 2)
+
+
+def test_agent_node_workflow_parks_then_succeeds_through_the_real_assembly(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """R-13(절반)·R-6: `GET` 이 `waiting_run` 과 기다리는 자식 Run 의 id 를 보여 주고(자식 Run 이
+    돌기 전에), 풀어 주면 자식이 끝나 통지가 Workflow 를 깨워 `succeeded` 가 된다. 자식 Run 은
+    Workflow
+    를 시작한 주체의 것으로 조회된다(`GET /runs/{id}` 가 200 -- 요청자를 비웠다면 500)."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        run_id, _ = stack.start_workflow()
+
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "waiting_run", timeout=_CHAIN_TIMEOUT
+        ), f"파킹이 투영되지 않았습니다 -- 마지막으로 본 투영: {stack.detail(run_id)}"
+        parked = stack.detail(run_id)
+        child = parked["waiting_run_id"]
+        assert child is not None, parked
+        assert parked["current_node_id"] == "a", parked
+        assert stack.query(
+            "SELECT agent_run_id FROM data.workflow_node_executions"
+            " WHERE workflow_run_id = %s AND node_id = 'a'",
+            run_id,
+        ) == [(UUID(child),)], "투영이 보여 주는 대기 대상은 실행기가 영속한 자식 id 다"
+        assert stack.query(
+            "SELECT lease_owner, lease_until FROM data.workflow_run_executions"
+            " WHERE workflow_run_id = %s",
+            run_id,
+        ) == [(None, None)], "대기 중에는 lease 를 쥐지 않는다(R-7)"
+
+        child_view = stack.client.get(f"/runs/{child}", headers=stack.headers)
+        assert child_view.status_code == 200, child_view.text
+        assert child_view.json()["requested_by"] == str(stack.key_id)
+
+        stack.release_children.set()
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "succeeded", timeout=_CHAIN_TIMEOUT
+        ), f"사슬이 끊겼습니다 -- 마지막으로 본 투영: {stack.detail(run_id)}"
+        final = stack.detail(run_id)
+        assert final["waiting_run_id"] is None, final
+        assert final["current_node_id"] == "e", final
+        assert final["failure_reason"] is None, final
+        assert wait_until(
+            lambda: (
+                stack.client.get(f"/runs/{child}", headers=stack.headers).json()["status"]
+                == "succeeded"
+            ),
+            timeout=_CHAIN_TIMEOUT,
+        )
+        assert stack.query(
+            "SELECT node_id, status::text FROM data.workflow_node_executions"
+            " WHERE workflow_run_id = %s ORDER BY started_at, node_id",
+            run_id,
+        ) == [("s", "succeeded"), ("a", "succeeded"), ("e", "succeeded")]
+
+
+def test_duplicate_requests_in_the_real_assembly_create_one_child_run(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """R-8: 같은 요청 메시지가 (파킹 중에) 두 번 더 와도 자식 Run 은 **1건**, 노드 실행 기록은
+    노드당 1행이다 -- 실제 worker 의 소비자가 받아 실제 실행기가 처리한다."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        run_id, version_id = stack.start_workflow()
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "waiting_run", timeout=_CHAIN_TIMEOUT
+        )
+        for _ in range(2):
+            redis_client.xadd(
+                _WORKFLOW_REQUESTED,
+                {
+                    "workflow_run_id": run_id,
+                    "workflow_version_id": str(version_id),
+                    "traceparent": "",
+                },
+            )
+        assert wait_until(
+            lambda: (
+                redis_client.xpending(_WORKFLOW_REQUESTED, "aether-worker")["pending"] == 0
+                and redis_client.xinfo_groups(_WORKFLOW_REQUESTED)[0]["lag"] == 0
+            ),
+            timeout=_CHAIN_TIMEOUT,
+        ), "중복 요청이 처리(ack)되지 않았습니다"
+
+        stack.release_children.set()
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "succeeded", timeout=_CHAIN_TIMEOUT
+        )
+
+        assert len(redis_client.xrange(_AGENT_RUN_REQUESTED, min="-", max="+") or []) == 1
+        assert stack.query(
+            "SELECT count(*) FROM control.runs r JOIN data.workflow_node_executions n"
+            " ON n.agent_run_id = r.id WHERE n.workflow_run_id = %s",
+            run_id,
+        ) == [(1,)]
+        assert stack.query(
+            "SELECT node_id, count(*) FROM data.workflow_node_executions"
+            " WHERE workflow_run_id = %s GROUP BY node_id ORDER BY node_id",
+            run_id,
+        ) == [("a", 1), ("e", 1), ("s", 1)]

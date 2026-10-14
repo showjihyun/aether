@@ -29,7 +29,7 @@ def _store_with_run() -> tuple[FakeWorkflowRunDeclarationStore, UUID]:
         )
     )
     store = FakeWorkflowRunDeclarationStore(repo)
-    return store, store.create(wf.id, 1, None).workflow_run_id
+    return store, store.create(wf.id, 1, None, uuid4()).workflow_run_id
 
 
 def _get(store: FakeWorkflowRunDeclarationStore, run_id: UUID) -> WorkflowRunView:

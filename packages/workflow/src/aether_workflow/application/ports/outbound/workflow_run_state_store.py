@@ -41,9 +41,14 @@ class WorkflowRunStateStore(Protocol):
         failure_reason: WorkflowFailureReason | None = None,
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
+        waiting_run_id: UUID | None = None,
     ) -> None:
         """`current_node_id`·`failure_reason`·`started_at`·`finished_at` 은 주었을 때만
-        채웁니다(COALESCE) — 주지 않은 호출이 이전 값을 지우지 않습니다. `seq` 는 항상 씁니다."""
+        채웁니다(COALESCE) — 주지 않은 호출이 이전 값을 지우지 않습니다. `seq` 는 항상 씁니다.
+
+        `waiting_run_id` 는 예외입니다: **상태에서 유도**합니다. `waiting_run` 일 때만 값이
+        있고(주지
+        않으면 이전 값 유지) 다른 상태로 가면 지워집니다 - api 의 투영 불변식과 같습니다."""
         ...
 
     def start_node(self, workflow_run_id: UUID, node_id: str, iteration: int) -> UUID | None:
@@ -51,8 +56,18 @@ class WorkflowRunStateStore(Protocol):
         그것이 멱등·재개의 축입니다(R-6, R-8)."""
         ...
 
+    def park_node(self, node_execution_id: UUID, agent_run_id: UUID) -> None:
+        """자식 Run 의 id 를 영속하고 노드를 `waiting_run` 으로 바꿉니다 - **한 문장**입니다.
+        발사(`AgentRunLauncher.launch`) **전에** 부릅니다. 순서가 반대면 재전달에서 id 를 다시
+        만들어 자식 Run 이 둘이 됩니다(R-8)."""
+        ...
+
     def finish_node(
-        self, node_execution_id: UUID, status: NodeExecutionStatus, finished_at: datetime
+        self,
+        node_execution_id: UUID,
+        status: NodeExecutionStatus,
+        finished_at: datetime,
+        failure_reason: WorkflowFailureReason | None = None,
     ) -> None: ...
 
     def node_executions(self, workflow_run_id: UUID) -> tuple[NodeExecutionRecord, ...]: ...

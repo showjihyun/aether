@@ -125,6 +125,27 @@ class PostgresRunDeclarationStore:
             cancel_requested_at=None,
         )
 
+    def create_with_id(
+        self, run_id: UUID, agent_version_id: UUID, input: str, requested_by: UUID | None
+    ) -> bool:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO control.runs (id, agent_version_id, input, requested_by)
+                VALUES (%s, %s, %s, %s)
+                ON CONFLICT (id) DO NOTHING
+                RETURNING id
+                """,
+                (run_id, agent_version_id, input, requested_by),
+            )
+            return cur.fetchone() is not None
+
+    def status(self, run_id: UUID) -> RunStatus | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT status FROM control.runs WHERE id = %s", (run_id,))
+            row = cur.fetchone()
+        return None if row is None else RunStatus(row[0])
+
     def get(self, run_id: UUID) -> RunView | None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(f"SELECT {_SELECT_COLUMNS} {_FROM_JOIN} WHERE r.id = %s", (run_id,))

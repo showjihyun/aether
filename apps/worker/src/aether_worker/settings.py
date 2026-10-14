@@ -116,6 +116,20 @@ class Settings(BaseSettings):
     """spec 0005 2.9 개정 2: worker -> api, Workflow Run 상태 투영 통지. api 의 소비자가
     `control.workflow_runs` 에 적용합니다(api 만 control role 로 씁니다)."""
 
+    workflow_wake_group: str = "aether-workflow"
+    """spec 0005 2.5 개정 3 (P4-2a B2): 파킹된 Workflow Run 을 깨우는 **빠른 경로**가
+    `worker_status_stream`
+    (`aether:runs:status`)을 읽는 consumer group. Agent Run 의 api 쪽 투영 group(`aether-api`)과
+    다른
+    이름이라 같은 메시지를 각자 한 번씩 받습니다."""
+
+    workflow_sweep_interval_seconds: float = 30.0
+    """spec 0005 2.5, 2.11 (P4-2a B2): 파킹 스위퍼 주기(초) -
+    `AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS`.
+    `waiting_run` 인데 자식 Run 이 이미 종결인 건을 주워 재큐하는 안전망입니다. 이벤트 하나가
+    유실되면
+    Workflow 가 영원히 파킹되므로(`2026-10-11-001`) 빠른 경로가 있어도 끄지 않습니다."""
+
     observation_max_chars: int = 16_000
     """spec 0002 2.6, R-14. 도구 결과를 이 길이로 잘라 `truncated: true` 를 표시합니다."""
 

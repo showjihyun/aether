@@ -15,6 +15,8 @@ from aether_workflow.domain.node_execution import NodeExecutionStatus
 from aether_workflow.domain.run_status import IllegalWorkflowTransition, WorkflowRunStatus
 
 from packages.workflow.tests.fakes import (
+    FakeAgentRunLauncher,
+    FakeAgentRunReader,
     FakeWorkflowClock,
     FakeWorkflowEventSink,
     FakeWorkflowRunDeclarationReader,
@@ -32,12 +34,16 @@ class _Rig:
         self.reader = FakeWorkflowRunDeclarationReader()
         self.sink = sink or FakeWorkflowEventSink()
         self.notifier = FakeWorkflowStatusNotifier()
+        self.agent_runs = FakeAgentRunReader()
+        self.launcher = FakeAgentRunLauncher(self.store)
         self.advance = AdvanceWorkflowRunUseCase(
             self.store,
             self.reader,
             self.sink,
             self.notifier,
             FakeWorkflowClock(),
+            agent_runs=self.agent_runs,
+            launcher=self.launcher,
             owner=_OWNER,
             lease_ttl_seconds=60.0,
         )
@@ -218,7 +224,7 @@ def test_unsupported_node_kind_fails_with_a_distinct_reason_and_no_half_node() -
     """plan 부록 A: 지원하지 않는 종류는 `failed` + 구별되는 사유, 절반만 만든 노드는 없다."""
     rig = _Rig()
     run_id = rig.reader.add(
-        (Node("start", NodeKind.START), Node("a", NodeKind.AGENT), Node("end", NodeKind.END)),
+        (Node("start", NodeKind.START), Node("a", NodeKind.CONDITION), Node("end", NodeKind.END)),
         (Edge("start", "a"), Edge("a", "end")),
     )
 

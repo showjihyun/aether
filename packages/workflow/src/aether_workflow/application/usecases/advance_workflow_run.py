@@ -2,20 +2,31 @@
 Workflow Run 을 `START` 에서 `END` 까지 전진시키는 실행기 골격. `AdvanceWorkflowRun`(inbound
 포트)의 유일한 구현입니다.
 
-**범위.** 지원하는 노드 종류는 `START`·`END` 둘입니다. 나머지 종류를 만나면 `failed` +
+**범위.** 지원하는 노드 종류는 `START`·`END`·`AGENT` 셋입니다. 나머지 종류를 만나면 `failed` +
 `unsupported_node_kind` 로 끝납니다(절반만 만든 노드를 두지 않습니다). 나가는 간선이 둘 이상이면
-`failed` + `unsupported_branching` — 조용히 하나를 고르지 않습니다(분기는 P4-2b). 파킹·스위퍼·
-자식 Run 은 PR B 이므로 이 유스케이스는 **대기 자체를 만들지 않습니다**: 호출은 lease 를 잡고,
-끝까지 가거나 `failed` 로 끝내고, `finally` 에서 놓습니다.
+`failed` + `unsupported_branching` — 조용히 하나를 고르지 않습니다(분기는 P4-2b).
+
+**`AGENT` 노드와 파킹(P4-2a B2).** 새 실행이면 Agent Version 을 해석하고(없으면 노드 실패
+`agent_version_not_found`, 요청자가 없으면 `workflow_run_without_requester`), 자식 Run 의 id 를
+**새로 정해 노드 실행 행에 영속(`park_node`)한 뒤에** `AgentRunLauncher.launch` 로 발사하고,
+`waiting_run` 으로 **파킹**합니다 — 상태와 기다리는 대상만 남기고 호출은 끝나며 lease 는 `finally`
+에서 놓입니다(R-7).
+순서가 반대면 재전달에서 id 를 다시 만들어 자식 Run 이 둘이 됩니다(R-8). 깨우는 신호(자식 종결 통지·
+스위퍼)는 어느 쪽이든 이 유스케이스를 **다시 부르는 것** 하나이고 판정은 여기서 합니다: 자식이 아직
+종결이 아니면 **아무 것도 바꾸지 않고**(이벤트·통지·`seq` 증가 없음) 파킹을 유지한 채 돌아갑니다 —
+그래서 같은 신호가 두 번 와도 전진은 한 번입니다. 노드 출력은 이 단위가 만들지 않습니다(D-8, P4-2b).
 
 **순서.** 선언 읽기(없으면 `RuntimeError`, lease 도 잡지 않음) → `acquire_lease`(실패면
-`WorkflowLeaseHeld`) → `load`(종결이면 아무것도 하지 않고 그 상태를 돌려줌 — 멱등) →
-`queued → running` → 현재 노드(없으면 `START`)부터 간선을 따라 전진 → `release`.
+`WorkflowLeaseHeld`) → `load`(종결이면 아무것도 하지 않고 그 상태를 돌려줌 — 멱등) → 파킹 중이고
+자식이
+아직 종결이 아니면 그대로 돌아감 → `queued`/`waiting_run → running` → 현재 노드(없으면 `START`)부터
+간선을 따라 전진 → `release`.
 
 **멱등·재개의 축은 `start_node`.** `None` 은 "이미 기록돼 있다" 입니다(R-6, R-8). 이 경우 노드를
 **다시 실행하지 않고** 기록이 `running` 으로 남아 있으면(시작만 하고 죽음) 새 행 없이 마무리하고,
-이미 마쳤으면 건너뜁니다. 이 단계의 노드(`START`·`END`)는 실행할 것이 없어 "마무리" 가 곧 실행의
-전부지만, 파킹이 생겨도 같은 축이 그대로 쓰입니다.
+이미 마쳤으면 건너뜁니다. `START`·`END` 는 실행할 것이 없어 "마무리" 가 곧 실행의 전부이고, `AGENT`
+는 같은 축 위에서
+`waiting_run` 기록(자식 id 가 영속된 상태)을 재개의 근거로 씁니다.
 
 **`seq`.** Workflow Run 하나 안에서 1 부터 단조 증가하고 이벤트와 상태 통지가
 **같은 수열**을 씁니다.
@@ -30,11 +41,22 @@ Workflow Run 을 `START` 에서 `END` 까지 전진시키는 실행기 골격. `
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from datetime import datetime
-from uuid import UUID
+from uuid import UUID, uuid4
+
+from aether_runtime.domain.run import RunStatus, is_terminal
 
 from aether_workflow.application.ports.inbound.advance_workflow_run import WorkflowLeaseHeld
+from aether_workflow.application.ports.outbound.agent_run_launcher import (
+    AgentRunLaunch,
+    AgentRunLauncher,
+)
+from aether_workflow.application.ports.outbound.agent_run_reader import (
+    AgentRunReader,
+    AgentVersionRef,
+)
 from aether_workflow.application.ports.outbound.clock import Clock
 from aether_workflow.application.ports.outbound.workflow_event_sink import WorkflowEventSink
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
@@ -58,7 +80,8 @@ from aether_workflow.domain.events import (
 )
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node import Node, NodeKind
-from aether_workflow.domain.node_execution import NodeExecutionStatus
+from aether_workflow.domain.node_execution import NodeExecutionRecord, NodeExecutionStatus
+from aether_workflow.domain.run_execution import WorkflowRunExecution
 from aether_workflow.domain.run_status import (
     TERMINAL_STATUSES,
     IllegalWorkflowTransition,
@@ -67,7 +90,7 @@ from aether_workflow.domain.run_status import (
 )
 
 _FIRST_ITERATION = 0
-_SUPPORTED_KINDS = frozenset({NodeKind.START, NodeKind.END})
+_SUPPORTED_KINDS = frozenset({NodeKind.START, NodeKind.END, NodeKind.AGENT})
 
 
 @dataclass
@@ -90,6 +113,8 @@ class AdvanceWorkflowRunUseCase:
         notifier: WorkflowStatusNotifier,
         clock: Clock,
         *,
+        agent_runs: AgentRunReader,
+        launcher: AgentRunLauncher,
         owner: str,
         lease_ttl_seconds: float,
     ) -> None:
@@ -98,6 +123,8 @@ class AdvanceWorkflowRunUseCase:
         self._sink = sink
         self._notifier = notifier
         self._clock = clock
+        self._agent_runs = agent_runs
+        self._launcher = launcher
         self._owner = owner
         self._lease_ttl_seconds = lease_ttl_seconds
 
@@ -121,6 +148,11 @@ class AdvanceWorkflowRunUseCase:
             raise RuntimeError(f"lease acquired but no execution row for {run_id}")
         if execution.status in TERMINAL_STATUSES:
             return execution.status
+        if execution.status is WorkflowRunStatus.WAITING_RUN and self._still_waiting(execution):
+            # 깨우는 신호가 왔지만 자식이 아직 종결이 아니다(중복 신호, 이른 신호) - 아무 것도
+            # 바꾸지
+            # 않는다. 이것이 R-8 의 핵심이다: 이벤트·통지·`seq` 증가가 없다.
+            return WorkflowRunStatus.WAITING_RUN
 
         cursor = _Cursor(run_id, execution.status_seq, execution.current_node_id)
         if execution.status is not WorkflowRunStatus.RUNNING:
@@ -141,7 +173,12 @@ class AdvanceWorkflowRunUseCase:
                     WorkflowFailureReason.UNSUPPORTED_NODE_KIND,
                     node_id=node.id,
                 )
-            self._run_node(cursor, node)
+            if node.kind is NodeKind.AGENT:
+                parked_or_failed = self._run_agent_node(cursor, node, declaration)
+                if parked_or_failed is not None:
+                    return parked_or_failed
+            else:
+                self._run_node(cursor, node)
             if node.kind is NodeKind.END:
                 return self._finish(cursor, WorkflowRunStatus.SUCCEEDED, node_id=node.id)
 
@@ -257,6 +294,201 @@ class AdvanceWorkflowRunUseCase:
         )
         self._publish(cursor, type_, payload, self._clock.now())
 
+    # -- AGENT 노드와 파킹 -----------------------------------------------------
+
+    def _record(self, run_id: UUID, node_id: str) -> NodeExecutionRecord | None:
+        return next(
+            (
+                r
+                for r in self._store.node_executions(run_id)
+                if r.node_id == node_id and r.iteration == _FIRST_ITERATION
+            ),
+            None,
+        )
+
+    def _still_waiting(self, execution: WorkflowRunExecution) -> bool:
+        """파킹 중인 Workflow 의 자식 Run 이 아직 종결이 아니면 `True`. 자식의 실행 행이 없는 것
+        (`None`, 아직 worker 가 집지 않음)도 종결이 아닙니다. 기록이 어긋나 판단할 수 없으면
+        `False` 로 두어 전진 경로가 기록을 보고 판정하게 합니다."""
+        if execution.current_node_id is None:
+            return False
+        record = self._record(execution.workflow_run_id, execution.current_node_id)
+        if (
+            record is None
+            or record.status is not NodeExecutionStatus.WAITING_RUN
+            or record.agent_run_id is None
+        ):
+            return False
+        child = self._agent_runs.status(record.agent_run_id)
+        return child is None or not is_terminal(child)
+
+    def _run_agent_node(
+        self, cursor: _Cursor, node: Node, declaration: WorkflowRunDeclaration
+    ) -> WorkflowRunStatus | None:
+        """`None` 이면 노드를 마쳤으니 다음으로 갑니다. 아니면 이 호출이 끝나는 상태(`waiting_run`
+        파킹 또는 종결)입니다."""
+        run_id = cursor.workflow_run_id
+        node_execution_id = self._store.start_node(run_id, node.id, _FIRST_ITERATION)
+        agent_run_id: UUID | None = None
+        if node_execution_id is not None:
+            self._emit_node_event(
+                cursor,
+                "node.started",
+                NodeStartedPayload(
+                    node_id=node.id, kind=node.kind.value, iteration=_FIRST_ITERATION
+                ).model_dump(),
+                node.id,
+            )
+        else:
+            # 이미 기록돼 있다 - 새 실행이 아니라 재개입니다(R-6, R-8).
+            record = self._record(run_id, node.id)
+            if record is None:
+                raise RuntimeError(f"node {node.id} of {run_id} is recorded but not readable")
+            if record.status is NodeExecutionStatus.SUCCEEDED:
+                return None
+            if record.status is NodeExecutionStatus.FAILED:
+                # 노드는 실패로 마쳤는데 Workflow 를 끝내기 전에 죽었다 - 남은 사유로 마저 끝낸다.
+                reason = (
+                    WorkflowFailureReason(record.failure_reason)
+                    if record.failure_reason is not None
+                    else WorkflowFailureReason.AGENT_RUN_FAILED
+                )
+                return self._finish(cursor, WorkflowRunStatus.FAILED, reason, node_id=node.id)
+            node_execution_id = record.id
+            agent_run_id = record.agent_run_id
+
+        if agent_run_id is None:
+            # 새 실행(또는 id 를 영속하기 전에 죽은 재개): 해석 -> **영속** -> 발사 -> 파킹.
+            resolved = self._resolve(declaration, node)
+            if isinstance(resolved, WorkflowFailureReason):
+                return self._fail_node(cursor, node, node_execution_id, resolved)
+            agent_run_id = uuid4()
+            self._store.park_node(node_execution_id, agent_run_id)
+            self._launch(declaration, agent_run_id, resolved)
+            return self._park(cursor, node, agent_run_id)
+
+        child = self._agent_runs.status(agent_run_id)
+        if child is None or not is_terminal(child):
+            if child is None:
+                # id 는 영속됐지만 발사했는지 모른다(영속과 파킹 사이에서 죽었을 수 있다). 같은 id
+                # 로 다시 발사한다 - api 쪽 선언이 멱등이라 자식 Run 은 하나다.
+                resolved = self._resolve(declaration, node)
+                if isinstance(resolved, WorkflowFailureReason):
+                    return self._fail_node(cursor, node, node_execution_id, resolved)
+                self._launch(declaration, agent_run_id, resolved)
+            return self._park(cursor, node, agent_run_id)
+
+        succeeded = child is RunStatus.SUCCEEDED
+        node_status = NodeExecutionStatus.SUCCEEDED if succeeded else NodeExecutionStatus.FAILED
+        node_reason = None if succeeded else WorkflowFailureReason.AGENT_RUN_FAILED
+        self._store.finish_node(node_execution_id, node_status, self._clock.now(), node_reason)
+        self._emit_node_event(
+            cursor,
+            "node.finished",
+            NodeFinishedPayload(
+                node_id=node.id, iteration=_FIRST_ITERATION, status=node_status.value
+            ).model_dump(),
+            node.id,
+        )
+        if succeeded:
+            return None
+        return self._finish(
+            cursor,
+            WorkflowRunStatus.FAILED,
+            WorkflowFailureReason.AGENT_RUN_FAILED,
+            node_id=node.id,
+        )
+
+    def _resolve(
+        self, declaration: WorkflowRunDeclaration, node: Node
+    ) -> AgentVersionRef | WorkflowFailureReason:
+        """발사에 필요한 것을 모읍니다. 하나라도 없으면 **발사하지 않고** 사유를 돌려줍니다 -
+        발사하면
+        api 가 선언하지 못한 자식을 기다리며 영원히 파킹됩니다(`2026-10-11-001`)."""
+        if declaration.requested_by is None:
+            return WorkflowFailureReason.WORKFLOW_RUN_WITHOUT_REQUESTER
+        if node.agent_id is None:
+            return WorkflowFailureReason.AGENT_VERSION_NOT_FOUND
+        ref = self._agent_runs.version_for(node.agent_id, node.agent_version)
+        if ref is None:
+            return WorkflowFailureReason.AGENT_VERSION_NOT_FOUND
+        return ref
+
+    def _launch(
+        self, declaration: WorkflowRunDeclaration, agent_run_id: UUID, ref: AgentVersionRef
+    ) -> None:
+        requested_by = declaration.requested_by
+        if requested_by is None:  # _resolve 가 이미 걸렀다 - 타입 좁히기
+            raise RuntimeError("launch without requester")
+        self._launcher.launch(
+            AgentRunLaunch(
+                agent_run_id=agent_run_id,
+                agent_version_id=ref.agent_version_id,
+                input=_serialize_input(declaration.input),
+                requested_by=requested_by,
+                traceparent=None,
+            )
+        )
+
+    def _park(self, cursor: _Cursor, node: Node, agent_run_id: UUID) -> WorkflowRunStatus:
+        """`waiting_run` 으로 내려갑니다: 저장하고, 발행하고, 통지합니다. lease 는 호출자의
+        `finally` 가 놓습니다 - 대기 중에 쥐고 있으면 worker 슬롯을 점유합니다(R-7)."""
+        if not can_transition(WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_RUN):
+            raise IllegalWorkflowTransition(
+                WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_RUN
+            )
+        now = self._clock.now()
+        cursor.seq += 1
+        cursor.node_id = node.id
+        self._store.set_status(
+            cursor.workflow_run_id,
+            WorkflowRunStatus.WAITING_RUN,
+            seq=cursor.seq,
+            current_node_id=node.id,
+            waiting_run_id=agent_run_id,
+        )
+        self._publish(
+            cursor,
+            "workflow.status",
+            WorkflowStatusPayload(
+                status=WorkflowRunStatus.WAITING_RUN.value, current_node_id=node.id
+            ).model_dump(exclude_none=True),
+            now,
+        )
+        self._notifier.notify(
+            WorkflowStatusMessage(
+                workflow_run_id=cursor.workflow_run_id,
+                seq=cursor.seq,
+                status=WorkflowRunStatus.WAITING_RUN,
+                at=now,
+                current_node_id=node.id,
+                waiting_run_id=agent_run_id,
+            )
+        )
+        return WorkflowRunStatus.WAITING_RUN
+
+    def _fail_node(
+        self,
+        cursor: _Cursor,
+        node: Node,
+        node_execution_id: UUID,
+        reason: WorkflowFailureReason,
+    ) -> WorkflowRunStatus:
+        self._store.finish_node(
+            node_execution_id, NodeExecutionStatus.FAILED, self._clock.now(), reason
+        )
+        self._emit_node_event(
+            cursor,
+            "node.finished",
+            NodeFinishedPayload(
+                node_id=node.id,
+                iteration=_FIRST_ITERATION,
+                status=NodeExecutionStatus.FAILED.value,
+            ).model_dump(),
+            node.id,
+        )
+        return self._finish(cursor, WorkflowRunStatus.FAILED, reason, node_id=node.id)
+
     # -- 종결 ---------------------------------------------------------------
 
     def _finish(
@@ -331,3 +563,11 @@ class AdvanceWorkflowRunUseCase:
                 payload=payload,
             )
         )
+
+
+def _serialize_input(value: dict[str, object] | None) -> str:
+    """자식 Run 의 입력 - Workflow Run 의 `input` 을 직렬화한 것(spec 0005 2.5 개정 3). 정렬된
+    compact JSON 이라 같은 입력은 같은 문자열입니다. 입력이 없으면 빈 문자열."""
+    if value is None:
+        return ""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)

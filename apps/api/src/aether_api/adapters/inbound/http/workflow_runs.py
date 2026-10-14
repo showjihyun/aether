@@ -90,9 +90,10 @@ def build_workflow_runs_router(
         body: WorkflowRunRequest,
         principal: require_principal_dep,
     ) -> WorkflowRunAccepted:
-        del principal
         try:
-            view = start_workflow_run(workflow_id, body.input, body.workflow_version)
+            view = start_workflow_run(
+                workflow_id, body.input, body.workflow_version, principal.key_id
+            )
         except WorkflowNotFound:
             raise HTTPException(status_code=404, detail="workflow_not_found") from None
         except WorkflowVersionNotFound:

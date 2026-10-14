@@ -122,8 +122,21 @@ def test_status_message_fields_and_absent_optionals(redis_client: Redis) -> None
             failure_reason=WorkflowFailureReason.UNSUPPORTED_NODE_KIND,
         )
     )
+    child = uuid.uuid4()
+    notifier.notify(
+        WorkflowStatusMessage(
+            workflow_run_id=run_id,
+            seq=5,
+            status=WorkflowRunStatus.WAITING_RUN,
+            at=_AT,
+            current_node_id="a",
+            waiting_run_id=child,
+        )
+    )
 
-    first, second = (fields for _, fields in _entries(redis_client, "aether:workflow_runs:status"))
+    first, second, parked = (
+        fields for _, fields in _entries(redis_client, "aether:workflow_runs:status")
+    )
     assert first == {
         "workflow_run_id": str(run_id),
         "seq": "1",
@@ -140,3 +153,11 @@ def test_status_message_fields_and_absent_optionals(redis_client: Redis) -> None
         "finished_at": _AT.isoformat(),
         "failure_reason": "unsupported_node_kind",
     }
+    assert parked == {
+        "workflow_run_id": str(run_id),
+        "seq": "5",
+        "status": "waiting_run",
+        "at": _AT.isoformat(),
+        "current_node_id": "a",
+        "waiting_run_id": str(child),
+    }, "파킹 통지는 기다리는 자식 Run 을 싣는다(R-13) - 다른 통지에는 이 필드가 없다"

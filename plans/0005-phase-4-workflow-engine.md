@@ -177,6 +177,15 @@ backlog 의 Phase 4 완료 판정 + spec 0005 의 R-1 ~ R-15 전부가 통과하
 | 실행 상태·lease | `data.workflow_run_executions` (마이그레이션 0006) | worker 가 씀 |
 | 스위퍼 주기 | `AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS` 기본 **30** | **PR B** |
 
+**B 가 만드는 것**(2026-10-14, A 병합 뒤 확정). 착수 전 실측으로 둘이 더 막혔고 spec **개정 3** 으로 적었습니다 — 노드에 **Agent 참조가 없었고**(그래서 `AGENT` 노드가 무엇을 실행할지 말할 수 없습니다), 깨우는 신호로 적힌 `run.finished` 는 **group 으로 받을 수 없는** per-run 스트림에 있습니다. B 도 두 물결로 나눕니다(PR 은 하나).
+
+| 물결 | 범위 |
+| --- | --- |
+| **B1** | 노드의 `agent_id`·`agent_version`(검증·아홉 번째 거부·API·SDK), 자식 Run **선언**을 만드는 api 쪽 소비자와 멱등 `create`(주어진 id 로) |
+| **B2** | 실행기의 `AGENT` 노드 — 자식 Run 의 Version 해석(`control.agent_versions` SELECT), 발사, `waiting_run` 파킹과 **lease 놓기**, 재개 둘(상태 통지 소비 + **스위퍼**), 멱등, 마이그레이션 0007(노드 실행 상태를 enum 으로 좁힘), R-6·R-7·R-8 |
+
+**실행기가 Version 을 해석합니다** — api 가 아닙니다. worker 는 `control.agent_versions` 에 SELECT 가 있으므로(0001) `(agent_id, version)` 을 `agent_version_id` 로 풀 수 있고, 없으면 **노드를 실패**시킵니다. api 가 풀게 하면 없는 Agent 를 가리킨 노드가 **영원히 파킹**됩니다(api 는 독약 메시지를 ack 하고 끝낼 뿐이고, 그것이 `2026-10-11-001` 이 적은 "대기 장치의 침묵" 입니다). 그래서 api 쪽 소비자의 일은 기계적입니다 — 받은 id 로 `control.runs` 에 INSERT(멱등) 하고 `aether:runs:requested` 에 통지.
+
 **A 에 넣지 않는 것**: 파킹, AGENT·CONDITION·그 밖의 노드 종류, 스위퍼, 취소 API, 노드 출력. 취소는 `control.workflow_runs.cancel_requested_at` 열이 이미 있지만 그것을 쓰는 API 가 없으므로 **A 에서도 만들지 않습니다**(Workflow 취소는 spec 2.3 이 허용한 전이이고, 넣을 단위는 backlog 가 정합니다 — 지금 열 하나 때문에 API 를 발명하지 않습니다).
 
 ## 관련 문서

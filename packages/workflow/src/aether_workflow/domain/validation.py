@@ -3,6 +3,9 @@
 여섯 거부(START 0개/2개 이상은 사유를 둘로 나눕니다)는 각각 다른 `Reason` 값입니다.
 `DUPLICATE_NODE_ID` 는 spec 2.2 의 목록에 없던 여덟 번째입니다 — 2026-10-13 구현에서
 발견했고 `DANGLING_EDGE` 와 같은 근거로 저장 때 잡습니다(spec 0005 개정 1).
+`AGENT_NODE_WITHOUT_AGENT` 는 아홉 번째입니다(개정 3) — `agent_id` 없는 `AGENT` 노드.
+`agent_id` 는 `AGENT` 가 아닌 노드에서 **무시**합니다(`max_iterations` 가 `LOOP` 아닌 노드에서
+무시되는 것과 같은 규칙) — 거부하지 않습니다.
 한 정의가 여러 규칙을 어기면 위반을 전부 돌려줍니다. 한 위반이 다른 위반의 파생
 증상으로 중복 보고되지 않도록, 고아 노드는 `END_UNREACHABLE` 에서 제외하고 끊긴
 간선은 도달 가능성 계산에서 무시합니다.
@@ -27,6 +30,7 @@ class Reason(StrEnum):
     DUPLICATE_NODE_ID = "duplicate_node_id"
     LOOP_WITHOUT_BOUND = "loop_without_bound"
     PARALLEL_WITHOUT_JOIN = "parallel_without_join"
+    AGENT_NODE_WITHOUT_AGENT = "agent_node_without_agent"
 
 
 @dataclass(frozen=True)
@@ -81,6 +85,10 @@ def validate_version(version: WorkflowVersion) -> tuple[Violation, ...]:
     for n in sorted(version.nodes, key=lambda n: n.id):
         if n.kind is NodeKind.LOOP and (n.max_iterations is None or n.max_iterations <= 0):
             violations.append(Violation(Reason.LOOP_WITHOUT_BOUND, n.id))
+
+    for n in sorted(version.nodes, key=lambda n: n.id):
+        if n.kind is NodeKind.AGENT and n.agent_id is None:
+            violations.append(Violation(Reason.AGENT_NODE_WITHOUT_AGENT, n.id))
 
     forward: dict[str, list[str]] = {}
     backward: dict[str, list[str]] = {}

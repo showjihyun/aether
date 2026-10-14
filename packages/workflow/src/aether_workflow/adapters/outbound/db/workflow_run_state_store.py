@@ -11,7 +11,14 @@ NOTHING RETURNING id` 라서 같은 `(workflow_run_id, node_id, iteration)` 를 
 행이 돌아오지 않고 `None` 입니다 - 그것이 멱등·재개의 축입니다.
 
 `status` 열은 `control.workflow_run_status` enum 이라 text 파라미터에 명시적 캐스트
-(`%s::control.workflow_run_status`)를 둡니다.
+(`%s::control.workflow_run_status`)를 둡니다. 노드 실행의 `status` 도 마찬가지로
+`data.workflow_node_execution_status`(마이그레이션 0007)입니다.
+
+`park_node` 는 자식 Run 의 id 와 `waiting_run` 을 **한 UPDATE** 로 영속합니다 - 발사 전에 부릅니다.
+`set_status` 의 `waiting_run_id` 는 `COALESCE` 가 아니라 **상태에서 유도**합니다(`waiting_run` 일
+때만 값이 있고 주지 않으면 이전 값, 다른 상태로 가면 NULL) - api 의 투영(`apply_status`)과 같은
+불변식입니다. 이 어댑터의 어떤 메서드도 파킹 때문에 lease 열을 새로 쓰지 않습니다: lease 를 놓는
+것은 `release` 하나이고 호출자의 `finally` 가 부릅니다(R-7).
 """
 
 from __future__ import annotations
@@ -86,7 +93,7 @@ class PostgresWorkflowRunStateStore:
             cur.execute(
                 """
                 SELECT status::text, status_seq, current_node_id, started_at, finished_at,
-                       failure_reason
+                       failure_reason, waiting_run_id
                 FROM data.workflow_run_executions
                 WHERE workflow_run_id = %s
                 """,
@@ -95,7 +102,15 @@ class PostgresWorkflowRunStateStore:
             row = cur.fetchone()
         if row is None:
             return None
-        status, status_seq, current_node_id, started_at, finished_at, failure_reason = row
+        (
+            status,
+            status_seq,
+            current_node_id,
+            started_at,
+            finished_at,
+            failure_reason,
+            waiting_run_id,
+        ) = row
         return WorkflowRunExecution(
             workflow_run_id=workflow_run_id,
             status=WorkflowRunStatus(status),
@@ -104,6 +119,7 @@ class PostgresWorkflowRunStateStore:
             started_at=started_at,
             finished_at=finished_at,
             failure_reason=failure_reason,
+            waiting_run_id=waiting_run_id,
         )
 
     def set_status(
@@ -116,6 +132,7 @@ class PostgresWorkflowRunStateStore:
         failure_reason: WorkflowFailureReason | None = None,
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
+        waiting_run_id: UUID | None = None,
     ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -125,6 +142,11 @@ class PostgresWorkflowRunStateStore:
                     status_seq = %(seq)s,
                     current_node_id = COALESCE(%(current_node_id)s, current_node_id),
                     failure_reason = COALESCE(%(failure_reason)s, failure_reason),
+                    waiting_run_id = CASE
+                        WHEN %(status)s::text = 'waiting_run'
+                        THEN COALESCE(%(waiting_run_id)s, waiting_run_id)
+                        ELSE NULL
+                    END,
                     started_at = COALESCE(%(started_at)s, started_at),
                     finished_at = COALESCE(%(finished_at)s, finished_at),
                     updated_at = now()
@@ -137,6 +159,7 @@ class PostgresWorkflowRunStateStore:
                     "seq": seq,
                     "current_node_id": current_node_id,
                     "failure_reason": failure_reason.value if failure_reason else None,
+                    "waiting_run_id": waiting_run_id,
                     "started_at": started_at,
                     "finished_at": finished_at,
                 },
@@ -151,7 +174,7 @@ class PostgresWorkflowRunStateStore:
                 """
                 INSERT INTO data.workflow_node_executions
                     (workflow_run_id, node_id, iteration, status)
-                VALUES (%s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s::data.workflow_node_execution_status)
                 ON CONFLICT (workflow_run_id, node_id, iteration) DO NOTHING
                 RETURNING id
                 """,
@@ -163,24 +186,48 @@ class PostgresWorkflowRunStateStore:
         node_execution_id: UUID = row[0]
         return node_execution_id
 
+    def park_node(self, node_execution_id: UUID, agent_run_id: UUID) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE data.workflow_node_executions
+                SET status = 'waiting_run'::data.workflow_node_execution_status,
+                    agent_run_id = %s
+                WHERE id = %s
+                """,
+                (agent_run_id, node_execution_id),
+            )
+
     def finish_node(
-        self, node_execution_id: UUID, status: NodeExecutionStatus, finished_at: datetime
+        self,
+        node_execution_id: UUID,
+        status: NodeExecutionStatus,
+        finished_at: datetime,
+        failure_reason: WorkflowFailureReason | None = None,
     ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE data.workflow_node_executions
-                SET status = %s, finished_at = %s
+                SET status = %s::data.workflow_node_execution_status,
+                    finished_at = %s,
+                    failure_reason = COALESCE(%s, failure_reason)
                 WHERE id = %s
                 """,
-                (status.value, finished_at, node_execution_id),
+                (
+                    status.value,
+                    finished_at,
+                    failure_reason.value if failure_reason is not None else None,
+                    node_execution_id,
+                ),
             )
 
     def node_executions(self, workflow_run_id: UUID) -> tuple[NodeExecutionRecord, ...]:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, node_id, iteration, status, started_at, finished_at
+                SELECT id, node_id, iteration, status::text, started_at, finished_at,
+                       agent_run_id, failure_reason
                 FROM data.workflow_node_executions
                 WHERE workflow_run_id = %s
                 ORDER BY started_at, node_id, iteration
@@ -197,6 +244,8 @@ class PostgresWorkflowRunStateStore:
                 status=NodeExecutionStatus(row[3]),
                 started_at=row[4],
                 finished_at=row[5],
+                agent_run_id=row[6],
+                failure_reason=row[7],
             )
             for row in rows
         )

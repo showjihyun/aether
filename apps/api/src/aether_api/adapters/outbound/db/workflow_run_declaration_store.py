@@ -103,17 +103,26 @@ class PostgresWorkflowRunDeclarationStore:
         self._connect = connect
 
     def create(
-        self, workflow_id: UUID, workflow_version: int, input: dict[str, Any] | None
+        self,
+        workflow_id: UUID,
+        workflow_version: int,
+        input: dict[str, Any] | None,
+        requested_by: UUID,
     ) -> WorkflowRunView:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO control.workflow_runs (workflow_version_id, input)
-                SELECT v.id, %s FROM control.workflow_versions v
+                INSERT INTO control.workflow_runs (workflow_version_id, input, requested_by)
+                SELECT v.id, %s, %s FROM control.workflow_versions v
                 WHERE v.workflow_id = %s AND v.version = %s
                 RETURNING id, workflow_version_id, status::text, requested_at
                 """,
-                (Jsonb(input) if input is not None else None, workflow_id, workflow_version),
+                (
+                    Jsonb(input) if input is not None else None,
+                    requested_by,
+                    workflow_id,
+                    workflow_version,
+                ),
             )
             row = cur.fetchone()
         if row is None:

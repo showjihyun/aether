@@ -163,3 +163,67 @@ def test_finish_node_records_status_and_time(make: _Factory) -> None:
     assert record.workflow_run_id == run_id
     assert record.status is NodeExecutionStatus.SUCCEEDED
     assert record.finished_at == _NOW
+
+
+def test_park_node_persists_the_child_id_and_waiting_status_in_one_step(make: _Factory) -> None:
+    """spec 0005 R-8 (B2): 자식 Run 의 id 와 `waiting_run` 은 한 문장으로 영속된다 - 발사 전에
+    부른다.
+    그 뒤 같은 노드를 다시 시작하면 `None` 이고, 읽으면 같은 id 가 돌아온다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "agent", 0)
+    assert node_execution_id is not None
+    child = uuid4()
+
+    store.park_node(node_execution_id, child)
+
+    (record,) = store.node_executions(run_id)
+    assert record.status is NodeExecutionStatus.WAITING_RUN
+    assert record.agent_run_id == child
+    assert record.finished_at is None
+    assert store.start_node(run_id, "agent", 0) is None
+
+
+def test_finish_node_records_the_failure_reason(make: _Factory) -> None:
+    """B2: 노드가 실패한 사유가 남는다 - Workflow 를 끝내기 전에 죽은 재개가 같은 사유로 끝낸다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "agent", 0)
+    assert node_execution_id is not None
+
+    store.finish_node(
+        node_execution_id,
+        NodeExecutionStatus.FAILED,
+        _NOW,
+        WorkflowFailureReason.AGENT_VERSION_NOT_FOUND,
+    )
+
+    (record,) = store.node_executions(run_id)
+    assert record.status is NodeExecutionStatus.FAILED
+    assert record.failure_reason == "agent_version_not_found"
+    assert record.agent_run_id is None
+
+
+def test_waiting_run_id_exists_only_while_the_status_is_waiting_run(make: _Factory) -> None:
+    """B2: `waiting_run_id` 는 상태에서 유도된다(api 의 투영 불변식과 같다) - `waiting_run` 일 때만
+    값이 있고, 주지 않은 `waiting_run` 호출은 이전 값을 지우지 않으며, 다른 상태로 가면 지워진다.
+    그리고 R-7 의 근거: 파킹은 lease 열을 건드리지 않는다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    child = uuid4()
+
+    store.set_status(run_id, WorkflowRunStatus.RUNNING, seq=1)
+    store.set_status(run_id, WorkflowRunStatus.WAITING_RUN, seq=2, waiting_run_id=child)
+    parked = store.load(run_id)
+    store.set_status(run_id, WorkflowRunStatus.WAITING_RUN, seq=3)
+    still = store.load(run_id)
+    store.release(run_id, "a")
+    store.set_status(run_id, WorkflowRunStatus.RUNNING, seq=4)
+    resumed = store.load(run_id)
+
+    assert parked is not None and still is not None and resumed is not None
+    assert parked.status is WorkflowRunStatus.WAITING_RUN
+    assert parked.waiting_run_id == child
+    assert still.waiting_run_id == child
+    assert resumed.waiting_run_id is None
+    assert store.acquire_lease(run_id, "b", 60.0) is True, "release 뒤에는 누구든 다시 잡는다"

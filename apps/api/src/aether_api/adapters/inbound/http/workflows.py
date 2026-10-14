@@ -5,7 +5,7 @@
 authenticate)` 뒤에 있습니다. 오류 응답은 `{"detail": "<코드>"}` 입니다.
 
 검증 실패(R-1)는 **400 `invalid_workflow_graph`** 이고 본문에 `violations[]` 가 붙습니다 —
-각 원소의 `reason` 이 `aether_workflow.domain.validation.Reason` 의 값(여덟 개 중 하나)이라
+각 원소의 `reason` 이 `aether_workflow.domain.validation.Reason` 의 값(아홉 개 중 하나)이라
 호출자가 사유를 구별합니다. 422 를 쓰지 않는 이유: 422 는 FastAPI 요청 검증(배열 형태)이
 이미 쓰고 있어 sdk 가 두 모양을 한 상태 코드에서 가려야 하기 때문입니다.
 
@@ -42,9 +42,15 @@ from aether_api.domain.workflow import WorkflowNotFound, WorkflowView
 
 
 class NodeModel(BaseModel):
+    # `max_iterations` 는 `LOOP` 에서, `agent_id`·`agent_version` 은 `AGENT` 에서만 뜻이 있습니다
+    # (spec 0005 2.2 개정 3). 셋 다 선택 키이고 다른 종류의 노드에 있는 값은 무시됩니다.
+    # (docstring 이 아닌 이유: OpenAPI `description` 이 늘어 SDK 의 변경이 두 키 밖으로 번집니다.)
+
     id: str
     kind: NodeKind
     max_iterations: int | None = None
+    agent_id: UUID | None = None
+    agent_version: int | None = None
 
 
 class EdgeModel(BaseModel):
@@ -100,7 +106,16 @@ class InvalidWorkflowGraphResponse(BaseModel):
 
 
 def _nodes_in(models: list[NodeModel]) -> tuple[Node, ...]:
-    return tuple(Node(id=m.id, kind=m.kind, max_iterations=m.max_iterations) for m in models)
+    return tuple(
+        Node(
+            id=m.id,
+            kind=m.kind,
+            max_iterations=m.max_iterations,
+            agent_id=m.agent_id,
+            agent_version=m.agent_version,
+        )
+        for m in models
+    )
 
 
 def _edges_in(models: list[EdgeModel]) -> tuple[Edge, ...]:
@@ -108,7 +123,16 @@ def _edges_in(models: list[EdgeModel]) -> tuple[Edge, ...]:
 
 
 def _nodes_out(version: WorkflowVersion) -> list[NodeModel]:
-    return [NodeModel(id=n.id, kind=n.kind, max_iterations=n.max_iterations) for n in version.nodes]
+    return [
+        NodeModel(
+            id=n.id,
+            kind=n.kind,
+            max_iterations=n.max_iterations,
+            agent_id=n.agent_id,
+            agent_version=n.agent_version,
+        )
+        for n in version.nodes
+    ]
 
 
 def _edges_out(version: WorkflowVersion) -> list[EdgeModel]:

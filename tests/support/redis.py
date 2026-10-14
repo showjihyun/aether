@@ -49,3 +49,17 @@ def redis_client(redis_url: str) -> Iterator[Redis]:
         yield client
     finally:
         client.close()
+
+
+def stream_entries(
+    client: Redis, stream: str, after: str = "-"
+) -> list[tuple[str, dict[str, str]]]:
+    """`XRANGE` 결과를 `(id, {필드: 값})` 문자열 쌍으로 좁힙니다 - `decode_responses=True`
+    클라이언트 전용입니다. `after` 가 `-` 가 아니면 그 id **다음**부터(배타) 읽습니다."""
+    start = "-" if after == "-" else f"({after}"
+    raw = client.xrange(stream, min=start, max="+")
+    entries: list[tuple[str, dict[str, str]]] = []
+    for entry_id, fields in raw or []:
+        assert isinstance(entry_id, str)
+        entries.append((entry_id, {str(k): str(v) for k, v in (fields or {}).items()}))
+    return entries

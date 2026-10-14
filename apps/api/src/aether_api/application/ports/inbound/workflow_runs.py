@@ -17,11 +17,16 @@ class StartWorkflowRun(Protocol):
     """`workflow_id` 의 Workflow 를 실행합니다 — `workflow_version` 이 없으면 현재 Version.
 
     Workflow 가 없으면 `WorkflowNotFound`, 지정한 Version 이 없으면
-    `WorkflowVersionNotFound` 를 던집니다.
+    `WorkflowVersionNotFound` 를 던집니다. `requested_by` 는 요청한 주체(`Principal.key_id`)이고
+    선언 행에 남아 자식 Agent Run 이 그대로 물려받습니다(spec 0005 2.5 개정 3).
     """
 
     def __call__(
-        self, workflow_id: UUID, input: dict[str, Any] | None, workflow_version: int | None
+        self,
+        workflow_id: UUID,
+        input: dict[str, Any] | None,
+        workflow_version: int | None,
+        requested_by: UUID,
     ) -> WorkflowRunView: ...
 
 
