@@ -466,6 +466,7 @@ def _build_production_workflow_handler(
         launcher=RedisAgentRunLauncher(client),
         owner=settings.worker_consumer,
         lease_ttl_seconds=settings.worker_lease_seconds,
+        output_max_bytes=settings.workflow_node_output_max_bytes,
     )
     return HandleWorkflowRequestedUseCase(advance, OtelTraceContext())
 

@@ -13,6 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 from uuid import UUID
 
 
@@ -36,3 +37,7 @@ class NodeExecutionRecord:
     finished_at: datetime | None
     agent_run_id: UUID | None = None
     failure_reason: str | None = None
+    output: dict[str, Any] | None = None
+    """spec 0005 2.4: 노드의 출력(JSON 객체). `START`·`END` 는 `None`. 읽는 곳은 `CONDITION` 판정의
+    맥락 하나뿐입니다(C-3)."""
+    output_truncated: bool = False

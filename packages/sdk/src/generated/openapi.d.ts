@@ -446,6 +446,11 @@ export interface components {
             cancel_requested_at: string;
         };
         /**
+         * ConditionOperator
+         * @enum {string}
+         */
+        ConditionOperator: "equals" | "not_equals" | "contains" | "gt" | "lt" | "exists";
+        /**
          * CreateAgentRequest
          * @description `POST /agents` 의 요청 본문.
          */
@@ -650,6 +655,11 @@ export interface components {
             agent_id?: string | null;
             /** Agent Version */
             agent_version?: number | null;
+            /** Condition Path */
+            condition_path?: string | null;
+            condition_operator?: components["schemas"]["ConditionOperator"] | null;
+            /** Condition Value */
+            condition_value?: string | number | boolean | null;
         };
         /** Policy */
         Policy: {

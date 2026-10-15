@@ -8,6 +8,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
+from aether_workflow.domain.condition import ConditionOperator
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.run_status import (
     TERMINAL_STATUSES,
@@ -27,10 +28,19 @@ def _n(
     max_iterations: int | None = None,
     agent_id: UUID | None = None,
 ) -> Node:
-    """`AGENT` 는 기본으로 Agent 를 가리킵니다 — 다른 사유를 보려는 테스트가 아홉 번째 사유로
-    오염되지 않게 합니다. 참조 없는 `AGENT` 는 `agent_id=None` 을 쓰는 전용 테스트가 만듭니다."""
+    """`AGENT` 는 기본으로 Agent 를, `CONDITION` 은 기본으로 판정식을 가집니다 — 다른 사유를 보려는
+    테스트가 그 사유들로 오염되지 않게 합니다. 참조·판정식 없는 노드는 전용 테스트가
+    직접 만듭니다."""
     if kind is NodeKind.AGENT and agent_id is None:
         agent_id = _AGENT_ID
+    if kind is NodeKind.CONDITION:
+        return Node(
+            id=node_id,
+            kind=kind,
+            condition_path="input.q",
+            condition_operator=ConditionOperator.EQUALS,
+            condition_value="x",
+        )
     return Node(id=node_id, kind=kind, max_iterations=max_iterations, agent_id=agent_id)
 
 
@@ -47,15 +57,22 @@ def _reasons(version: WorkflowVersion) -> set[Reason]:
 
 
 def _valid() -> WorkflowVersion:
-    return _version(
-        [
+    return WorkflowVersion(
+        number=1,
+        nodes=(
             _n("s", NodeKind.START),
             _n("a", NodeKind.AGENT),
             _n("c", NodeKind.CONDITION),
             _n("h", NodeKind.AGENT),
             _n("e", NodeKind.END),
-        ],
-        [("s", "a"), ("a", "c"), ("c", "h"), ("h", "e")],
+        ),
+        edges=(
+            Edge("s", "a"),
+            Edge("a", "c"),
+            Edge("c", "h", "true"),
+            Edge("c", "e", "false"),
+            Edge("h", "e"),
+        ),
     )
 
 
@@ -198,11 +215,12 @@ def test_six_rejections_have_distinct_reasons() -> None:
 
     spec 2.2 의 여섯 거부 → 사유 여덟: START 0개/2개 이상을 둘로 나누고(R-1 이
     "각각" 을 요구합니다), spec 목록에 없던 `DUPLICATE_NODE_ID` 를 더했습니다
-    (spec 0005 개정 1). 아홉 번째 `AGENT_NODE_WITHOUT_AGENT` 는 개정 3 입니다. 이 숫자를
-    늘릴 때는 spec 2.2 의 표도 함께 고칩니다 — 그래서 여기 상수로 못 박습니다.
+    (spec 0005 개정 1). 아홉 번째 `AGENT_NODE_WITHOUT_AGENT` 는 개정 3, 열 번째와 열한 번째
+    (`CONDITION_NODE_WITHOUT_PREDICATE`·`CONDITION_NODE_WITHOUT_BOTH_BRANCHES`)는 개정 4 입니다.
+    이 숫자를 늘릴 때는 spec 2.2 의 표도 함께 고칩니다 — 그래서 여기 상수로 못 박습니다.
     """
-    assert len(list(Reason)) == 9
-    assert len({r.value for r in Reason}) == 9
+    assert len(list(Reason)) == 11
+    assert len({r.value for r in Reason}) == 11
 
 
 def test_agent_node_without_agent_rejected() -> None:
@@ -255,7 +273,7 @@ def test_agent_id_on_a_non_agent_node_is_ignored_not_rejected() -> None:
     v = _version(
         [
             _n("s", NodeKind.START),
-            Node(id="c", kind=NodeKind.CONDITION, agent_id=_AGENT_ID, max_iterations=5),
+            Node(id="c", kind=NodeKind.LLM, agent_id=_AGENT_ID, max_iterations=5),
             _n("e", NodeKind.END),
         ],
         [("s", "c"), ("c", "e")],
@@ -349,3 +367,110 @@ def test_normal_path_transitions() -> None:
     assert can_transition(S.WAITING_RUN, S.RUNNING)
     assert can_transition(S.RUNNING, S.SUCCEEDED)
     assert not can_transition(S.QUEUED, S.SUCCEEDED)
+
+
+# --- P4-2b: CONDITION ------------------------------------------------------------------
+
+
+def _cond(
+    path: str | None = "input.q",
+    operator: ConditionOperator | None = ConditionOperator.EQUALS,
+    value: object = "x",
+) -> Node:
+    return Node(
+        id="c",
+        kind=NodeKind.CONDITION,
+        condition_path=path,
+        condition_operator=operator,
+        condition_value=value,
+    )
+
+
+def _branching(node: Node, labels: list[str | None]) -> WorkflowVersion:
+    targets = [f"t{i}" for i in range(len(labels))]
+    return WorkflowVersion(
+        number=1,
+        nodes=(
+            _n("s", NodeKind.START),
+            node,
+            *(_n(t, NodeKind.END) for t in targets),
+        ),
+        edges=(
+            Edge("s", "c"),
+            *(Edge("c", t, label) for t, label in zip(targets, labels, strict=True)),
+        ),
+    )
+
+
+def test_condition_with_a_predicate_and_both_branches_passes() -> None:
+    """spec 0005 2.2 개정 4: 판정식과 `true`·`false` 두 분기가 있으면 통과한다."""
+    assert validate_version(_branching(_cond(), ["true", "false"])) == ()
+
+
+def test_condition_exists_needs_no_value() -> None:
+    """spec 개정 4: 연산자가 `exists` 면 `condition_value` 가 없다."""
+    node = _cond(operator=ConditionOperator.EXISTS, value=None)
+    assert validate_version(_branching(node, ["true", "false"])) == ()
+
+
+@pytest.mark.parametrize(
+    "node",
+    [
+        _cond(path=None),
+        _cond(path=""),
+        _cond(operator=None),
+        _cond(value=None),  # `equals` 는 비교할 값이 있어야 한다
+        Node(id="c", kind=NodeKind.CONDITION),
+    ],
+    ids=["no-path", "empty-path", "no-operator", "no-value", "bare"],
+)
+def test_condition_without_a_predicate_is_rejected(node: Node) -> None:
+    """spec 0005 2.2 개정 4: 판정식이 없으면 실행 시점에 터지므로 저장 때 잡는다 - 그 노드만."""
+    v = _branching(node, ["true", "false"])
+    assert validate_version(v) == (Violation(Reason.CONDITION_NODE_WITHOUT_PREDICATE, "c"),)
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [["true"], ["false"], ["true", "true"], ["true", None], [None, None], ["yes", "no"]],
+    ids=["only-true", "only-false", "true-twice", "true-and-unlabeled", "unlabeled", "other-names"],
+)
+def test_condition_without_both_branches_is_rejected(labels: list[str | None]) -> None:
+    """spec 0005 2.2 개정 4: 나가는 간선의 label 에 `true`·`false` 가 **둘 다** 있어야 한다."""
+    v = _branching(_cond(), labels)
+    assert validate_version(v) == (Violation(Reason.CONDITION_NODE_WITHOUT_BOTH_BRANCHES, "c"),)
+
+
+def test_the_two_condition_rejections_are_reported_together_and_distinctly() -> None:
+    v = _branching(Node(id="c", kind=NodeKind.CONDITION), ["true"])
+    assert _reasons(v) == {
+        Reason.CONDITION_NODE_WITHOUT_PREDICATE,
+        Reason.CONDITION_NODE_WITHOUT_BOTH_BRANCHES,
+    }
+
+
+def test_condition_settings_on_a_non_condition_node_are_ignored_not_rejected() -> None:
+    """`agent_id` 와 같은 규칙 - 다른 종류의 노드에 있는 값은 무시한다."""
+    v = _version(
+        [
+            _n("s", NodeKind.START),
+            Node(id="a", kind=NodeKind.LLM, condition_path="input.q"),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "a"), ("a", "e")],
+    )
+    assert validate_version(v) == ()
+
+
+def test_serialization_differs_when_only_a_condition_key_differs() -> None:
+    """spec R-2: 세 키 각각이 직렬화에 들어 있다 - 빠지면 두 정의가 같은 바이트를 내고 R-2 가
+    공허해진다."""
+
+    def with_condition(node: Node) -> bytes:
+        return serialize_version(_branching(node, ["true", "false"]))
+
+    base = with_condition(_cond())
+    assert base == with_condition(_cond())
+    assert base != with_condition(_cond(path="input.other"))
+    assert base != with_condition(_cond(operator=ConditionOperator.NOT_EQUALS))
+    assert base != with_condition(_cond(value="y"))

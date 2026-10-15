@@ -29,6 +29,12 @@ class AgentRunReader(Protocol):
         과 같이 다룹니다."""
         ...
 
+    def last_assistant_text(self, agent_run_id: UUID) -> str | None:
+        """자식 Run 의 **마지막 assistant 메시지 본문**(`data.run_states`, worker 가 소유하는
+        평면). assistant 메시지가 없거나 상태 행이 없으면 `None`. 호출자는 이것을 span·감사·보고에
+        넘기지 않습니다(C-3)."""
+        ...
+
     def version_for(self, agent_id: UUID, version: int | None) -> AgentVersionRef | None:
         """`version` 이 `None` 이면 그 Agent 의 **최대 version** 입니다. `control.agents.
         current_version` 은 worker 가 읽을 수 없고, Version 은 append-only(불변 트리거)이므로 최대

@@ -1255,6 +1255,18 @@
         "title": "CancelAccepted",
         "description": "`POST /runs/{run_id}/cancel` 의 성공 응답(202) — 멱등(spec 2.2, D-11)."
       },
+      "ConditionOperator": {
+        "type": "string",
+        "enum": [
+          "equals",
+          "not_equals",
+          "contains",
+          "gt",
+          "lt",
+          "exists"
+        ],
+        "title": "ConditionOperator"
+      },
       "CreateAgentRequest": {
         "properties": {
           "name": {
@@ -1701,6 +1713,47 @@
               }
             ],
             "title": "Agent Version"
+          },
+          "condition_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Path"
+          },
+          "condition_operator": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConditionOperator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "condition_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Condition Value"
           }
         },
         "type": "object",

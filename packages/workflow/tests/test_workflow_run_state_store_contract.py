@@ -27,6 +27,7 @@ from aether_workflow.application.ports.outbound.workflow_run_state_store import 
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.node_execution import NodeExecutionStatus
+from aether_workflow.domain.node_output import NodeOutput
 from aether_workflow.domain.run_status import WorkflowRunStatus
 
 from packages.workflow.tests.fakes import FakeWorkflowRunStateStore
@@ -227,3 +228,41 @@ def test_waiting_run_id_exists_only_while_the_status_is_waiting_run(make: _Facto
     assert still.waiting_run_id == child
     assert resumed.waiting_run_id is None
     assert store.acquire_lease(run_id, "b", 60.0) is True, "release 뒤에는 누구든 다시 잡는다"
+
+
+def test_finish_node_without_output_leaves_the_output_empty(make: _Factory) -> None:
+    """spec 0005 2.4 개정 4: 출력이 없는 노드(`START`·`END`·`CONDITION`)는 `NULL` 이다 - 빈 객체가
+    아니다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "start", 0)
+    assert node_execution_id is not None
+
+    store.finish_node(node_execution_id, NodeExecutionStatus.SUCCEEDED, _NOW)
+
+    (record,) = store.node_executions(run_id)
+    assert record.output is None
+    assert record.output_truncated is False
+
+
+@pytest.mark.parametrize("truncated", [False, True])
+def test_finish_node_records_the_output_and_the_truncation_flag_together(
+    make: _Factory, truncated: bool
+) -> None:
+    """spec 0005 2.4 개정 4 (4): 값과 잘렸다는 사실은 한 번에 적힌다. 한국어가 그대로 돌아온다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "ask", 0)
+    assert node_execution_id is not None
+    value = {"text": "안녕하세요", "status": "succeeded"}
+
+    store.finish_node(
+        node_execution_id,
+        NodeExecutionStatus.SUCCEEDED,
+        _NOW,
+        output=NodeOutput(value, truncated=truncated),
+    )
+
+    (record,) = store.node_executions(run_id)
+    assert record.output == value
+    assert record.output_truncated is truncated

@@ -19,7 +19,7 @@ from collections.abc import Callable
 from uuid import UUID
 
 import psycopg
-from aether_runtime.domain.run import RunStatus
+from aether_runtime.domain.run import RunState, RunStatus
 
 from aether_workflow.application.ports.outbound.agent_run_reader import AgentVersionRef
 
@@ -36,6 +36,15 @@ class PostgresAgentRunReader:
             )
             row = cur.fetchone()
         return None if row is None else RunStatus(row[0])
+
+    def last_assistant_text(self, agent_run_id: UUID) -> str | None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute("SELECT state FROM data.run_states WHERE run_id = %s", (agent_run_id,))
+            row = cur.fetchone()
+        if row is None:
+            return None
+        state = RunState.model_validate(row[0])
+        return next((m.content for m in reversed(state.messages) if m.role == "assistant"), None)
 
     def version_for(self, agent_id: UUID, version: int | None) -> AgentVersionRef | None:
         with self._connect() as conn, conn.cursor() as cur:

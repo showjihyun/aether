@@ -1,5 +1,5 @@
 """spec 0005 R-1, R-2: Workflow 정의 유스케이스 단위 테스트가 공유하는 지원 코드 — 앱 조립과
-아홉 거부 사례. 테스트가 아니라 지원 모듈입니다(`fakes_workflow.py` 와 같은 자리)."""
+열한 거부 사례. 테스트가 아니라 지원 모듈입니다(`fakes_workflow.py` 와 같은 자리)."""
 
 from __future__ import annotations
 
@@ -50,6 +50,7 @@ def _n(
     agent_version: int | None = None,
     *,
     bare: bool = False,
+    condition: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """`AGENT` 는 기본으로 Agent 를 가리킵니다 — 다른 사유를 보려는 사례가 아홉 번째 사유
     (`agent_node_without_agent`)로 오염되지 않게 합니다. `bare=True` 가 참조 없는 `AGENT` 입니다."""
@@ -61,11 +62,24 @@ def _n(
         "max_iterations": max_iterations,
         "agent_id": agent_id,
         "agent_version": agent_version,
+        **(condition or {}),
     }
 
 
-def _e(source: str, target: str) -> dict[str, Any]:
-    return {"source": source, "target": target, "label": None}
+_PREDICATE: dict[str, Any] = {
+    "condition_path": "input.q",
+    "condition_operator": "equals",
+    "condition_value": "go",
+}
+
+
+def _c(node_id: str, **overrides: Any) -> dict[str, Any]:
+    """판정식이 있는 `CONDITION`(spec 0005 2.2 개정 4)."""
+    return _n(node_id, "CONDITION", condition={**_PREDICATE, **overrides})
+
+
+def _e(source: str, target: str, label: str | None = None) -> dict[str, Any]:
+    return {"source": source, "target": target, "label": label}
 
 
 def _valid_body() -> dict[str, Any]:
@@ -113,5 +127,13 @@ _REJECTIONS: dict[Reason, dict[str, Any]] = {
     Reason.AGENT_NODE_WITHOUT_AGENT: {
         "nodes": [_n("s", "START"), _n("a", "AGENT", bare=True), _n("e", "END")],
         "edges": [_e("s", "a"), _e("a", "e")],
+    },
+    Reason.CONDITION_NODE_WITHOUT_PREDICATE: {
+        "nodes": [_n("s", "START"), _n("c", "CONDITION"), _n("t", "END"), _n("f", "END")],
+        "edges": [_e("s", "c"), _e("c", "t", "true"), _e("c", "f", "false")],
+    },
+    Reason.CONDITION_NODE_WITHOUT_BOTH_BRANCHES: {
+        "nodes": [_n("s", "START"), _c("c"), _n("t", "END")],
+        "edges": [_e("s", "c"), _e("c", "t", "true")],
     },
 }

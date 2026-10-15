@@ -130,6 +130,12 @@ class Settings(BaseSettings):
     유실되면
     Workflow 가 영원히 파킹되므로(`2026-10-11-001`) 빠른 경로가 있어도 끄지 않습니다."""
 
+    workflow_node_output_max_bytes: int = Field(default=8192, ge=64)
+    """spec 0005 2.4 개정 4, D-8 (P4-2b): 노드 출력의 상한 - 직렬화된 JSON 의 UTF-8 바이트
+    (`AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES`). 넘기면 자르고 `output_truncated` 를 함께 적습니다.
+    봉투(`{"text":"","status":"timed_out"}`, 32 바이트)보다 작으면 의미가 없어 64 미만은
+    거부합니다."""
+
     observation_max_chars: int = 16_000
     """spec 0002 2.6, R-14. 도구 결과를 이 길이로 잘라 `truncated: true` 를 표시합니다."""
 

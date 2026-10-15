@@ -120,6 +120,8 @@ services:
       AETHER_EMBED_DIM: ${AETHER_EMBED_DIM:-768}
       # spec 0005 2.5, 2.11 (P4-2a B2): 파킹된 Workflow Run 을 주워 재큐하는 스위퍼의 주기(초).
       AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS: ${AETHER_WORKFLOW_SWEEP_INTERVAL_SECONDS:-30}
+      # spec 0005 2.4 개정 4 (P4-2b): 노드 출력의 상한(직렬화된 바이트). 넘기면 자르고 잘렸다고 적습니다.
+      AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES: ${AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES:-8192}
       # P2-5 2단계, spec 2.9 개정 6: postgres-readonly MCP 서버(아래
       # AETHER_MCP_SERVERS 기본값)가 `AETHER_POSTGRES_READONLY_URL` 을 만들 때 쓰는
       # 재료입니다. worker **프로세스 자신의** env 로 넣어 두면(compose 의 `$$` 로

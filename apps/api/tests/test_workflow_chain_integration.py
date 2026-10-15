@@ -22,6 +22,7 @@ import 하지 않고 각자 만듭니다(AR-7). 그래서 한쪽이 `workflow_ru
 
 from __future__ import annotations
 
+import json
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -155,6 +156,7 @@ def test_a_run_started_through_the_api_is_executed_and_projected_back(
 _WORKFLOW_REQUESTED = "aether:workflow_runs:requested"
 _AGENT_RUN_REQUESTED = "aether:workflow:agent_runs:requested"
 _CHAIN_TIMEOUT = 30.0
+_DEFAULT_OUTPUT_LIMIT: int = WorkerSettings.model_fields["workflow_node_output_max_bytes"].default
 
 
 @dataclass
@@ -201,6 +203,71 @@ class _Stack:
         }
         return run_id, version_id
 
+    def define_branching(self) -> str:
+        """`START -> AGENT -> CONDITION -> END-true / END-false`. 조건은 **노드의 출력**을 가리킨다:
+        `nodes.a.text` 가 `"yes"` 를 포함하는가. 모델은 echo fake 라 자식 Run 의 답은 입력의 직렬화
+        (`{"q":"..."}`)이고 결정적이다."""
+        created = self.client.post(
+            "/workflows",
+            json={
+                "name": f"chain-branch-{uuid4()}",
+                "nodes": [
+                    _node("s", "START"),
+                    {**_node("a", "AGENT"), "agent_id": self.agent_id, "agent_version": None},
+                    {
+                        **_node("c", "CONDITION"),
+                        "condition_path": "nodes.a.text",
+                        "condition_operator": "contains",
+                        "condition_value": "yes",
+                    },
+                    _node("end_true", "END"),
+                    _node("end_false", "END"),
+                ],
+                "edges": [
+                    {"source": "s", "target": "a", "label": None},
+                    {"source": "a", "target": "c", "label": None},
+                    {"source": "c", "target": "end_true", "label": "true"},
+                    {"source": "c", "target": "end_false", "label": "false"},
+                ],
+            },
+            headers=self.headers,
+        )
+        assert created.status_code == 201, created.text
+        workflow_id: str = created.json()["id"]
+        return workflow_id
+
+    def run_to_the_end(self, workflow_id: str, input: dict[str, Any]) -> str:
+        """실행을 시작해 `succeeded` 까지 기다리고 `workflow_run_id` 를 돌려준다."""
+        started = self.client.post(
+            f"/workflows/{workflow_id}/runs", json={"input": input}, headers=self.headers
+        )
+        assert started.status_code == 202, started.text
+        run_id: str = started.json()["workflow_run_id"]
+        assert wait_until(
+            lambda: self.detail(run_id)["status"] == "succeeded", timeout=_CHAIN_TIMEOUT
+        ), f"사슬이 끊겼습니다 -- 마지막으로 본 투영: {self.detail(run_id)}"
+        return run_id
+
+    def visited(self, run_id: str) -> list[str]:
+        return [
+            row[0]
+            for row in self.query(
+                "SELECT node_id FROM data.workflow_node_executions"
+                " WHERE workflow_run_id = %s ORDER BY started_at, node_id",
+                run_id,
+            )
+        ]
+
+    def outputs(self, run_id: str) -> dict[str, tuple[Any, bool]]:
+        return {
+            row[0]: (row[1], row[2])
+            for row in self.query(
+                "SELECT node_id, output, output_truncated FROM data.workflow_node_executions"
+                " WHERE workflow_run_id = %s",
+                run_id,
+            )
+        }
+
     def detail(self, run_id: str) -> dict[str, Any]:
         response = self.client.get(f"/workflow-runs/{run_id}", headers=self.headers)
         assert response.status_code == 200, response.text
@@ -225,6 +292,7 @@ def _stack(
     redis_client: Redis,
     control_connection_factory: Callable[[], psycopg.Connection],
     admin_connection_factory: Callable[[], psycopg.Connection],
+    output_max_bytes: int | None = None,
 ) -> Iterator[_Stack]:
     host, port = db_host_port
     api_settings = ApiSettings(database_url=control_database_url, redis_url=redis_url)
@@ -233,6 +301,9 @@ def _stack(
         worker_consumer=f"test-chain-agent-{uuid4()}",
         worker_heartbeat_seconds=1,
         workflow_sweep_interval_seconds=1.0,
+        workflow_node_output_max_bytes=(
+            output_max_bytes if output_max_bytes is not None else _DEFAULT_OUTPUT_LIMIT
+        ),
     )
     issued = IssueApiKeyUseCase(PostgresApiKeyStore(control_connection_factory))(
         f"test-workflow-chain-agent-{uuid4()}"
@@ -409,3 +480,118 @@ def test_duplicate_requests_in_the_real_assembly_create_one_child_run(
             " WHERE workflow_run_id = %s GROUP BY node_id ORDER BY node_id",
             run_id,
         ) == [("a", 1), ("e", 1), ("s", 1)]
+
+
+# --- P4-2b: 노드 출력과 CONDITION ---------------------------------------------------------
+
+
+def test_the_same_workflow_takes_different_paths_for_different_inputs_through_the_real_assembly(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """R-5: 같은 Workflow 를 두 입력으로 돌리면 서로 다른 경로를 타고 지난 노드 목록이 다르다.
+    api -> 요청 스트림 -> 실행기 -> 자식 Agent Run(echo fake 모델) -> `data.run_states` 의 마지막
+    assistant 본문 -> 노드 출력 -> `CONDITION` -> 분기 -> 투영 -> `GET`, 프로덕션 조립 그대로.
+    분기는 **노드 출력**(`nodes.a.text`)으로 갈린다 -- 입력으로 갈리지 않는다."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        stack.release_children.set()
+        workflow_id = stack.define_branching()
+
+        yes_run = stack.run_to_the_end(workflow_id, {"q": "yes please"})
+        no_run = stack.run_to_the_end(workflow_id, {"q": "no thanks"})
+
+        assert stack.visited(yes_run) == ["s", "a", "c", "end_true"]
+        assert stack.visited(no_run) == ["s", "a", "c", "end_false"]
+        assert stack.visited(yes_run) != stack.visited(no_run)
+        assert stack.detail(yes_run)["current_node_id"] == "end_true"
+        assert stack.detail(no_run)["current_node_id"] == "end_false"
+        assert stack.detail(yes_run)["failure_reason"] is None
+
+        # 출력: AGENT 만 갖는다. 본문은 echo 모델이 돌려준 자식 입력의 직렬화다.
+        yes_outputs = stack.outputs(yes_run)
+        assert yes_outputs["a"] == ({"text": '{"q":"yes please"}', "status": "succeeded"}, False)
+        for node_id in ("s", "c", "end_true"):
+            assert yes_outputs[node_id] == (None, False), node_id
+        assert stack.outputs(no_run)["a"][0] == {
+            "text": '{"q":"no thanks"}',
+            "status": "succeeded",
+        }
+
+
+def test_a_reply_over_the_limit_is_stored_truncated_with_the_flag_through_the_real_assembly(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """D-8: 상한(`AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES` -> worker `Settings` -> 실행기)을 넘는
+    실제 응답은 잘려 저장되고 `output_truncated` 가 함께 참이다. 한국어 경계가 UTF-8 안전하다
+    (`jsonb` 가 거부하지 않고 되읽은 본문이 입력의 접두사다). 잘렸어도 분기는 간다."""
+    limit = 256
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+        output_max_bytes=limit,
+    ) as stack:
+        stack.release_children.set()
+        workflow_id = stack.define_branching()
+        question = "yes " + "안녕하세요 " * 200
+
+        run_id = stack.run_to_the_end(workflow_id, {"q": question})
+
+        value, truncated = stack.outputs(run_id)["a"]
+        assert truncated is True
+        assert value["status"] == "succeeded"
+        assert '{"q":"yes 안녕하세요' in value["text"]
+        assert len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode()) <= limit
+        assert ('{"q":"' + question + '"}').startswith(value["text"])
+        # 잘린 본문에서도 앞부분의 "yes" 가 남아 `true` 분기로 갔다.
+        assert stack.detail(run_id)["current_node_id"] == "end_true"
+        assert stack.outputs(run_id)["s"] == (None, False)
+
+
+def test_a_reply_over_the_default_8_kib_limit_is_stored_truncated(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """D-8: **기본 상한(8192)** 을 넘는 실제 응답 1건. echo fake 모델이 15 000 바이트 남짓한 입력을
+    그대로 돌려준다 -- 자식 Run 의 마지막 assistant 본문이 8 KiB 를 넘고, 저장된 출력은 상한
+    이하이며 잘렸다고 적힌다."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        stack.release_children.set()
+        workflow_id = stack.define_branching()
+
+        run_id = stack.run_to_the_end(workflow_id, {"q": "yes " + "가" * 5000})
+
+        value, truncated = stack.outputs(run_id)["a"]
+        assert truncated is True
+        size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode())
+        assert 8000 < size <= 8192, size
