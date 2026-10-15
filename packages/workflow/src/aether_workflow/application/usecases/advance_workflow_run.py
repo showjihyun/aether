@@ -2,9 +2,19 @@
 Workflow Run 을 `START` 에서 `END` 까지 전진시키는 실행기 골격. `AdvanceWorkflowRun`(inbound
 포트)의 유일한 구현입니다.
 
-**범위.** 지원하는 노드 종류는 `START`·`END`·`AGENT` 셋입니다. 나머지 종류를 만나면 `failed` +
-`unsupported_node_kind` 로 끝납니다(절반만 만든 노드를 두지 않습니다). 나가는 간선이 둘 이상이면
-`failed` + `unsupported_branching` — 조용히 하나를 고르지 않습니다(분기는 P4-2b).
+**범위.** 지원하는 노드 종류는 `START`·`END`·`AGENT`·`CONDITION` 넷입니다. 나머지 종류를 만나면
+`failed` + `unsupported_node_kind` 로 끝납니다(절반만 만든 노드를 두지 않습니다). 나가는 간선이
+둘 이상인 노드는 `CONDITION` 만 예외이고, 다른 종류는 `failed` + `unsupported_branching` — 조용히
+하나를 고르지 않습니다.
+
+**노드 출력과 `CONDITION`(P4-2b, 개정 4, D-8, D-9).** `AGENT` 노드가 마치면 자식 Run 의 마지막
+assistant 본문과 종결 상태를 `{"text", "status"}` 로 상한(`output_max_bytes`, 직렬화된 바이트)까지
+잘라 `finish_node` 로 **함께** 기록합니다(잘렸으면 `output_truncated` 도). `START`·`END`·`CONDITION`
+은 출력이 없습니다. `CONDITION` 은 선언된 맥락(`input` 과 지난 노드들의 출력)을 만들어 `domain` 의
+순수 함수로 판정하고, 결과(`"true"`/`"false"`)와 같은 `label` 의 간선으로 갑니다. 판정할 수 없으면
+(`condition_path_missing`·`condition_type_mismatch`) 노드와 Workflow 가 그 사유로 실패합니다.
+**출력을 읽는 곳은 `_condition_context` 하나**이고, 출력은 이벤트·통지·로그·span 어디에도 넘기지
+않습니다(C-3, `tests/arch/test_workflow_output_stays_in_data.py` 가 고정).
 
 **`AGENT` 노드와 파킹(P4-2a B2).** 새 실행이면 Agent Version 을 해석하고(없으면 노드 실패
 `agent_version_not_found`, 요청자가 없으면 `workflow_run_without_requester`), 자식 Run 의 id 를
@@ -44,6 +54,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from typing import Any
 from uuid import UUID, uuid4
 
 from aether_runtime.domain.run import RunStatus, is_terminal
@@ -70,6 +81,7 @@ from aether_workflow.application.ports.outbound.workflow_status_notifier import 
     WorkflowStatusMessage,
     WorkflowStatusNotifier,
 )
+from aether_workflow.domain.condition import ConditionFailure, evaluate_condition
 from aether_workflow.domain.events import (
     NodeFinishedPayload,
     NodeStartedPayload,
@@ -81,6 +93,7 @@ from aether_workflow.domain.events import (
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node import Node, NodeKind
 from aether_workflow.domain.node_execution import NodeExecutionRecord, NodeExecutionStatus
+from aether_workflow.domain.node_output import agent_output
 from aether_workflow.domain.run_execution import WorkflowRunExecution
 from aether_workflow.domain.run_status import (
     TERMINAL_STATUSES,
@@ -90,7 +103,8 @@ from aether_workflow.domain.run_status import (
 )
 
 _FIRST_ITERATION = 0
-_SUPPORTED_KINDS = frozenset({NodeKind.START, NodeKind.END, NodeKind.AGENT})
+_SUPPORTED_KINDS = frozenset({NodeKind.START, NodeKind.END, NodeKind.AGENT, NodeKind.CONDITION})
+_BRANCH_LABELS = {True: "true", False: "false"}
 
 
 @dataclass
@@ -117,7 +131,9 @@ class AdvanceWorkflowRunUseCase:
         launcher: AgentRunLauncher,
         owner: str,
         lease_ttl_seconds: float,
+        output_max_bytes: int = 8192,
     ) -> None:
+        self._output_max_bytes = output_max_bytes
         self._store = store
         self._reader = reader
         self._sink = sink
@@ -173,24 +189,35 @@ class AdvanceWorkflowRunUseCase:
                     WorkflowFailureReason.UNSUPPORTED_NODE_KIND,
                     node_id=node.id,
                 )
+            branch: bool | None = None
             if node.kind is NodeKind.AGENT:
                 parked_or_failed = self._run_agent_node(cursor, node, declaration)
                 if parked_or_failed is not None:
                     return parked_or_failed
+            elif node.kind is NodeKind.CONDITION:
+                decided = self._run_condition_node(cursor, node, declaration)
+                if isinstance(decided, WorkflowRunStatus):
+                    return decided
+                branch = decided
             else:
                 self._run_node(cursor, node)
             if node.kind is NodeKind.END:
                 return self._finish(cursor, WorkflowRunStatus.SUCCEEDED, node_id=node.id)
 
             outgoing = [e for e in declaration.edges if e.source == node.id]
-            if len(outgoing) > 1:
+            if branch is not None:
+                label = _BRANCH_LABELS[branch]
+                chosen = [e for e in outgoing if e.label == label]
+                following = nodes.get(chosen[0].target) if chosen else None
+            elif len(outgoing) > 1:
                 return self._finish(
                     cursor,
                     WorkflowRunStatus.FAILED,
                     WorkflowFailureReason.UNSUPPORTED_BRANCHING,
                     node_id=node.id,
                 )
-            following = nodes.get(outgoing[0].target) if outgoing else None
+            else:
+                following = nodes.get(outgoing[0].target) if outgoing else None
             if following is None:
                 return self._finish(
                     cursor,
@@ -294,6 +321,84 @@ class AdvanceWorkflowRunUseCase:
         )
         self._publish(cursor, type_, payload, self._clock.now())
 
+    # -- CONDITION ------------------------------------------------------------
+
+    def _run_condition_node(
+        self, cursor: _Cursor, node: Node, declaration: WorkflowRunDeclaration
+    ) -> bool | WorkflowRunStatus:
+        """판정 결과(`True` -> `"true"` 분기)를 돌려줍니다. 판정할 수 없으면 노드와 Workflow 가
+        실패하고 그 종결 상태를 돌려줍니다. 판정은 순수 함수에 맥락이 같으면 결과가 같으므로,
+        노드를 마친 뒤 죽은 재개는 **다시 판정해** 같은 분기로 갑니다(분기를 영속하지 않습니다)."""
+        run_id = cursor.workflow_run_id
+        node_execution_id = self._store.start_node(run_id, node.id, _FIRST_ITERATION)
+        already_finished = False
+        if node_execution_id is not None:
+            self._emit_node_event(
+                cursor,
+                "node.started",
+                NodeStartedPayload(
+                    node_id=node.id, kind=node.kind.value, iteration=_FIRST_ITERATION
+                ).model_dump(),
+                node.id,
+            )
+        else:
+            record = self._record(run_id, node.id)
+            if record is None:
+                raise RuntimeError(f"node {node.id} of {run_id} is recorded but not readable")
+            if record.status is NodeExecutionStatus.FAILED:
+                reason = (
+                    WorkflowFailureReason(record.failure_reason)
+                    if record.failure_reason is not None
+                    else WorkflowFailureReason.INVALID_GRAPH
+                )
+                return self._finish(cursor, WorkflowRunStatus.FAILED, reason, node_id=node.id)
+            node_execution_id = record.id
+            already_finished = record.status is NodeExecutionStatus.SUCCEEDED
+
+        try:
+            if node.condition_path is None or node.condition_operator is None:
+                raise ConditionFailure(WorkflowFailureReason.INVALID_GRAPH)
+            result = evaluate_condition(
+                self._condition_context(declaration),
+                node.condition_path,
+                node.condition_operator,
+                node.condition_value,
+            )
+        except ConditionFailure as failure:
+            if already_finished:
+                return self._finish(
+                    cursor, WorkflowRunStatus.FAILED, failure.reason, node_id=node.id
+                )
+            return self._fail_node(cursor, node, node_execution_id, failure.reason)
+
+        if not already_finished:
+            self._store.finish_node(
+                node_execution_id, NodeExecutionStatus.SUCCEEDED, self._clock.now()
+            )
+            self._emit_node_event(
+                cursor,
+                "node.finished",
+                NodeFinishedPayload(
+                    node_id=node.id,
+                    iteration=_FIRST_ITERATION,
+                    status=NodeExecutionStatus.SUCCEEDED.value,
+                ).model_dump(),
+                node.id,
+            )
+        return result
+
+    def _condition_context(self, declaration: WorkflowRunDeclaration) -> dict[str, Any]:
+        """판정 대상이 되는 **선언된 맥락 하나**(spec 개정 4 (1)). 노드의 출력을 읽는 곳은 제품에서
+        여기뿐입니다(C-3) - 세 번째 소비자를 만들지 않습니다."""
+        outputs: dict[str, Any] = {}
+        records = sorted(
+            self._store.node_executions(declaration.workflow_run_id), key=lambda r: r.iteration
+        )
+        for record in records:
+            if record.output is not None:
+                outputs[record.node_id] = record.output
+        return {"input": declaration.input, "nodes": outputs}
+
     # -- AGENT 노드와 파킹 -----------------------------------------------------
 
     def _record(self, run_id: UUID, node_id: str) -> NodeExecutionRecord | None:
@@ -381,7 +486,14 @@ class AdvanceWorkflowRunUseCase:
         succeeded = child is RunStatus.SUCCEEDED
         node_status = NodeExecutionStatus.SUCCEEDED if succeeded else NodeExecutionStatus.FAILED
         node_reason = None if succeeded else WorkflowFailureReason.AGENT_RUN_FAILED
-        self._store.finish_node(node_execution_id, node_status, self._clock.now(), node_reason)
+        output = agent_output(
+            self._agent_runs.last_assistant_text(agent_run_id) or "",
+            child.value,
+            self._output_max_bytes,
+        )
+        self._store.finish_node(
+            node_execution_id, node_status, self._clock.now(), node_reason, output
+        )
         self._emit_node_event(
             cursor,
             "node.finished",

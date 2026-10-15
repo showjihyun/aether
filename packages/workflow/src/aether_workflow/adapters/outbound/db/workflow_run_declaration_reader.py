@@ -15,19 +15,25 @@ import psycopg
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
     WorkflowRunDeclaration,
 )
+from aether_workflow.domain.condition import ConditionOperator
 from aether_workflow.domain.node import Edge, Node, NodeKind
 
 
 def _node(raw: dict[str, Any]) -> Node:
     """`agent_id`·`agent_version` 키는 B1 이 더했습니다 - 그 전에 저장된 Version 에는 **없으므로**
-    `.get` 입니다(`KeyError` 로 터지면 옛 Run 이 전부 죽습니다)."""
+    `.get` 입니다(`KeyError` 로 터지면 옛 Run 이 전부 죽습니다). `condition_*` 세 키(P4-2b)도
+    같습니다."""
     agent_id = raw.get("agent_id")
+    operator = raw.get("condition_operator")
     return Node(
         id=raw["id"],
         kind=NodeKind(raw["kind"]),
         max_iterations=raw.get("max_iterations"),
         agent_id=UUID(agent_id) if agent_id is not None else None,
         agent_version=raw.get("agent_version"),
+        condition_path=raw.get("condition_path"),
+        condition_operator=ConditionOperator(operator) if operator is not None else None,
+        condition_value=raw.get("condition_value"),
     )
 
 

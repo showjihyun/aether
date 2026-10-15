@@ -224,7 +224,7 @@ def test_unsupported_node_kind_fails_with_a_distinct_reason_and_no_half_node() -
     """plan 부록 A: 지원하지 않는 종류는 `failed` + 구별되는 사유, 절반만 만든 노드는 없다."""
     rig = _Rig()
     run_id = rig.reader.add(
-        (Node("start", NodeKind.START), Node("a", NodeKind.CONDITION), Node("end", NodeKind.END)),
+        (Node("start", NodeKind.START), Node("a", NodeKind.WAIT), Node("end", NodeKind.END)),
         (Edge("start", "a"), Edge("a", "end")),
     )
 

@@ -25,6 +25,7 @@ from aether_workflow.domain.events import WorkflowEvent
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.node_execution import NodeExecutionRecord, NodeExecutionStatus
+from aether_workflow.domain.node_output import NodeOutput
 from aether_workflow.domain.run_execution import WorkflowRunExecution
 from aether_workflow.domain.run_status import WorkflowRunStatus
 
@@ -179,13 +180,17 @@ class FakeWorkflowRunStateStore:
         status: NodeExecutionStatus,
         finished_at: datetime,
         failure_reason: WorkflowFailureReason | None = None,
+        output: NodeOutput | None = None,
     ) -> None:
-        self._update_node(
-            node_execution_id,
-            status=status,
-            finished_at=finished_at,
-            failure_reason=failure_reason.value if failure_reason is not None else None,
-        )
+        changes: dict[str, Any] = {
+            "status": status,
+            "finished_at": finished_at,
+            "failure_reason": failure_reason.value if failure_reason is not None else None,
+        }
+        if output is not None:
+            changes["output"] = output.value
+            changes["output_truncated"] = output.truncated
+        self._update_node(node_execution_id, **changes)
 
     def _update_node(self, node_execution_id: UUID, **changes: Any) -> None:
         for records in self.nodes.values():
@@ -264,9 +269,17 @@ class FakeAgentRunReader:
         self.statuses: dict[UUID, RunStatus] = {}
         self.versions: dict[tuple[UUID, int | None], AgentVersionRef] = {}
         self.version_lookups: list[tuple[UUID, int | None]] = []
+        self.texts: dict[UUID, str] = {}
 
     def set_status(self, agent_run_id: UUID, status: RunStatus) -> None:
         self.statuses[agent_run_id] = status
+
+    def set_text(self, agent_run_id: UUID, text: str) -> None:
+        """자식 Run 의 마지막 assistant 본문을 정한다. 정하지 않은 Run 은 `None`."""
+        self.texts[agent_run_id] = text
+
+    def last_assistant_text(self, agent_run_id: UUID) -> str | None:
+        return self.texts.get(agent_run_id)
 
     def add_version(self, agent_id: UUID, version: int | None) -> AgentVersionRef:
         ref = AgentVersionRef(agent_version_id=uuid4(), version=version or 1)

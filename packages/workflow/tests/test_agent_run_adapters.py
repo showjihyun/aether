@@ -14,7 +14,7 @@ from collections.abc import Callable
 
 import psycopg
 import pytest
-from aether_runtime.domain.run import RunStatus
+from aether_runtime.domain.run import Message, RunState, RunStatus
 from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
 from aether_workflow.adapters.outbound.redis.agent_run_launcher import RedisAgentRunLauncher
 from aether_workflow.application.ports.outbound.agent_run_launcher import AgentRunLaunch
@@ -160,3 +160,59 @@ def test_launcher_sends_an_empty_string_for_a_missing_traceparent(redis_client: 
     (fields,) = [f for _, f in entries if f.get("agent_run_id") == str(launch.agent_run_id)]
     assert fields["traceparent"] == ""
     assert fields["input"] == ""
+
+
+def _seed_state(admin: _Factory, messages: list[Message] | None) -> uuid.UUID:
+    """`control.runs` 한 행과(`messages` 가 있으면) `data.run_states` 의 스냅숏 한 행을 심는다."""
+    _, version_ids = _agent_with_versions(admin, 1)
+    run_id = uuid.uuid4()
+    conn = admin()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO control.runs (id, agent_version_id, input) VALUES (%s, %s, 'x')",
+                (run_id, version_ids[0]),
+            )
+            if messages is not None:
+                state = RunState(run_id=run_id, messages=messages, status=RunStatus.SUCCEEDED)
+                cur.execute(
+                    "INSERT INTO data.run_states (run_id, state) VALUES (%s, %s)",
+                    (run_id, state.model_dump_json()),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+    return run_id
+
+
+def test_last_assistant_text_is_the_final_assistant_message_of_the_snapshot(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    """spec 0005 2.4 개정 4 (4): 본문은 worker 가 소유하는 `data.run_states` 에서 읽는다(새 권한
+    없이). 마지막 assistant 이후에 도구 메시지가 와도 그 assistant 본문이다. 한국어가
+    그대로 온다."""
+    run_id = _seed_state(
+        admin_connection_factory,
+        [
+            Message.user("질문"),
+            Message.assistant("첫 번째 답"),
+            Message.tool(tool_call_id="t1", content="도구 결과"),
+            Message.assistant("마지막 답변입니다"),
+            Message.tool(tool_call_id="t2", content="뒤따른 도구 결과"),
+        ],
+    )
+
+    reader = PostgresAgentRunReader(data_connection_factory)
+    assert reader.last_assistant_text(run_id) == "마지막 답변입니다"
+
+
+def test_last_assistant_text_is_none_without_an_assistant_message_or_a_snapshot(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    reader = PostgresAgentRunReader(data_connection_factory)
+    only_user = _seed_state(admin_connection_factory, [Message.user("질문")])
+    no_snapshot = _seed_state(admin_connection_factory, None)
+
+    assert reader.last_assistant_text(only_user) is None
+    assert reader.last_assistant_text(no_snapshot) is None
+    assert reader.last_assistant_text(uuid.uuid4()) is None

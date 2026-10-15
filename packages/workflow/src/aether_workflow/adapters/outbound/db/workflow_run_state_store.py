@@ -28,9 +28,11 @@ from datetime import datetime
 from uuid import UUID
 
 import psycopg
+from psycopg.types.json import Jsonb
 
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node_execution import NodeExecutionRecord, NodeExecutionStatus
+from aether_workflow.domain.node_output import NodeOutput
 from aether_workflow.domain.run_execution import WorkflowRunExecution
 from aether_workflow.domain.run_status import WorkflowRunStatus
 
@@ -204,22 +206,28 @@ class PostgresWorkflowRunStateStore:
         status: NodeExecutionStatus,
         finished_at: datetime,
         failure_reason: WorkflowFailureReason | None = None,
+        output: NodeOutput | None = None,
     ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE data.workflow_node_executions
-                SET status = %s::data.workflow_node_execution_status,
-                    finished_at = %s,
-                    failure_reason = COALESCE(%s, failure_reason)
-                WHERE id = %s
+                SET status = %(status)s::data.workflow_node_execution_status,
+                    finished_at = %(finished_at)s,
+                    failure_reason = COALESCE(%(failure_reason)s, failure_reason),
+                    output = COALESCE(%(output)s::jsonb, output),
+                    output_truncated = CASE WHEN %(output)s::jsonb IS NULL
+                        THEN output_truncated ELSE %(truncated)s END
+                WHERE id = %(id)s
                 """,
-                (
-                    status.value,
-                    finished_at,
-                    failure_reason.value if failure_reason is not None else None,
-                    node_execution_id,
-                ),
+                {
+                    "status": status.value,
+                    "finished_at": finished_at,
+                    "failure_reason": failure_reason.value if failure_reason is not None else None,
+                    "output": Jsonb(output.value) if output is not None else None,
+                    "truncated": output.truncated if output is not None else False,
+                    "id": node_execution_id,
+                },
             )
 
     def node_executions(self, workflow_run_id: UUID) -> tuple[NodeExecutionRecord, ...]:
@@ -227,7 +235,7 @@ class PostgresWorkflowRunStateStore:
             cur.execute(
                 """
                 SELECT id, node_id, iteration, status::text, started_at, finished_at,
-                       agent_run_id, failure_reason
+                       agent_run_id, failure_reason, output, output_truncated
                 FROM data.workflow_node_executions
                 WHERE workflow_run_id = %s
                 ORDER BY started_at, node_id, iteration
@@ -246,6 +254,8 @@ class PostgresWorkflowRunStateStore:
                 finished_at=row[5],
                 agent_run_id=row[6],
                 failure_reason=row[7],
+                output=row[8],
+                output_truncated=row[9],
             )
             for row in rows
         )

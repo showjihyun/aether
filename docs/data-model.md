@@ -285,7 +285,7 @@ Workflow Run 의 **실행 상태와 lease** 입니다(마이그레이션 0006, s
 
 자식 Agent Run 과의 연결은 **이 표의** `agent_run_id` 입니다(spec 0005 D-3). Run 쪽에 "이 Run 은 어느 Workflow 노드의 것" 을 두면 `aether_runtime` 이 workflow 를 알아야 하고 그것이 AR-13 위반입니다. cross-schema FK 의 수명은 4절과 같습니다.
 
-`output`(jsonb)과 `output_truncated` 는 P4-2b 가 씁니다 — **8 KiB 상한은 애플리케이션이 지키고** 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다. 집합은 P4-2a 의 실행기가 정했습니다(`aether_workflow.domain.node_execution.NodeExecutionStatus`) — 컬럼을 enum 으로 좁히는 것은 파킹이 `waiting_run` 을 더하는 **같은 단위의 두 번째 PR** 로 미룹니다(마이그레이션 하나로 끝내기 위해서입니다).
+`output`(jsonb)과 `output_truncated` 는 **P4-2b 가 씁니다**(2026-10-15 적용). 상한은 **직렬화된 UTF-8 바이트** 기준이고 애플리케이션이 지킵니다 — 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다. 집합은 P4-2a 의 실행기가 정했습니다(`aether_workflow.domain.node_execution.NodeExecutionStatus`) — 컬럼을 enum 으로 좁히는 것은 파킹이 `waiting_run` 을 더하는 **같은 단위의 두 번째 PR** 로 미룹니다(마이그레이션 하나로 끝내기 위해서입니다).
 
 ### 마이그레이션 0007 — 요청자·노드 상태 enum·FK 둘
 

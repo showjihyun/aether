@@ -55,3 +55,24 @@ def test_no_new_lease_variable_is_introduced() -> None:
     """lease TTL 은 새 변수 없이 기존 `worker_lease_seconds` 를 쓴다."""
     names = set(Settings.model_fields)
     assert not {n for n in names if n.startswith("workflow_") and "lease" in n}
+
+
+def test_node_output_limit_defaults_to_8_kib_and_can_be_overridden(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """spec 0005 2.4 개정 4 (P4-2b): 노드 출력의 상한(직렬화된 바이트) -
+    `AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES`, 기본 8192."""
+    assert Settings().workflow_node_output_max_bytes == 8192
+
+    monkeypatch.setenv("AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES", "256")
+
+    assert Settings().workflow_node_output_max_bytes == 256
+
+
+def test_node_output_limit_below_the_envelope_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """`{"text":"","status":"timed_out"}` 조차 담지 못하는 상한은 설정 오류다 - 조용히 빈 출력을
+    만들지 않는다."""
+    monkeypatch.setenv("AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES", "8")
+
+    with pytest.raises(ValueError, match="workflow_node_output_max_bytes"):
+        Settings()

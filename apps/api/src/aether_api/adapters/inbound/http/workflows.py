@@ -5,7 +5,7 @@
 authenticate)` 뒤에 있습니다. 오류 응답은 `{"detail": "<코드>"}` 입니다.
 
 검증 실패(R-1)는 **400 `invalid_workflow_graph`** 이고 본문에 `violations[]` 가 붙습니다 —
-각 원소의 `reason` 이 `aether_workflow.domain.validation.Reason` 의 값(아홉 개 중 하나)이라
+각 원소의 `reason` 이 `aether_workflow.domain.validation.Reason` 의 값(열한 개 중 하나)이라
 호출자가 사유를 구별합니다. 422 를 쓰지 않는 이유: 422 는 FastAPI 요청 검증(배열 형태)이
 이미 쓰고 있어 sdk 가 두 모양을 한 상태 코드에서 가려야 하기 때문입니다.
 
@@ -20,6 +20,7 @@ from collections.abc import Callable
 from typing import Annotated
 from uuid import UUID
 
+from aether_workflow.domain.condition import ConditionOperator
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.validation import InvalidWorkflowGraph
 from aether_workflow.domain.workflow_version import WorkflowVersion
@@ -44,6 +45,8 @@ from aether_api.domain.workflow import WorkflowNotFound, WorkflowView
 class NodeModel(BaseModel):
     # `max_iterations` 는 `LOOP` 에서, `agent_id`·`agent_version` 은 `AGENT` 에서만 뜻이 있습니다
     # (spec 0005 2.2 개정 3). 셋 다 선택 키이고 다른 종류의 노드에 있는 값은 무시됩니다.
+    # `CONDITION` 은 `condition_path`·`condition_operator`·`condition_value`(`exists` 면 값 없음)를
+    # 가지고 분기는 간선 `label` 의 `true`·`false` 입니다(개정 4).
     # (docstring 이 아닌 이유: OpenAPI `description` 이 늘어 SDK 의 변경이 두 키 밖으로 번집니다.)
 
     id: str
@@ -51,6 +54,9 @@ class NodeModel(BaseModel):
     max_iterations: int | None = None
     agent_id: UUID | None = None
     agent_version: int | None = None
+    condition_path: str | None = None
+    condition_operator: ConditionOperator | None = None
+    condition_value: str | int | float | bool | None = None
 
 
 class EdgeModel(BaseModel):
@@ -113,6 +119,9 @@ def _nodes_in(models: list[NodeModel]) -> tuple[Node, ...]:
             max_iterations=m.max_iterations,
             agent_id=m.agent_id,
             agent_version=m.agent_version,
+            condition_path=m.condition_path,
+            condition_operator=m.condition_operator,
+            condition_value=m.condition_value,
         )
         for m in models
     )
@@ -130,6 +139,9 @@ def _nodes_out(version: WorkflowVersion) -> list[NodeModel]:
             max_iterations=n.max_iterations,
             agent_id=n.agent_id,
             agent_version=n.agent_version,
+            condition_path=n.condition_path,
+            condition_operator=n.condition_operator,
+            condition_value=n.condition_value,
         )
         for n in version.nodes
     ]

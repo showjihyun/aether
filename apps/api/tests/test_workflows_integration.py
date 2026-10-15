@@ -20,6 +20,7 @@ from aether_api.adapters.outbound.db.api_keys import PostgresApiKeyStore
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.main import create_app
 from aether_api.settings import Settings
+from aether_workflow.domain.condition import ConditionOperator
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.serialization import serialize_version
 from aether_workflow.domain.workflow_version import WorkflowVersion
@@ -397,6 +398,13 @@ def _as_version(number: int, body: dict[str, Any]) -> WorkflowVersion:
                 max_iterations=n["max_iterations"],
                 agent_id=uuid.UUID(n["agent_id"]) if n["agent_id"] is not None else None,
                 agent_version=n["agent_version"],
+                condition_path=n.get("condition_path"),
+                condition_operator=(
+                    ConditionOperator(n["condition_operator"])
+                    if n.get("condition_operator") is not None
+                    else None
+                ),
+                condition_value=n.get("condition_value"),
             )
             for n in body["nodes"]
         ),
@@ -433,6 +441,76 @@ def test_put_creates_version_two_and_version_one_is_byte_identical(
     current = client.get(f"/workflows/{workflow_id}", headers=auth_headers).json()
     assert current["current_version"] == 2
     assert [n["id"] for n in current["nodes"]] == ["s", "b", "e"]
+
+
+def test_condition_keys_survive_storage_and_the_stored_version_serializes_identically(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """spec 0005 2.2 개정 4, R-2: `CONDITION` 의 세 키가 `jsonb` 를 왕복하고(값의 타입 포함), 저장된
+    Version 의 직렬화가 요청 본문의 것과 **바이트 단위로 같다** -- 세 키가 빠지면 깨진다."""
+    body = {
+        "nodes": [
+            _n("s", "START"),
+            {
+                **_n("c", "CONDITION"),
+                "condition_path": "input.n",
+                "condition_operator": "gt",
+                "condition_value": 3,
+            },
+            _n("t", "END"),
+            _n("f", "END"),
+        ],
+        "edges": [_e("s", "c"), _e("c", "t", "true"), _e("c", "f", "false")],
+    }
+    created = client.post(
+        "/workflows", json={"name": f"wf-{uuid.uuid4()}", **body}, headers=auth_headers
+    )
+    assert created.status_code == 201, created.text
+
+    stored = client.get(
+        f"/workflows/{created.json()['id']}/versions/1", headers=auth_headers
+    ).json()
+
+    by_id = {n["id"]: n for n in stored["nodes"]}
+    assert by_id["c"]["condition_operator"] == "gt"
+    assert by_id["c"]["condition_value"] == 3
+    assert serialize_version(_as_version(1, stored)) == serialize_version(_as_version(1, body))
+
+
+def test_a_version_stored_before_the_condition_keys_is_still_readable(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    admin_connection_factory: _Factory,
+) -> None:
+    """P4-2a B1 이 `agent_id` 키로 한 번 놓친 함정: 세 키가 없는 옛 행을 `KeyError` 없이 읽는다."""
+    created = client.post(
+        "/workflows", json={"name": f"wf-{uuid.uuid4()}", **_V1}, headers=auth_headers
+    )
+    workflow_id = created.json()["id"]
+    legacy = [
+        {"id": "s", "kind": "START", "max_iterations": None},
+        {"id": "e", "kind": "END", "max_iterations": None},
+    ]
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO control.workflow_versions (workflow_id, version, nodes, edges)"
+                " VALUES (%s, 2, %s, %s)",
+                (
+                    workflow_id,
+                    json.dumps(legacy),
+                    json.dumps([{"source": "s", "target": "e", "label": None}]),
+                ),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+    response = client.get(f"/workflows/{workflow_id}/versions/2", headers=auth_headers)
+
+    assert response.status_code == 200, response.text
+    assert [n["condition_path"] for n in response.json()["nodes"]] == [None, None]
 
 
 def test_invalid_graph_is_400_stores_nothing_and_names_the_reason(

@@ -15,7 +15,7 @@ class WorkflowFailureReason(StrEnum):
     """`START`·`END` 외의 노드 종류를 만났습니다(이 실행기가 아직 모르는 종류)."""
 
     UNSUPPORTED_BRANCHING = "unsupported_branching"
-    """나가는 간선이 둘 이상입니다 — 분기는 P4-2b 입니다. 조용히 하나를 고르지 않습니다."""
+    """`CONDITION` 이 아닌 노드의 나가는 간선이 둘 이상입니다 - 조용히 하나를 고르지 않습니다."""
 
     INVALID_GRAPH = "invalid_graph"
     """저장 시점 검증을 통과했다면 생기지 않는 모양(START 없음, 나가는 간선 없는 비-END)."""
@@ -26,6 +26,13 @@ class WorkflowFailureReason(StrEnum):
     AGENT_VERSION_NOT_FOUND = "agent_version_not_found"
     """`AGENT` 노드가 가리키는 Agent·Version 이 없습니다(또는 참조가 비어 있습니다). 발사하지 않고
     노드를 실패시킵니다 - 발사하면 api 가 선언하지 못한 자식을 기다리며 영원히 파킹됩니다."""
+
+    CONDITION_PATH_MISSING = "condition_path_missing"
+    """`CONDITION` 이 가리킨 경로가 판정 맥락에 없습니다(`exists` 만 거짓으로 답합니다). 조용히 한쪽
+    분기로 가는 Workflow 는 디버깅할 수 없어 실행 실패로 끝냅니다(spec 0005 2.4 개정 4)."""
+
+    CONDITION_TYPE_MISMATCH = "condition_type_mismatch"
+    """`CONDITION` 의 연산자가 그 타입의 값에 적용될 수 없습니다(`gt`·`lt` 에 숫자가 아닌 값 등)."""
 
     WORKFLOW_RUN_WITHOUT_REQUESTER = "workflow_run_without_requester"
     """Workflow Run 에 요청자가 없습니다(마이그레이션 0007 이전에 만들어진 행). 비운 채로 자식 Run

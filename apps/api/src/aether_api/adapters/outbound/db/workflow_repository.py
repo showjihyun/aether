@@ -19,6 +19,7 @@ from typing import Any
 from uuid import UUID
 
 import psycopg
+from aether_workflow.domain.condition import ConditionOperator
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.workflow_version import WorkflowVersion
 
@@ -34,6 +35,11 @@ def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
                 "max_iterations": n.max_iterations,
                 "agent_id": str(n.agent_id) if n.agent_id is not None else None,
                 "agent_version": n.agent_version,
+                "condition_path": n.condition_path,
+                "condition_operator": (
+                    n.condition_operator.value if n.condition_operator is not None else None
+                ),
+                "condition_value": n.condition_value,
             }
             for n in nodes
         ]
@@ -41,15 +47,20 @@ def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
 
 
 def _node_from_json(n: dict[str, Any]) -> Node:
-    """`agent_id`·`agent_version` 은 P4-2a B1 이 더한 키입니다 — 그 전에 저장된 Version(P4-1·A)
-    의 행에는 **없으므로** `.get` 으로 읽고 없으면 `None` 입니다(`KeyError` 로 터지지 않게)."""
+    """`agent_id`·`agent_version` 은 P4-2a B1 이, `condition_*` 세 키는 P4-2b 가 더한 키입니다 —
+    그 전에 저장된 Version 의 행에는 **없으므로** `.get` 으로 읽고 없으면 `None` 입니다(`KeyError`
+    로 터지지 않게)."""
     raw_agent_id = n.get("agent_id")
+    operator = n.get("condition_operator")
     return Node(
         id=n["id"],
         kind=NodeKind(n["kind"]),
         max_iterations=n["max_iterations"],
         agent_id=UUID(raw_agent_id) if raw_agent_id is not None else None,
         agent_version=n.get("agent_version"),
+        condition_path=n.get("condition_path"),
+        condition_operator=ConditionOperator(operator) if operator is not None else None,
+        condition_value=n.get("condition_value"),
     )
 
 

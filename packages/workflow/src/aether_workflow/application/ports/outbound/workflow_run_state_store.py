@@ -13,6 +13,7 @@ from uuid import UUID
 
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node_execution import NodeExecutionRecord, NodeExecutionStatus
+from aether_workflow.domain.node_output import NodeOutput
 from aether_workflow.domain.run_execution import WorkflowRunExecution
 from aether_workflow.domain.run_status import WorkflowRunStatus
 
@@ -68,6 +69,10 @@ class WorkflowRunStateStore(Protocol):
         status: NodeExecutionStatus,
         finished_at: datetime,
         failure_reason: WorkflowFailureReason | None = None,
-    ) -> None: ...
+        output: NodeOutput | None = None,
+    ) -> None:
+        """`output` 이 있으면 값과 `output_truncated` 를 **함께** 씁니다(잘렸다는 사실을 따로
+        두지 않습니다, spec 0005 2.4 개정 4). 없으면 열을 건드리지 않습니다."""
+        ...
 
     def node_executions(self, workflow_run_id: UUID) -> tuple[NodeExecutionRecord, ...]: ...

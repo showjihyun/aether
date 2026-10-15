@@ -168,7 +168,17 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 
 **노드는 종류별 설정을 가집니다.** `kind = AGENT` 인 노드는 `agent_id`(필수)와 `agent_version`(선택)으로 **무엇을 실행할지** 말합니다 — `LOOP` 의 `max_iterations` 와 같은 자리입니다(spec 0005 **개정 3**). `agent_version` 을 주지 않으면 실행 시점의 최신 Version 입니다. 다른 종류의 `agent_id` 는 무시하고 거부하지 않습니다(`max_iterations` 를 다루는 방식과 같습니다). 두 키는 **선택**이므로 기존 요청 본문은 그대로 유효하고, 개정 3 전에 저장된 Version 은 두 값이 `null` 로 읽힙니다.
 
-`reason` 은 아홉 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`·**`agent_node_without_agent`**(`AGENT` 에 `agent_id` 가 없음, 개정 3). 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1·3).
+`kind = CONDITION` 인 노드는 세 키로 **무엇을 보고 갈라지는지** 말합니다(개정 4).
+
+| 키 | 뜻 |
+| --- | --- |
+| `condition_path` | 판정 대상의 경로(점 표기). 맥락은 `{"input": <Workflow Run 의 입력>, "nodes": {"<노드 id>": <그 노드의 출력>}}` — 예 `input.q`, `nodes.ask.text` |
+| `condition_operator` | `equals`·`not_equals`·`contains`·`gt`·`lt`·`exists` 중 하나. **열거형**이므로 다른 값은 `422` 입니다 |
+| `condition_value` | 비교할 JSON 스칼라(문자열·숫자·불리언). `exists` 면 없음. `null` 은 "값 없음" 으로 읽으므로 `equals null` 은 표현하지 않습니다 |
+
+분기는 나가는 간선의 `label` 이 `"true"`/`"false"` 인 쪽입니다 — 선언 순서와 무관합니다. `contains` 는 문자열의 부분 문자열·리스트의 원소·객체의 키를 봅니다. `gt`·`lt` 는 **숫자만**이고 불리언은 숫자로 취급하지 않습니다. 경로는 객체 키만 따라가므로 배열 인덱스를 쓸 수 없고, 노드 id 에 `.` 이 있으면 그 노드의 출력은 경로로 가리킬 수 없습니다 — 모호한 문법을 늘리지 않았습니다.
+
+`reason` 은 열한 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`·**`agent_node_without_agent`**(`AGENT` 에 `agent_id` 가 없음, 개정 3)·**`condition_node_without_predicate`**·**`condition_node_without_both_branches`**(개정 4). 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1·3·4).
 
 ## 9. Workflow Run (P4-2a)
 
@@ -186,6 +196,14 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 **`waiting_run_id` 는 상태에서 유도됩니다** — `waiting_run` 일 때만 값이 있고 다른 상태로 가면 비워집니다. 투영 스트림(6절)은 값을 **지우는** 신호를 실을 수 없으므로(값 없는 선택 필드는 키 자체가 없고, 투영은 `COALESCE(new, old)` 입니다) 이것을 불변식으로 둡니다. 그러지 않으면 `succeeded` 인 Run 이 자식 Run 을 기다리는 것처럼 보입니다.
 
 `GET` 이 보는 것은 `control.workflow_runs` 의 **투영**입니다. 실행 상태의 정본은 `data.workflow_run_executions` 이고(spec 0005 2.9 개정 2) worker 가 씁니다 — 적재의 상태를 api 가 투영하는 것과 같은 경계입니다(6절). 그래서 조회는 상태 메시지가 도착한 뒤에 바뀝니다.
+
+### 9.1 노드 출력과 분기 (P4-2b)
+
+`AGENT` 노드의 출력은 `{"text": <자식 Run 의 마지막 assistant 본문>, "status": <자식의 종결 상태>}` 입니다. 상한은 **직렬화된 UTF-8 바이트** 기준 `AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES`(기본 8192, 최소 64)이고, 넘기면 **본문만** 잘라 `output_truncated` 를 함께 참으로 적습니다 — 조용히 자르지 않습니다. 자르는 단위는 코드 포인트라 한 글자를 반으로 가르지 않습니다. `status` 는 판정에 쓰이므로 줄이지 않습니다. `START`·`END`·`CONDITION` 은 출력이 **없습니다**(`NULL`).
+
+**출력은 `data.workflow_node_executions` 에만 있습니다.** 조회 API 도, span·감사·보고도 아닙니다(spec D-8·C-3). 읽는 곳은 지금 **`CONDITION` 하나**이고 그 사실을 구조 테스트(`tests/arch/test_workflow_output_stays_in_data.py`)가 AST 로 고정합니다 — 출력에서 파생된 값이 발행·통지·페이로드·로깅 호출의 인자로 들어가면 실패합니다. 조회 API 를 만들지 않은 이유는 **api 역할이 `data` 에 권한이 없기** 때문입니다(0001 R-7) — 투영이 필요하고 그것은 화면이 생기는 Phase 5 의 일입니다. 소비자가 하나뿐인 덕에 C-3 의 되돌리기가 쌉니다.
+
+실패 사유 둘이 더 생겼습니다 — `condition_path_missing`(`exists` 가 아닌 연산자가 없는 경로를 가리킴)과 `condition_type_mismatch`(`gt`·`lt` 에 숫자가 아닌 값 등). **없는 경로는 조용한 거짓이 아닙니다** — `exists` 만 거짓이고 나머지는 실행이 실패합니다. 조용히 한쪽으로 가는 Workflow 는 디버깅할 수 없습니다.
 
 ### 9.1 파킹과 재개 (P4-2a)
 
