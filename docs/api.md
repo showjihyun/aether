@@ -197,6 +197,23 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 
 `GET` 이 보는 것은 `control.workflow_runs` 의 **투영**입니다. 실행 상태의 정본은 `data.workflow_run_executions` 이고(spec 0005 2.9 개정 2) worker 가 씁니다 — 적재의 상태를 api 가 투영하는 것과 같은 경계입니다(6절). 그래서 조회는 상태 메시지가 도착한 뒤에 바뀝니다.
 
+### 9.1 승인 (P4-4, 🔒)
+
+`HUMAN`·`APPROVAL` 노드에 닿으면 Workflow Run 이 `waiting_approval` 로 파킹되고 `waiting_node_execution_id` 가 **지금 무엇을 기다리는지** 가리킵니다. v1 에서 두 종류는 **같게** 동작합니다(spec 0005 개정 5) — "사람의 입력" 과 "승인 게이트" 의 구분은 입력을 받는 표면이 생길 때 갈라집니다.
+
+| 메서드·경로 | 요청 | 성공 | 오류 |
+| --- | --- | --- | --- |
+| `POST /workflow-runs/{id}/approvals` | `{ "node_execution_id": <uuid>, "note"?: <str> }` | `201 { approval_id, workflow_run_id, node_execution_id, approved_by, approved_at, note }` | `401`, `404 workflow_run_not_found`, `400 workflow_run_not_waiting_approval`·`node_execution_not_waiting`·`already_approved` |
+| `GET /workflow-runs/{id}/approvals` | — | `200 { items: [...] }` | `401`, `404 workflow_run_not_found` |
+
+**인증된 주체 누구나 승인할 수 있습니다.** `approved_by` 는 그 주체의 id 를 **기록**할 뿐 판정하지 않고, "요청자 본인은 승인할 수 없다" 같은 규칙도 없습니다. **이 공백은 의도된 것**이고 Trust Layer(Phase 8)의 자리입니다(spec 0005 2.6·C-4). 반쪽짜리 권한 모델을 지금 넣으면 이전 비용만 만듭니다.
+
+거부 넷은 전부 **정확성** 가드입니다 — 선승인(아직 대기가 아님), 엉뚱한 지목(기다리는 대상이 아님), 재전송(이미 승인됨), 없는 Run. 지목 대상을 `control` 의 투영에서 읽는 이유는 api 역할이 `data` 를 볼 수 없기 때문이고(0001 R-7), 투영에 값이 없으면 **어떤 노드 실행도 인정하지 않습니다**(fail-closed).
+
+승인 기록은 `control.workflow_approvals` 에 **append-only** 로 남고 노드 실행당 **한 건**입니다(DB unique). 기록 뒤 api 가 재큐하지만 **전진의 근거는 재큐가 아니라 저장된 승인**입니다 — 실행기가 그것을 읽고 판정합니다. 재큐가 유실되면 스위퍼가 승인된 대기를 주워 갑니다.
+
+`GET /workflow-runs/{id}` 의 응답에 `waiting_node_execution_id` 가 있습니다(승인 호출에 필요한 포인터). 승인 **기록**은 그 응답에 넣지 않고 위의 목록 경로로 봅니다.
+
 ### 9.1 노드 출력과 분기 (P4-2b)
 
 `AGENT` 노드의 출력은 `{"text": <자식 Run 의 마지막 assistant 본문>, "status": <자식의 종결 상태>}` 입니다. 상한은 **직렬화된 UTF-8 바이트** 기준 `AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES`(기본 8192, 최소 64)이고, 넘기면 **본문만** 잘라 `output_truncated` 를 함께 참으로 적습니다 — 조용히 자르지 않습니다. 자르는 단위는 코드 포인트라 한 글자를 반으로 가르지 않습니다. `status` 는 판정에 쓰이므로 줄이지 않습니다. `START`·`END`·`CONDITION` 은 출력이 **없습니다**(`NULL`).
@@ -233,7 +250,7 @@ Workflow 는 **자기 어휘**를 가집니다(spec 0005 D-13) — Agent Run 의
 | `node.finished` | `node_id`, `iteration`, `status`(`running`·`succeeded`·`failed`) |
 | `workflow.finished` | `status` — **항상 마지막** |
 
-`approval.requested`·`approval.granted`(spec 2.10)는 P4-4 에서 더합니다 — 쓰는 코드와 함께 정의합니다.
+`approval.requested`·`approval.granted` 는 **P4-4 가 더했습니다** — payload 는 `node_id`·`iteration` 뿐이고 **승인 주체를 싣지 않습니다**(주체 id 를 이벤트 스트림에 넣지 않습니다. 기록은 `control` 에 있고 조회로 봅니다). `approval.granted` 를 내는 쪽은 **실행기**입니다 — 기록은 api 가 하지만 이벤트 어휘는 실행기의 것이고(D-13) 그 이벤트의 뜻은 "엔진이 승인을 관측했다" 입니다.
 
 `seq` 는 Workflow Run 하나 안에서 1부터 단조 증가하고 **이벤트와 상태 통지가 같은 수열**을 씁니다(Agent Run 과 같은 규칙). 정본은 `data.workflow_run_executions.status_seq` 입니다. 비종결 이벤트는 저장한 뒤 발행하므로 재시작이 `seq` 를 **다시 쓰는 일은 없고 빈틈만** 생깁니다. 종결 한 쌍(`workflow.status` + `workflow.finished`)만 반대로 **발행이 먼저**입니다 — 종결 상태를 먼저 저장하면 그 사이에 죽었을 때 재전달이 "종결이면 아무것도 하지 않는다" 에 걸려 투영이 영영 `running` 으로 남습니다. 같은 `seq` 재발행은 어댑터가 성공으로 흡수하고 투영은 `seq` 로 멱등이므로, 중복이 아니라 **빈틈 없음**을 택한 선택입니다.
 

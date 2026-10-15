@@ -64,6 +64,7 @@ from aether_runtime.application.ports.outbound.model_gateway import ModelGateway
 from aether_runtime.application.ports.outbound.tool_gateway import ToolGateway
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
+from aether_workflow.adapters.outbound.db.approval_reader import PostgresApprovalReader
 from aether_workflow.adapters.outbound.db.workflow_run_declaration_reader import (
     PostgresWorkflowRunDeclarationReader,
 )
@@ -449,7 +450,11 @@ def _build_production_workflow_handler(
 
     spec 0005 2.5 개정 3 (P4-2a B2): 자식 Agent Run 의 상태·Version 은 `PostgresAgentRunReader`
     (`data.run_executions`·`control.agent_versions`, 읽기만)로 보고, 선언은 `RedisAgentRunLauncher`
-    로 api 에 요청합니다(worker 는 `control.runs` 에 INSERT 할 수 없습니다)."""
+    로 api 에 요청합니다(worker 는 `control.runs` 에 INSERT 할 수 없습니다).
+
+    spec 0005 2.6 개정 5 (P4-4): 승인은 `PostgresApprovalReader`(`control.workflow_approvals`
+    SELECT 만, 마이그레이션 0008)로 **저장된 사실** 을 읽어 판정합니다 - 재큐 메시지는 근거가
+    아닙니다."""
 
     def connect() -> psycopg.Connection:
         return psycopg.connect(settings.psycopg_dsn)
@@ -463,6 +468,7 @@ def _build_production_workflow_handler(
         RedisWorkflowStatusNotifier(client, stream=settings.workflow_status_stream),
         WorkflowSystemClock(),
         agent_runs=PostgresAgentRunReader(connect),
+        approvals=PostgresApprovalReader(connect),
         launcher=RedisAgentRunLauncher(client),
         owner=settings.worker_consumer,
         lease_ttl_seconds=settings.worker_lease_seconds,

@@ -28,7 +28,8 @@ from alembic.config import Config
 pytestmark = pytest.mark.integration
 
 _Factory = Callable[[], psycopg.Connection]
-_NODE_STATUSES = ("running", "waiting_run", "succeeded", "failed")
+_NODE_STATUSES = ("running", "waiting_run", "waiting_approval", "succeeded", "failed")
+"""0007 이 만든 네 값 + 0008(P4-4)이 더한 `waiting_approval`. head 기준입니다."""
 
 
 def _column_type(conn: psycopg.Connection, schema: str, table: str, column: str) -> tuple[str, str]:
@@ -131,11 +132,11 @@ def test_0007_downgrade_then_upgrade_round_trip(
         conn.close()
 
 
-def test_node_execution_status_is_its_own_four_value_enum(
+def test_node_execution_status_is_its_own_enum_not_the_agent_run_one(
     admin_connection_factory: _Factory,
 ) -> None:
     """spec 0005 2.9: 새 enum 은 `data.run_execution_status`(0001, 일곱 값)와 다른 타입이고 값이
-    정확히 네 개다."""
+    정확히 다섯 개다(0007 의 네 값 + 0008 의 `waiting_approval`)."""
     conn = admin_connection_factory()
     try:
         assert _column_type(conn, "data", "workflow_node_executions", "status") == (
@@ -154,11 +155,11 @@ def test_node_execution_status_is_its_own_four_value_enum(
         conn.close()
 
 
-def test_data_role_writes_the_four_values_and_rejects_the_rest(
+def test_data_role_writes_the_node_values_and_rejects_the_rest(
     admin_connection_factory: _Factory, data_connection_factory: _Factory
 ) -> None:
-    """spec 0005 2.9: `aether_data` 가 네 값을 쓸 수 있고, Agent Run 의 값(`waiting`·`queued`)이나
-    철자가 다른 값은 거부된다."""
+    """spec 0005 2.9: `aether_data` 가 노드 실행의 값을 쓸 수 있고, Agent Run 의 값(`waiting`·
+    `queued`)이나 철자가 다른 값은 거부된다."""
     admin = admin_connection_factory()
     try:
         run_id = _seed_workflow_run(admin)

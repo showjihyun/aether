@@ -279,6 +279,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflow-runs/{workflow_run_id}/approvals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Approvals Route */
+        get: operations["list_approvals_route_workflow_runs__workflow_run_id__approvals_get"];
+        put?: never;
+        /** Approve Route */
+        post: operations["approve_route_workflow_runs__workflow_run_id__approvals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -414,6 +432,49 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+        };
+        /** ApprovalListResponse */
+        ApprovalListResponse: {
+            /** Items */
+            items: components["schemas"]["ApprovalResponse"][];
+        };
+        /**
+         * ApprovalRequest
+         * @description `POST /workflow-runs/{id}/approvals` 의 요청 본문 - **지목하는 노드 실행** 이 필수입니다.
+         */
+        ApprovalRequest: {
+            /**
+             * Node Execution Id
+             * Format: uuid
+             */
+            node_execution_id: string;
+            /** Note */
+            note?: string | null;
+        };
+        /**
+         * ApprovalResponse
+         * @description 승인 기록 한 건 - `approved_by` 는 인증된 주체의 id 그대로입니다.
+         */
+        ApprovalResponse: {
+            /**
+             * Workflow Run Id
+             * Format: uuid
+             */
+            workflow_run_id: string;
+            /**
+             * Node Execution Id
+             * Format: uuid
+             */
+            node_execution_id: string;
+            /** Approved By */
+            approved_by: string;
+            /**
+             * Approved At
+             * Format: date-time
+             */
+            approved_at: string;
+            /** Note */
+            note: string | null;
         };
         /** Backoff */
         Backoff: {
@@ -643,7 +704,7 @@ export interface components {
          * NodeKind
          * @enum {string}
          */
-        NodeKind: "START" | "END" | "AGENT" | "CONDITION" | "PARALLEL" | "JOIN" | "LOOP" | "WAIT" | "LLM" | "MCP" | "TOOL";
+        NodeKind: "START" | "END" | "AGENT" | "CONDITION" | "PARALLEL" | "JOIN" | "LOOP" | "WAIT" | "LLM" | "MCP" | "TOOL" | "HUMAN" | "APPROVAL";
         /** NodeModel */
         NodeModel: {
             /** Id */
@@ -894,6 +955,8 @@ export interface components {
             current_node_id: string | null;
             /** Waiting Run Id */
             waiting_run_id: string | null;
+            /** Waiting Node Execution Id */
+            waiting_node_execution_id: string | null;
             /**
              * Requested At
              * Format: date-time
@@ -1790,6 +1853,107 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["WorkflowRunDetailResponse"];
                 };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_run_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_approvals_route_workflow_runs__workflow_run_id__approvals_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalListResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_run_not_found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_route_workflow_runs__workflow_run_id__approvals_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                workflow_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalResponse"];
+                };
+            };
+            /** @description workflow_run_not_waiting_approval | node_execution_not_waiting | already_approved */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description unauthorized */
             401: {

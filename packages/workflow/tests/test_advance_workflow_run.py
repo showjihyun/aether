@@ -17,6 +17,7 @@ from aether_workflow.domain.run_status import IllegalWorkflowTransition, Workflo
 from packages.workflow.tests.fakes import (
     FakeAgentRunLauncher,
     FakeAgentRunReader,
+    FakeApprovalReader,
     FakeWorkflowClock,
     FakeWorkflowEventSink,
     FakeWorkflowRunDeclarationReader,
@@ -43,6 +44,7 @@ class _Rig:
             self.notifier,
             FakeWorkflowClock(),
             agent_runs=self.agent_runs,
+            approvals=FakeApprovalReader(),
             launcher=self.launcher,
             owner=_OWNER,
             lease_ttl_seconds=60.0,

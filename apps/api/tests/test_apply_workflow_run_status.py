@@ -90,3 +90,29 @@ def test_unknown_run_returns_false() -> None:
     store, _ = _store_with_run()
 
     assert ApplyWorkflowRunStatusUseCase(store)(_message(uuid4())) is False
+
+
+def test_waiting_approval_projects_the_awaited_node_execution_and_clears_it_on_leaving() -> None:
+    """spec 0005 2.6 개정 5 (1), R-12, R-13 (P4-4): 지목 대상은 `waiting_approval` 일 때만 값이 있다
+    (상태에서 유도). 승인 대기와 자식 Run 대기는 필드로 서로 섞이지 않는다."""
+    store, run_id = _store_with_run()
+    apply = ApplyWorkflowRunStatusUseCase(store)
+    awaited = uuid4()
+
+    apply(
+        _message(
+            run_id,
+            seq=2,
+            status=WorkflowRunStatus.WAITING_APPROVAL,
+            current_node_id="gate",
+            waiting_node_execution_id=awaited,
+        )
+    )
+    parked = _get(store, run_id)
+    apply(_message(run_id, seq=3, status=WorkflowRunStatus.RUNNING))
+    resumed = _get(store, run_id)
+
+    assert parked.status == WorkflowRunStatus.WAITING_APPROVAL
+    assert parked.waiting_node_execution_id == awaited
+    assert parked.waiting_run_id is None
+    assert resumed.waiting_node_execution_id is None

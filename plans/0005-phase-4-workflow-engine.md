@@ -188,6 +188,19 @@ backlog 의 Phase 4 완료 판정 + spec 0005 의 R-1 ~ R-15 전부가 통과하
 
 **A 에 넣지 않는 것**: 파킹, AGENT·CONDITION·그 밖의 노드 종류, 스위퍼, 취소 API, 노드 출력. 취소는 `control.workflow_runs.cancel_requested_at` 열이 이미 있지만 그것을 쓰는 API 가 없으므로 **A 에서도 만들지 않습니다**(Workflow 취소는 spec 2.3 이 허용한 전이이고, 넣을 단위는 backlog 가 정합니다 — 지금 열 하나 때문에 API 를 발명하지 않습니다).
 
+## 부록 B — P4-4 의 실행 설계 (2026-10-15, M)
+
+2절의 P4-4 표를 **좁힙니다.** 착수 전에 둘이 막혔고 spec **개정 5** 로 적었습니다.
+
+| 막힌 것 | 어떻게 |
+| --- | --- |
+| **api 가 R-12 의 4xx 를 낼 수 없습니다** — 노드 실행은 `data` 에 있고 api 역할은 그 평면에 권한이 없습니다 | 지목 대상을 **투영**합니다(`control.workflow_runs.waiting_node_execution_id`, 마이그레이션 0008). `waiting_run_id` 와 같은 모양이고 상태에서 유도합니다 |
+| **실행기가 승인을 확인할 수 없습니다** — `aether_data` 는 `control.workflow_approvals` 에 권한이 없습니다(0005 가 일부러 비워 둔 자리) | **SELECT 만** 더합니다. 전진의 근거는 저장된 사실이어야 하고 재큐 메시지여서는 안 됩니다 — **이 GRANT 가 H-1 의 검토 대상**입니다 |
+
+**H-1 은 이 PR 의 병합 전 게이트입니다**(DP-6, AGENTS.md Trust). 에이전트는 PR 까지 가고 **병합하지 않습니다**. 사람이 보는 것: 새 GRANT 한 줄, 승인 API 의 거부 조건, `approved_by` 가 인증된 주체 그대로인지, 그리고 **권한 판정을 넣지 않았다는 명시**.
+
+**넣지 않는 것**: 승인자 권한 모델, "자기 승인 금지", 알림(Non-goal). 그럴듯해서 더하는 반쪽 권한 판정이 이 단위의 반려 사유입니다(spec 2.6·C-4).
+
 ## 관련 문서
 
 - [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) — 요구사항·결정

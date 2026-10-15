@@ -154,3 +154,30 @@ def test_get_unknown_is_404_workflow_run_not_found() -> None:
 
     assert response.status_code == 404
     assert response.json() == {"detail": "workflow_run_not_found"}
+
+
+def test_get_shows_waiting_approval_and_the_awaited_node_execution_apart_from_waiting_run() -> None:
+    """spec 0005 R-12, R-13 (P4-4): 승인 대기는 상태만으로 `waiting_run` 과 구별되고, 승인이
+    지목해야
+    하는 노드 실행의 id 가 본문에 나온다(`waiting_run_id` 는 비어 있다)."""
+    client, repo, store, _notifier = _client()
+    created = store.create(_workflow(repo), 1, None, _KEY)
+    awaited = uuid4()
+    store.apply_status(
+        created.workflow_run_id,
+        seq=2,
+        status=WorkflowRunStatus.WAITING_APPROVAL,
+        current_node_id="gate",
+        waiting_run_id=None,
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        finished_at=None,
+        failure_reason=None,
+        waiting_node_execution_id=awaited,
+    )
+
+    body = client.get(f"/workflow-runs/{created.workflow_run_id}").json()
+
+    assert body["status"] == "waiting_approval"
+    assert body["waiting_node_execution_id"] == str(awaited)
+    assert body["waiting_run_id"] is None
+    assert body["current_node_id"] == "gate"

@@ -44,6 +44,7 @@ from aether_worker.application.usecases.resume_parked_workflows import (
 from aether_worker.main import serve
 from aether_worker.settings import Settings
 from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
+from aether_workflow.adapters.outbound.db.approval_reader import PostgresApprovalReader
 from aether_workflow.adapters.outbound.db.workflow_run_declaration_reader import (
     PostgresWorkflowRunDeclarationReader,
 )
@@ -93,14 +94,15 @@ class _Env:
     def _retire_leftover_parked_runs(self) -> None:
         """DB 는 세션 안에서 공유된다 -- 앞선 테스트(파킹 어댑터 테스트 등)가 `waiting_run` 으로
         남긴
-        Run 이 있으면 `sweep()` 이 그것까지 줍는다. 이 파일의 단언은 **자기 Run** 만 센다: 남은 것을
+        Run 이 있으면 `sweep()` 이 그것까지 줍는다(P4-4: 승인이 저장된 `waiting_approval` 도
+        줍는다). 이 파일의 단언은 **자기 Run** 만 센다: 남은 것을
         종결 처리해 스위퍼의 입력에서 치운다."""
         conn = self.admin()
         try:
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE data.workflow_run_executions SET status = 'cancelled'"
-                    " WHERE status = 'waiting_run'"
+                    " WHERE status IN ('waiting_run', 'waiting_approval')"
                 )
             conn.commit()
         finally:
@@ -117,6 +119,7 @@ class _Env:
             RedisWorkflowStatusNotifier(self.redis),
             SystemClock(),
             agent_runs=PostgresAgentRunReader(self.data),
+            approvals=PostgresApprovalReader(self.data),
             launcher=RedisAgentRunLauncher(self.redis),
             owner=owner,
             lease_ttl_seconds=60.0,

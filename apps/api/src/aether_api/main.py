@@ -35,6 +35,9 @@ from aether_api.adapters.inbound.http.events import build_events_router
 from aether_api.adapters.inbound.http.healthz import build_router
 from aether_api.adapters.inbound.http.knowledge import build_knowledge_router
 from aether_api.adapters.inbound.http.runs import build_runs_router
+from aether_api.adapters.inbound.http.workflow_approvals import (
+    build_workflow_approvals_router,
+)
 from aether_api.adapters.inbound.http.workflow_runs import build_workflow_runs_router
 from aether_api.adapters.inbound.http.workflows import build_workflows_router
 from aether_api.adapters.inbound.stream.ingestion_status_consumer import (
@@ -57,6 +60,9 @@ from aether_api.adapters.outbound.db.knowledge_declaration_store import (
 )
 from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDeclarationStore
 from aether_api.adapters.outbound.db.tool_permissions import PostgresToolPermissionStore
+from aether_api.adapters.outbound.db.workflow_approval_store import (
+    PostgresWorkflowApprovalStore,
+)
 from aether_api.adapters.outbound.db.workflow_repository import PostgresWorkflowRepository
 from aether_api.adapters.outbound.db.workflow_run_declaration_store import (
     PostgresWorkflowRunDeclarationStore,
@@ -76,6 +82,7 @@ from aether_api.application.usecases.apply_run_status import ApplyRunStatusUseCa
 from aether_api.application.usecases.apply_workflow_run_status import (
     ApplyWorkflowRunStatusUseCase,
 )
+from aether_api.application.usecases.approve_workflow_node import ApproveWorkflowNodeUseCase
 from aether_api.application.usecases.authenticate import AuthenticateUseCase
 from aether_api.application.usecases.cancel_run import CancelRunUseCase
 from aether_api.application.usecases.create_agent import CreateAgentUseCase
@@ -93,6 +100,9 @@ from aether_api.application.usecases.get_workflow_run import GetWorkflowRunUseCa
 from aether_api.application.usecases.get_workflow_version import GetWorkflowVersionUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
+from aether_api.application.usecases.list_workflow_approvals import (
+    ListWorkflowApprovalsUseCase,
+)
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
 from aether_api.application.usecases.request_ingestion import RequestIngestionUseCase
 from aether_api.application.usecases.request_run import RequestRunUseCase
@@ -474,6 +484,21 @@ def create_app(
                 tracing=request_tracing,
             ),
             GetWorkflowRunUseCase(workflow_run_declaration_store),
+        )
+    )
+
+    # P4-4: 승인 API. 권한 판정 없이 인증된 주체의 id 를 그대로 기록한다(spec C-4). 재큐는
+    # `aether:workflow_runs:requested` 에 같은 notifier 로 한다(api 가 그 스트림의 쓰는 쪽).
+    workflow_approval_store = PostgresWorkflowApprovalStore(
+        lambda: psycopg.connect(settings.psycopg_dsn)
+    )
+    app.include_router(
+        build_workflow_approvals_router(
+            require_principal(authenticate),
+            ApproveWorkflowNodeUseCase(
+                workflow_run_declaration_store, workflow_approval_store, workflow_run_notifier
+            ),
+            ListWorkflowApprovalsUseCase(workflow_run_declaration_store, workflow_approval_store),
         )
     )
     return app

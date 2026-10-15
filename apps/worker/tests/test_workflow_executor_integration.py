@@ -22,6 +22,7 @@ from aether_worker.application.usecases.handle_workflow_requested import (
     HandleWorkflowRequestedUseCase,
 )
 from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
+from aether_workflow.adapters.outbound.db.approval_reader import PostgresApprovalReader
 from aether_workflow.adapters.outbound.db.workflow_run_declaration_reader import (
     PostgresWorkflowRunDeclarationReader,
 )
@@ -73,6 +74,7 @@ class _Env:
             RedisWorkflowStatusNotifier(self.redis),
             SystemClock(),
             agent_runs=PostgresAgentRunReader(self.data),
+            approvals=PostgresApprovalReader(self.data),
             launcher=RedisAgentRunLauncher(self.redis),
             owner=owner,
             lease_ttl_seconds=60.0,

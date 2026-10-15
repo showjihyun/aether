@@ -23,12 +23,14 @@ from pydantic import ValidationError
 from packages.workflow.tests.fakes import FakeWorkflowClock
 
 
-def test_vocabulary_is_exactly_the_four_workflow_types() -> None:
-    """spec 0005 2.10: `approval.*` 는 P4-4 - 지금은 네 개뿐이고 Agent Run 어휘가 섞이지 않는다."""
+def test_vocabulary_is_exactly_the_six_workflow_types() -> None:
+    """spec 0005 2.10: 여섯 개(`approval.*` 는 P4-4)이고 Agent Run 어휘가 섞이지 않는다."""
     assert WORKFLOW_EVENT_TYPES == {
         "workflow.status",
         "node.started",
         "node.finished",
+        "approval.requested",
+        "approval.granted",
         "workflow.finished",
     }
     assert set(PAYLOAD_MODELS) == WORKFLOW_EVENT_TYPES

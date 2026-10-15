@@ -47,11 +47,16 @@ class WorkflowRunDeclarationStore(Protocol):
         started_at: datetime | None,
         finished_at: datetime | None,
         failure_reason: str | None,
+        waiting_node_execution_id: UUID | None = None,
     ) -> bool:
         """`seq` 가 저장된 `status_seq` 보다 클 때만 한 UPDATE 로 적용합니다.
 
         `current_node_id`·`waiting_run_id`·`started_at`·`finished_at`·`failure_reason` 이
         `None` 이면 기존 값을 그대로 둡니다(`COALESCE(new, old)`). 적용됐으면 `True`,
         아니면(낮거나 같은 `seq`, 또는 없는 id) `False`.
+
+        `waiting_run_id`·`waiting_node_execution_id` 는 예외입니다: **상태에서 유도**합니다 - 각각
+        `waiting_run`·`waiting_approval` 일 때만 값이 있고(주지 않으면 이전 값) 다른 상태로 가면
+        지워집니다.
         """
         ...

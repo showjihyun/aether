@@ -161,3 +161,42 @@ def test_status_message_fields_and_absent_optionals(redis_client: Redis) -> None
         "current_node_id": "a",
         "waiting_run_id": str(child),
     }, "파킹 통지는 기다리는 자식 Run 을 싣는다(R-13) - 다른 통지에는 이 필드가 없다"
+
+
+def test_status_message_carries_the_awaited_node_execution_only_when_present(
+    redis_client: Redis,
+) -> None:
+    """spec 0005 2.6 개정 5 (1), R-12 (P4-4): `waiting_approval` 통지는 기다리는 노드 실행의 id 를
+    `waiting_node_execution_id` 로 싣고, 없으면 필드 자체를 보내지 않는다(A1 계약)."""
+    run_id = uuid.uuid4()
+    awaited = uuid.uuid4()
+    notifier = RedisWorkflowStatusNotifier(redis_client)
+
+    notifier.notify(
+        WorkflowStatusMessage(
+            workflow_run_id=run_id,
+            seq=4,
+            status=WorkflowRunStatus.WAITING_APPROVAL,
+            at=_AT,
+            current_node_id="gate",
+            waiting_node_execution_id=awaited,
+        )
+    )
+    notifier.notify(
+        WorkflowStatusMessage(
+            workflow_run_id=run_id, seq=5, status=WorkflowRunStatus.RUNNING, at=_AT
+        )
+    )
+
+    parked, running = (
+        fields for _, fields in _entries(redis_client, "aether:workflow_runs:status")
+    )
+    assert parked == {
+        "workflow_run_id": str(run_id),
+        "seq": "4",
+        "status": "waiting_approval",
+        "at": _AT.isoformat(),
+        "current_node_id": "gate",
+        "waiting_node_execution_id": str(awaited),
+    }
+    assert "waiting_node_execution_id" not in running

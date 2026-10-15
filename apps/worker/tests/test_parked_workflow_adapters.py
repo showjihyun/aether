@@ -159,3 +159,93 @@ def test_requeue_writes_the_workflow_request_contract(redis_client: Redis) -> No
             "traceparent": "",
         }
     ]
+
+
+# --- P4-4: 승인 대기를 스위퍼가 줍는다 ---------------------------------------------------
+
+
+def _waiting_approval(
+    admin: _Factory, awaited: uuid.UUID | None, *, approved: list[uuid.UUID]
+) -> ParkedWorkflow:
+    """`waiting_approval` Workflow Run 하나. `approved` 의 각 노드 실행 id 에 승인 기록을 심는다."""
+    run_id, version_id = declare_workflow_run(
+        admin,
+        (Node("s", NodeKind.START), Node("e", NodeKind.END)),
+        (Edge("s", "e"),),
+    )
+    conn = admin()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO data.workflow_run_executions"
+                " (workflow_run_id, status, waiting_node_execution_id)"
+                " VALUES (%s, 'waiting_approval'::control.workflow_run_status, %s)",
+                (run_id, awaited),
+            )
+            for node_execution_id in approved:
+                cur.execute(
+                    "INSERT INTO control.workflow_approvals"
+                    " (workflow_run_id, node_execution_id, approved_by) VALUES (%s, %s, 'tester')",
+                    (run_id, node_execution_id),
+                )
+        conn.commit()
+    finally:
+        conn.close()
+    return ParkedWorkflow(workflow_run_id=run_id, workflow_version_id=version_id)
+
+
+def test_a_workflow_waiting_for_approval_that_has_been_approved_is_ready(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    """spec 0005 2.5 (P4-4): 승인 뒤 재큐가 유실돼도 영원히 멈추지 않는다 -- 승인이 **이미 저장된**
+    `waiting_approval` 은 스위퍼가 줍는다(이벤트만 믿지 않는다, `2026-10-11-001`)."""
+    awaited = uuid.uuid4()
+    parked = _waiting_approval(admin_connection_factory, awaited, approved=[awaited])
+
+    assert parked in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_a_workflow_still_waiting_for_its_approval_is_not_ready(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    """승인이 없는 대기는 줍지 않는다 -- 줍는다고 틀리지는 않지만(실행기가 승인을 확인) 승인 전에는
+    매 주기마다 쓸데없는 재큐가 쌓인다."""
+    parked = _waiting_approval(admin_connection_factory, uuid.uuid4(), approved=[])
+
+    assert parked not in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_an_approval_for_another_node_execution_does_not_make_the_wait_ready(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    """R-12: 기다리는 그 노드 실행의 승인만 근거다."""
+    parked = _waiting_approval(admin_connection_factory, uuid.uuid4(), approved=[uuid.uuid4()])
+
+    assert parked not in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_a_waiting_approval_without_a_pointer_is_never_ready(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    """fail-closed: 지목 대상이 비어 있으면 어떤 승인도 근거가 되지 못한다."""
+    parked = _waiting_approval(admin_connection_factory, None, approved=[uuid.uuid4()])
+
+    assert parked not in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_the_approval_branch_does_not_disturb_the_child_run_branch(
+    admin_connection_factory: _Factory, data_connection_factory: _Factory
+) -> None:
+    """회귀(R-13): 한 번의 조회가 두 대기를 함께 줍는다 -- 자식이 종결인 `waiting_run` 과 승인이
+    있는
+    `waiting_approval` 이 같이 나오고, 각자 한 번씩만 나온다."""
+    awaited = uuid.uuid4()
+    waiting_run = _parked(
+        admin_connection_factory, "waiting_run", _child(admin_connection_factory, "failed")
+    )
+    waiting_approval = _waiting_approval(admin_connection_factory, awaited, approved=[awaited])
+
+    ready = PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+    assert ready.count(waiting_run) == 1
+    assert ready.count(waiting_approval) == 1

@@ -968,6 +968,109 @@
           }
         }
       }
+    },
+    "/workflow-runs/{workflow_run_id}/approvals": {
+      "post": {
+        "summary": "Approve Route",
+        "operationId": "approve_route_workflow_runs__workflow_run_id__approvals_post",
+        "parameters": [
+          {
+            "name": "workflow_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Run Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "workflow_run_not_waiting_approval | node_execution_not_waiting | already_approved"
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_run_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List Approvals Route",
+        "operationId": "list_approvals_route_workflow_runs__workflow_run_id__approvals_get",
+        "parameters": [
+          {
+            "name": "workflow_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Run Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_run_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1213,6 +1316,92 @@
         ],
         "title": "AgentVersionResponse",
         "description": "`GET /agents/{id}/versions/{version}` 의 성공 응답."
+      },
+      "ApprovalListResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApprovalResponse"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ApprovalListResponse"
+      },
+      "ApprovalRequest": {
+        "properties": {
+          "node_execution_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Execution Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_execution_id"
+        ],
+        "title": "ApprovalRequest",
+        "description": "`POST /workflow-runs/{id}/approvals` 의 요청 본문 - **지목하는 노드 실행** 이 필수입니다."
+      },
+      "ApprovalResponse": {
+        "properties": {
+          "workflow_run_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Workflow Run Id"
+          },
+          "node_execution_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Node Execution Id"
+          },
+          "approved_by": {
+            "type": "string",
+            "title": "Approved By"
+          },
+          "approved_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Approved At"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "workflow_run_id",
+          "node_execution_id",
+          "approved_by",
+          "approved_at",
+          "note"
+        ],
+        "title": "ApprovalResponse",
+        "description": "승인 기록 한 건 - `approved_by` 는 인증된 주체의 id 그대로입니다."
       },
       "Backoff": {
         "properties": {
@@ -1667,7 +1856,9 @@
           "WAIT",
           "LLM",
           "MCP",
-          "TOOL"
+          "TOOL",
+          "HUMAN",
+          "APPROVAL"
         ],
         "title": "NodeKind"
       },
@@ -2230,6 +2421,18 @@
             ],
             "title": "Waiting Run Id"
           },
+          "waiting_node_execution_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Node Execution Id"
+          },
           "requested_at": {
             "type": "string",
             "format": "date-time",
@@ -2280,6 +2483,7 @@
           "status",
           "current_node_id",
           "waiting_run_id",
+          "waiting_node_execution_id",
           "requested_at",
           "started_at",
           "finished_at",

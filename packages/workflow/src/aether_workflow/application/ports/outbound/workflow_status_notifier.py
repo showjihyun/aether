@@ -3,7 +3,9 @@
 `seq` 와 같은 수열입니다.
 
 api 쪽 `WorkflowRunStatusMessage` 와 필드가 같지만 서로 import 하지 않습니다 — 스트림 계약이
-정본입니다. `waiting_run_id` 는 `waiting_run` 일 때만 있습니다(파킹, P4-2a B2).
+정본입니다. `waiting_run_id` 는 `waiting_run` 일 때만, `waiting_node_execution_id` 는
+`waiting_approval` 일
+때만 있습니다(파킹, P4-2a B2·P4-4).
 """
 
 from __future__ import annotations
@@ -25,6 +27,7 @@ class WorkflowStatusMessage(BaseModel):
     at: datetime
     current_node_id: str | None = None
     waiting_run_id: UUID | None = None
+    waiting_node_execution_id: UUID | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     failure_reason: WorkflowFailureReason | None = None

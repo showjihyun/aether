@@ -20,6 +20,7 @@ from uuid import UUID
 class NodeExecutionStatus(StrEnum):
     RUNNING = "running"
     WAITING_RUN = "waiting_run"
+    WAITING_APPROVAL = "waiting_approval"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 

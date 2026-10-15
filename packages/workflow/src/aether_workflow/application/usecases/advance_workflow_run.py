@@ -2,7 +2,8 @@
 Workflow Run 을 `START` 에서 `END` 까지 전진시키는 실행기 골격. `AdvanceWorkflowRun`(inbound
 포트)의 유일한 구현입니다.
 
-**범위.** 지원하는 노드 종류는 `START`·`END`·`AGENT`·`CONDITION` 넷입니다. 나머지 종류를 만나면
+**범위.** 지원하는 노드 종류는 `START`·`END`·`AGENT`·`CONDITION`·`HUMAN`·`APPROVAL` 여섯입니다
+(`HUMAN`·`APPROVAL` 은 v1 에서 같게 `waiting_approval` 로 파킹합니다, P4-4). 나머지 종류를 만나면
 `failed` + `unsupported_node_kind` 로 끝납니다(절반만 만든 노드를 두지 않습니다). 나가는 간선이
 둘 이상인 노드는 `CONDITION` 만 예외이고, 다른 종류는 `failed` + `unsupported_branching` — 조용히
 하나를 고르지 않습니다.
@@ -68,6 +69,7 @@ from aether_workflow.application.ports.outbound.agent_run_reader import (
     AgentRunReader,
     AgentVersionRef,
 )
+from aether_workflow.application.ports.outbound.approval_reader import ApprovalReader
 from aether_workflow.application.ports.outbound.clock import Clock
 from aether_workflow.application.ports.outbound.workflow_event_sink import WorkflowEventSink
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
@@ -83,6 +85,8 @@ from aether_workflow.application.ports.outbound.workflow_status_notifier import 
 )
 from aether_workflow.domain.condition import ConditionFailure, evaluate_condition
 from aether_workflow.domain.events import (
+    ApprovalGrantedPayload,
+    ApprovalRequestedPayload,
     NodeFinishedPayload,
     NodeStartedPayload,
     WorkflowEvent,
@@ -103,7 +107,10 @@ from aether_workflow.domain.run_status import (
 )
 
 _FIRST_ITERATION = 0
-_SUPPORTED_KINDS = frozenset({NodeKind.START, NodeKind.END, NodeKind.AGENT, NodeKind.CONDITION})
+_APPROVAL_KINDS = frozenset({NodeKind.HUMAN, NodeKind.APPROVAL})
+_SUPPORTED_KINDS = frozenset(
+    {NodeKind.START, NodeKind.END, NodeKind.AGENT, NodeKind.CONDITION} | _APPROVAL_KINDS
+)
 _BRANCH_LABELS = {True: "true", False: "false"}
 
 
@@ -128,6 +135,7 @@ class AdvanceWorkflowRunUseCase:
         clock: Clock,
         *,
         agent_runs: AgentRunReader,
+        approvals: ApprovalReader,
         launcher: AgentRunLauncher,
         owner: str,
         lease_ttl_seconds: float,
@@ -140,6 +148,7 @@ class AdvanceWorkflowRunUseCase:
         self._notifier = notifier
         self._clock = clock
         self._agent_runs = agent_runs
+        self._approvals = approvals
         self._launcher = launcher
         self._owner = owner
         self._lease_ttl_seconds = lease_ttl_seconds
@@ -169,6 +178,12 @@ class AdvanceWorkflowRunUseCase:
             # 바꾸지
             # 않는다. 이것이 R-8 의 핵심이다: 이벤트·통지·`seq` 증가가 없다.
             return WorkflowRunStatus.WAITING_RUN
+        if execution.status is WorkflowRunStatus.WAITING_APPROVAL and not self._approval_is_stored(
+            execution
+        ):
+            # 재큐 메시지는 승인이 아니다(R-12). 저장된 승인이 없으면 아무 것도 바꾸지 않는다 -
+            # 이벤트·통지·`seq` 증가가 없다(R-8).
+            return WorkflowRunStatus.WAITING_APPROVAL
 
         cursor = _Cursor(run_id, execution.status_seq, execution.current_node_id)
         if execution.status is not WorkflowRunStatus.RUNNING:
@@ -192,6 +207,10 @@ class AdvanceWorkflowRunUseCase:
             branch: bool | None = None
             if node.kind is NodeKind.AGENT:
                 parked_or_failed = self._run_agent_node(cursor, node, declaration)
+                if parked_or_failed is not None:
+                    return parked_or_failed
+            elif node.kind in _APPROVAL_KINDS:
+                parked_or_failed = self._run_approval_node(cursor, node)
                 if parked_or_failed is not None:
                     return parked_or_failed
             elif node.kind is NodeKind.CONDITION:
@@ -398,6 +417,130 @@ class AdvanceWorkflowRunUseCase:
             if record.output is not None:
                 outputs[record.node_id] = record.output
         return {"input": declaration.input, "nodes": outputs}
+
+    # -- HUMAN / APPROVAL 노드와 승인 대기 -----------------------------------------
+
+    def _approval_is_stored(self, execution: WorkflowRunExecution) -> bool:
+        """`waiting_approval` 인 Workflow Run 이 기다리는 노드 실행에 **저장된 승인** 이 있는가.
+        기다리는 노드 실행을 알 수 없으면(포인터 없음) 승인을 증명할 수 없으므로 `False` - 멈춘 채로
+        둡니다(fail-closed). 이 판정에 재큐 메시지는 관여하지 않습니다."""
+        awaited = execution.waiting_node_execution_id
+        if awaited is None:
+            return False
+        return self._approvals.approval_for(awaited) is not None
+
+    def _run_approval_node(self, cursor: _Cursor, node: Node) -> WorkflowRunStatus | None:
+        """`HUMAN` 과 `APPROVAL` 은 v1 에서 **같다**(spec 2.6 개정 5 (5)). `None` 이면 승인이 저장돼
+        노드를 마쳤으니 다음으로 갑니다. 아니면 이 호출이 끝나는 상태(`waiting_approval`
+        파킹)입니다.
+
+        여기에 "누가 승인했는가" 를 묻는 코드는 없습니다 - 권한 모델은 만들지 않습니다(C-4)."""
+        run_id = cursor.workflow_run_id
+        node_execution_id = self._store.start_node(run_id, node.id, _FIRST_ITERATION)
+        if node_execution_id is not None:
+            self._emit_node_event(
+                cursor,
+                "node.started",
+                NodeStartedPayload(
+                    node_id=node.id, kind=node.kind.value, iteration=_FIRST_ITERATION
+                ).model_dump(),
+                node.id,
+            )
+            return self._park_for_approval(cursor, node, node_execution_id)
+
+        # 이미 기록돼 있다 - 새 실행이 아니라 재개입니다(R-6, R-8).
+        record = self._record(run_id, node.id)
+        if record is None:
+            raise RuntimeError(f"node {node.id} of {run_id} is recorded but not readable")
+        if record.status is NodeExecutionStatus.SUCCEEDED:
+            return None
+        if record.status is NodeExecutionStatus.FAILED:
+            reason = (
+                WorkflowFailureReason(record.failure_reason)
+                if record.failure_reason is not None
+                else WorkflowFailureReason.INVALID_GRAPH
+            )
+            return self._finish(cursor, WorkflowRunStatus.FAILED, reason, node_id=node.id)
+        # `running`(시작만 하고 죽음) 또는 `waiting_approval`: 저장된 승인이 있어야만 마친다. 상태
+        # 쪽 검사(`_approval_is_stored`)를 지난 뒤에도 노드 쪽에서 한 번 더 묻는 이유는, 상태를
+        # 저장하기 전에 죽은 재전달도 같은 규칙으로 판정하기 위해서다.
+        if self._approvals.approval_for(record.id) is None:
+            return self._park_for_approval(cursor, node, record.id)
+
+        self._store.finish_node(record.id, NodeExecutionStatus.SUCCEEDED, self._clock.now())
+        self._emit_node_event(
+            cursor,
+            "approval.granted",
+            ApprovalGrantedPayload(node_id=node.id, iteration=_FIRST_ITERATION).model_dump(),
+            node.id,
+        )
+        self._emit_node_event(
+            cursor,
+            "node.finished",
+            NodeFinishedPayload(
+                node_id=node.id,
+                iteration=_FIRST_ITERATION,
+                status=NodeExecutionStatus.SUCCEEDED.value,
+            ).model_dump(),
+            node.id,
+        )
+        return None
+
+    def _park_for_approval(
+        self, cursor: _Cursor, node: Node, node_execution_id: UUID
+    ) -> WorkflowRunStatus:
+        """`waiting_approval` 으로 내려갑니다: 노드를 대기로 표시하고, Workflow Run 상태와 기다리는
+        노드 실행의 id 를 저장하고, 발행·통지하고, `approval.requested` 를 냅니다. lease 는 호출자의
+        `finally` 가 놓습니다 - 대기 중에 쥐고 있으면 worker 슬롯을 점유합니다(R-7)."""
+        if not can_transition(WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL):
+            raise IllegalWorkflowTransition(
+                WorkflowRunStatus.RUNNING, WorkflowRunStatus.WAITING_APPROVAL
+            )
+        self._store.park_node_for_approval(node_execution_id)
+        now = self._clock.now()
+        cursor.seq += 1
+        cursor.node_id = node.id
+        self._store.set_status(
+            cursor.workflow_run_id,
+            WorkflowRunStatus.WAITING_APPROVAL,
+            seq=cursor.seq,
+            current_node_id=node.id,
+            waiting_node_execution_id=node_execution_id,
+        )
+        self._publish(
+            cursor,
+            "workflow.status",
+            WorkflowStatusPayload(
+                status=WorkflowRunStatus.WAITING_APPROVAL.value, current_node_id=node.id
+            ).model_dump(exclude_none=True),
+            now,
+        )
+        self._notifier.notify(
+            WorkflowStatusMessage(
+                workflow_run_id=cursor.workflow_run_id,
+                seq=cursor.seq,
+                status=WorkflowRunStatus.WAITING_APPROVAL,
+                at=now,
+                current_node_id=node.id,
+                waiting_node_execution_id=node_execution_id,
+            )
+        )
+        # 저장 먼저, 발행은 그 다음(모듈 docstring 의 `seq` 규칙). 이 `seq` 는 상태 통지가 없는
+        # 이벤트의 것이라 투영은 건너뛰고 이벤트 스트림만 앞선다 - 빈틈은 단조성을 해치지 않는다.
+        cursor.seq += 1
+        self._store.set_status(
+            cursor.workflow_run_id,
+            WorkflowRunStatus.WAITING_APPROVAL,
+            seq=cursor.seq,
+            current_node_id=node.id,
+        )
+        self._publish(
+            cursor,
+            "approval.requested",
+            ApprovalRequestedPayload(node_id=node.id, iteration=_FIRST_ITERATION).model_dump(),
+            now,
+        )
+        return WorkflowRunStatus.WAITING_APPROVAL
 
     # -- AGENT 노드와 파킹 -----------------------------------------------------
 

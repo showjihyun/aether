@@ -40,6 +40,7 @@ _EXPECTED_COLUMNS = {
     "status_seq",
     "current_node_id",
     "waiting_run_id",
+    "waiting_node_execution_id",
     "lease_owner",
     "lease_until",
     "started_at",
@@ -509,3 +510,51 @@ def _seed_agent_run_id(connect: _Factory) -> uuid.UUID:
         .create(agent.id, version.id, 1, "x", requested_by)
         .run_id
     )
+
+
+def test_waiting_node_execution_id_is_cleared_when_the_status_leaves_waiting_approval(
+    control_connection_factory: _Factory,
+) -> None:
+    """spec 0005 2.6 개정 5 (1), R-12, R-13 (P4-4): 지목 대상도 **상태에서 유도**된다 --
+    `waiting_approval`
+    일 때만 값이 있고, 주지 않은 `waiting_approval` 통지는 이전 값을 지우지 않으며, 다른 상태로 가면
+    지워진다. `waiting_run` 과 `waiting_approval` 은 서로의 포인터를 건드리지 않는다."""
+    run_id = _seed_workflow_run(control_connection_factory)
+    store = _store(control_connection_factory)
+    awaited = uuid.uuid4()
+    child = _seed_agent_run_id(control_connection_factory)
+
+    assert _apply(
+        store,
+        run_id,
+        1,
+        status=WorkflowRunStatus.WAITING_APPROVAL,
+        current_node_id="gate",
+        waiting_node_execution_id=awaited,
+    )
+    parked = store.get(run_id)
+    assert _apply(store, run_id, 2, status=WorkflowRunStatus.WAITING_APPROVAL)
+    still = store.get(run_id)
+    assert _apply(store, run_id, 3, status=WorkflowRunStatus.RUNNING)
+    resumed = store.get(run_id)
+    assert _apply(store, run_id, 4, status=WorkflowRunStatus.WAITING_RUN, waiting_run_id=child)
+    child_wait = store.get(run_id)
+    assert _apply(
+        store,
+        run_id,
+        5,
+        status=WorkflowRunStatus.SUCCEEDED,
+        waiting_node_execution_id=awaited,
+    )
+    done = store.get(run_id)
+
+    assert parked is not None and still is not None and resumed is not None
+    assert child_wait is not None and done is not None
+    assert parked.status == WorkflowRunStatus.WAITING_APPROVAL
+    assert parked.waiting_node_execution_id == awaited
+    assert parked.waiting_run_id is None
+    assert still.waiting_node_execution_id == awaited
+    assert resumed.waiting_node_execution_id is None
+    assert child_wait.waiting_run_id == child
+    assert child_wait.waiting_node_execution_id is None
+    assert done.waiting_node_execution_id is None, "종결 상태는 무엇도 기다리지 않습니다"

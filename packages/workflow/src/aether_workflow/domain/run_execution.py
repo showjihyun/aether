@@ -19,3 +19,5 @@ class WorkflowRunExecution:
     finished_at: datetime | None
     failure_reason: str | None
     waiting_run_id: UUID | None = None
+    waiting_node_execution_id: UUID | None = None
+    """`waiting_approval` 일 때만 값이 있다 - 승인이 지목해야 하는 노드 실행(R-12)."""
