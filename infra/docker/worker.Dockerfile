@@ -15,7 +15,7 @@ FROM node:26-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e961522
 
 RUN npm install --global --no-fund --no-audit @modelcontextprotocol/server-filesystem@2026.8.31
 
-FROM ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91fc62fe7c17567eee97230dd198e43edb8a9fbecca843714a4358fe1bc AS uv
+FROM ghcr.io/astral-sh/uv:0.13.1@sha256:4a1f3666816dafadd20ceb71eac9a7d56d7ef30279f7d64048519ab901ada336 AS uv
 
 FROM python:3.12-slim@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea AS runtime
 
