@@ -462,7 +462,7 @@ plan 0005 리뷰로 P4-2 → **P4-2a·P4-2b** 로 분할했고(범위의 합은 
 | P4-2a | Workflow 실행기 골격 · AGENT 노드 · 파킹과 재개 | P4-1, P1-5 | — | 완료 (PR #148, #149) |
 | P4-2b | 노드 출력(8 KiB)과 CONDITION 분기 | P4-2a | — | 완료 (PR #150) |
 | P4-4 | 🔒 HUMAN / APPROVAL (HITL) | P4-2a | — | 완료 (PR #151 — **H-1 사람 검토 뒤 병합**) |
-| P4-3 | PARALLEL / JOIN / LOOP / WAIT | P4-2a | — | 완료 (PR #154) |
+| P4-3 | PARALLEL / JOIN / LOOP / WAIT | P4-2a | — | 완료 (PR #155) |
 | P4-5 | LLM / MCP / TOOL 노드 | P4-2a, P2-3 | — | 대기 |
 
 행의 순서가 실행 순서입니다 — **P4-4 가 P4-3 앞**입니다. 근거는 plan 0005 1절이고, 순서는 plan 이 소유합니다.
