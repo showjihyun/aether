@@ -1,4 +1,4 @@
-"""spec 0005 2.2, R-1: `DefineWorkflow` — 열두 거부 사유가 각각 다른 사유로 400, 올바른 그래프는
+"""spec 0005 2.2, R-1: `DefineWorkflow` — 열네 거부 사유가 각각 다른 사유로 400, 올바른 그래프는
 201 이고 Version 1. DB 없음(fake 저장소)."""
 
 from __future__ import annotations
@@ -20,14 +20,14 @@ from apps.api.tests.workflow_support import (
 
 
 def test_rejection_cases_cover_every_reason() -> None:
-    """spec 0005 2.2: 사유 값은 열두 개이고 이 파일의 사례가 전부를 덮는다(자기 증명)."""
-    assert len(Reason) == 12
+    """spec 0005 2.2: 사유 값은 열네 개이고 이 파일의 사례가 전부를 덮는다(자기 증명)."""
+    assert len(Reason) == 14
     assert set(_REJECTIONS) == set(Reason)
 
 
 @pytest.mark.parametrize("reason", list(Reason), ids=lambda r: r.value)
 def test_post_rejects_each_invalid_graph_with_its_own_reason(reason: Reason) -> None:
-    """spec 0005 R-1: 열두 거부가 각각 다른 사유로 400 이다."""
+    """spec 0005 R-1: 열네 거부가 각각 다른 사유로 400 이다."""
     client, repo = _client()
 
     response = client.post("/workflows", json={"name": "bad", **_REJECTIONS[reason]})
@@ -224,3 +224,61 @@ def test_wait_seconds_round_trips_and_a_non_positive_one_is_rejected() -> None:
     assert [v["reason"] for v in rejected.json()["violations"]] == ["wait_node_without_duration"]
     assert zero.status_code == 400
     assert [v["reason"] for v in zero.json()["violations"]] == ["wait_node_without_duration"]
+
+
+def test_llm_and_tool_keys_round_trip_through_post_and_get() -> None:
+    """spec 0005 2.8 개정 9 (3): `LLM`·`TOOL`·`MCP` 의 설정 키 여섯이 POST 로 들어가 GET 으로 그대로
+    나온다(저장 -> 읽기에서 빠지는 키가 없다)."""
+    client, _ = _client()
+    tool = {
+        "tool_server": "builtin",
+        "tool_name": "calculator",
+        "tool_arguments": {"expression": "2+2"},
+        "tool_arguments_path": "input.args",
+    }
+    body = {
+        "name": "llm-tool",
+        "nodes": [
+            _n("s", "START"),
+            _n("m", "LLM", extra={"llm_prompt": "hi", "llm_prompt_path": "input.doc"}),
+            _n("t", "TOOL", extra=tool),
+            _n("x", "MCP", extra=tool),
+            _n("e", "END"),
+        ],
+        "edges": [_e("s", "m"), _e("m", "t"), _e("t", "x"), _e("x", "e")],
+    }
+
+    created = client.post("/workflows", json=body)
+    fetched = client.get(f"/workflows/{created.json()['id']}")
+
+    assert created.status_code == 201, created.text
+    by_id = {n["id"]: n for n in fetched.json()["nodes"]}
+    assert by_id["m"]["llm_prompt"] == "hi"
+    assert by_id["m"]["llm_prompt_path"] == "input.doc"
+    for node_id in ("t", "x"):
+        for key, value in tool.items():
+            assert by_id[node_id][key] == value
+
+
+def test_tool_node_without_an_agent_reuses_the_agent_reason() -> None:
+    """spec 0005 2.8 개정 9 (4): Agent 참조가 없는 `TOOL`·`MCP` 는 기존 사유 하나로 400."""
+    client, _ = _client()
+    target = {"tool_server": "builtin", "tool_name": "clock"}
+    body = {
+        "name": "bare-tool",
+        "nodes": [
+            _n("s", "START"),
+            _n("t", "TOOL", bare=True, extra=target),
+            _n("x", "MCP", bare=True, extra=target),
+            _n("e", "END"),
+        ],
+        "edges": [_e("s", "t"), _e("t", "x"), _e("x", "e")],
+    }
+
+    response = client.post("/workflows", json=body)
+
+    assert response.status_code == 400
+    assert [(v["reason"], v["node_id"]) for v in response.json()["violations"]] == [
+        ("agent_node_without_agent", "t"),
+        ("agent_node_without_agent", "x"),
+    ]

@@ -41,6 +41,10 @@ adapters`·`aether_mcp.application.usecases` 는 import 하지 않습니다(실�
 — Executor 는 `aether_mcp` 를 몰라도 됩니다. 그 밖의 예외(변환 대상이 아닌 것)는
 그대로 전파합니다.
 
+**`run_kind`(spec 0005 2.8 개정 10).** 이 게이트웨이가 부르는 `run_id` 가 어느 평면의 Run 인지 -
+`agent`(기본) 또는 `workflow`. 인스턴스의 성질이라 `ToolGateway` 포트의 `call()` 시그니처는 바뀌지
+않고(Executor 는 모릅니다), 감사에만 실립니다. 판정 경로는 이 값을 쓰지 않습니다.
+
 `close()`: 지금 구현(`StdioMcpClient`/`HttpMcpClient`)은 호출마다 서버 프로세스를
 새로 열고 닫으므로(spec 2.2, D-11) 정리할 지속 연결이 없습니다 — no-op 입니다.
 """
@@ -48,7 +52,7 @@ adapters`·`aether_mcp.application.usecases` 는 import 하지 않습니다(실�
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any
+from typing import Any, Literal
 from uuid import UUID
 
 from aether_mcp.application.ports.inbound.call_tool import CallTool
@@ -100,7 +104,9 @@ class McpToolGateway:
         call_tool: CallTool,
         discover_tools: DiscoverTools,
         server_table: Mapping[str, McpServerRef],
+        run_kind: Literal["agent", "workflow"] = "agent",
     ) -> None:
+        self._run_kind = run_kind
         self._call_tool = call_tool
         self._discover_tools = discover_tools
         self._server_table = server_table
@@ -136,7 +142,11 @@ class McpToolGateway:
         return tuple(merged.values())
 
     def call(
-        self, run_id: UUID, agent_version_id: UUID, name: str, arguments: dict[str, Any]
+        self,
+        run_id: UUID,
+        agent_version_id: UUID,
+        name: str,
+        arguments: dict[str, Any],
     ) -> ToolResult:
         server = self._tool_server.get(name)
         if server is None:
@@ -153,6 +163,7 @@ class McpToolGateway:
             server=server,
             tool_name=name,
             arguments=arguments,
+            run_kind=self._run_kind,
         )
         try:
             result = self._call_tool(call)
@@ -165,7 +176,11 @@ class McpToolGateway:
         return ToolResult(content=result.content, is_error=result.is_error)
 
     def _call_unbound_for_audit_only(
-        self, run_id: UUID, agent_version_id: UUID, name: str, arguments: dict[str, Any]
+        self,
+        run_id: UUID,
+        agent_version_id: UUID,
+        name: str,
+        arguments: dict[str, Any],
     ) -> None:
         """`_UNBOUND_SENTINEL` 로 `CallTool` 을 불러 감사 1건을 남깁니다. 결과는
         쓰지 않습니다 — 호출자는 이 뒤에 항상 `ToolNotFound` 를 올립니다."""
@@ -175,6 +190,7 @@ class McpToolGateway:
             server=_UNBOUND_SENTINEL,
             tool_name=name,
             arguments=arguments,
+            run_kind=self._run_kind,
         )
         try:
             self._call_tool(call)

@@ -17,7 +17,7 @@ authenticate)` 뒤에 있습니다. 오류 응답은 `{"detail": "<코드>"}` �
 """
 
 from collections.abc import Callable
-from typing import Annotated
+from typing import Annotated, Any
 from uuid import UUID
 
 from aether_workflow.domain.condition import ConditionOperator
@@ -47,7 +47,9 @@ class NodeModel(BaseModel):
     # (spec 0005 2.2 개정 3). 셋 다 선택 키이고 다른 종류의 노드에 있는 값은 무시됩니다.
     # `CONDITION` 은 `condition_path`·`condition_operator`·`condition_value`(`exists` 면 값 없음)를
     # 가지고 분기는 간선 `label` 의 `true`·`false` 입니다(개정 4). `WAIT` 는 `wait_seconds`(양수)가
-    # 필수입니다(개정 7 (5)).
+    # 필수입니다(개정 7 (5)). `LLM` 은 `llm_prompt`(필수)·`llm_prompt_path`, `TOOL`·`MCP` 는
+    # `tool_server`·`tool_name`(필수)·`tool_arguments`·`tool_arguments_path` 와
+    # `agent_id`(권한 주체)를 가집니다(개정 9).
     # (docstring 이 아닌 이유: OpenAPI `description` 이 늘어 SDK 의 변경이 두 키 밖으로 번집니다.)
 
     id: str
@@ -59,6 +61,12 @@ class NodeModel(BaseModel):
     condition_operator: ConditionOperator | None = None
     condition_value: str | int | float | bool | None = None
     wait_seconds: int | None = None
+    llm_prompt: str | None = None
+    llm_prompt_path: str | None = None
+    tool_server: str | None = None
+    tool_name: str | None = None
+    tool_arguments: dict[str, Any] | None = None
+    tool_arguments_path: str | None = None
 
 
 class EdgeModel(BaseModel):
@@ -125,6 +133,12 @@ def _nodes_in(models: list[NodeModel]) -> tuple[Node, ...]:
             condition_operator=m.condition_operator,
             condition_value=m.condition_value,
             wait_seconds=m.wait_seconds,
+            llm_prompt=m.llm_prompt,
+            llm_prompt_path=m.llm_prompt_path,
+            tool_server=m.tool_server,
+            tool_name=m.tool_name,
+            tool_arguments=m.tool_arguments,
+            tool_arguments_path=m.tool_arguments_path,
         )
         for m in models
     )
@@ -146,6 +160,12 @@ def _nodes_out(version: WorkflowVersion) -> list[NodeModel]:
             condition_operator=n.condition_operator,
             condition_value=n.condition_value,
             wait_seconds=n.wait_seconds,
+            llm_prompt=n.llm_prompt,
+            llm_prompt_path=n.llm_prompt_path,
+            tool_server=n.tool_server,
+            tool_name=n.tool_name,
+            tool_arguments=n.tool_arguments,
+            tool_arguments_path=n.tool_arguments_path,
         )
         for n in version.nodes
     ]

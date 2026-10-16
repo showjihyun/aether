@@ -274,11 +274,12 @@ def test_six_rejections_have_distinct_reasons() -> None:
     "각각" 을 요구합니다), spec 목록에 없던 `DUPLICATE_NODE_ID` 를 더했습니다
     (spec 0005 개정 1). 아홉 번째 `AGENT_NODE_WITHOUT_AGENT` 는 개정 3, 열 번째와 열한 번째
     (`CONDITION_NODE_WITHOUT_PREDICATE`·`CONDITION_NODE_WITHOUT_BOTH_BRANCHES`)는 개정 4 입니다.
-    열두 번째 `WAIT_NODE_WITHOUT_DURATION` 은 개정 7 (5) 입니다.
+    열두 번째 `WAIT_NODE_WITHOUT_DURATION` 은 개정 7 (5), 열세 번째와 열네 번째
+    (`LLM_NODE_WITHOUT_PROMPT`·`TOOL_NODE_WITHOUT_TARGET`)는 개정 9 (4) 입니다.
     이 숫자를 늘릴 때는 spec 2.2 의 표도 함께 고칩니다 — 그래서 여기 상수로 못 박습니다.
     """
-    assert len(list(Reason)) == 12
-    assert len({r.value for r in Reason}) == 12
+    assert len(list(Reason)) == 14
+    assert len({r.value for r in Reason}) == 14
 
 
 def test_agent_node_without_agent_rejected() -> None:
@@ -331,7 +332,7 @@ def test_agent_id_on_a_non_agent_node_is_ignored_not_rejected() -> None:
     v = _version(
         [
             _n("s", NodeKind.START),
-            Node(id="c", kind=NodeKind.LLM, agent_id=_AGENT_ID, max_iterations=5),
+            Node(id="c", kind=NodeKind.LLM, llm_prompt="p", agent_id=_AGENT_ID, max_iterations=5),
             _n("e", NodeKind.END),
         ],
         [("s", "c"), ("c", "e")],
@@ -579,7 +580,7 @@ def test_condition_settings_on_a_non_condition_node_are_ignored_not_rejected() -
     v = _version(
         [
             _n("s", NodeKind.START),
-            Node(id="a", kind=NodeKind.LLM, condition_path="input.q"),
+            Node(id="a", kind=NodeKind.LLM, llm_prompt="p", condition_path="input.q"),
             _n("e", NodeKind.END),
         ],
         [("s", "a"), ("a", "e")],

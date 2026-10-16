@@ -194,6 +194,18 @@ Agent Run 과 **별도 enum** 입니다. `data.run_execution_status`(마이그�
 
 Agent 를 거치지 않고 한 번만 부르는 노드입니다. 통로는 바뀌지 않습니다 — 모델은 `ModelGateway`(AR-5), 도구는 MCP Gateway(AR-6)를 지나고 감사도 그대로 남습니다. `aether_workflow` 는 그 라이브러리를 직접 import 하지 않고 포트로만 선언합니다(R-14).
 
+**개정 9 (2026-10-16, P4-5 착수 전 — 권한 주체는 사람이 정했습니다).** 다섯을 고정합니다.
+
+1. **`TOOL`·`MCP` 노드는 `agent_id`(선택 `agent_version`)로 권한 주체를 지목합니다.** Policy 는 `agent_version_id` 로만 판정하고 `control.tool_permissions.agent_version_id` 에는 `control.agent_versions` FK 가 걸려 있어 **Workflow Version 을 주체로 쓸 수 없습니다**(2026-10-16 실측). 선택지는 "노드가 Agent 를 지목" 과 "Policy 를 Workflow 까지 확장" 둘이었고 **사람이 전자를 골랐습니다**(2026-10-16, AGENTS.md Trust 에 따른 에스컬레이션). 그래서 Policy 의 코드·스키마는 **바뀌지 않고**, 기본 deny 가 그대로이며, 감사(`data.tool_call_audit`)에 실제 `agent_version_id` 가 남습니다. 대가는 적어 둡니다 — Workflow 가 Agent 의 권한을 **빌리는** 모양이고, Workflow 자신을 주체로 보는 모델은 Phase 8 의 자리입니다.
+2. **`MCP` 와 `TOOL` 을 v1 에서 같게 다룹니다.** 모든 도구 호출은 MCP Gateway 를 지나므로(AR-6, Phase 2) 두 종류의 구현이 같습니다. `HUMAN`·`APPROVAL` 과 같은 근거입니다 — 쓰이지 않는 분기를 만들지 않습니다.
+3. **노드 설정.** `LLM` 은 `llm_prompt`(필수 리터럴)와 `llm_prompt_path`(선택). `TOOL`·`MCP` 는 `tool_server`·`tool_name`(필수), `tool_arguments`(선택 리터럴 객체)와 `tool_arguments_path`(선택). 경로는 `CONDITION` 과 **같은 맥락**(`input`·`nodes.<id>`)을 가리키고, 프롬프트는 뒤에 덧붙이며 인자는 병합합니다(경로 값이 이깁니다). **템플릿 언어를 만들지 않습니다** — 임의 표현식을 평가하지 않는다는 D-9 의 정신을 그대로 씁니다.
+4. **저장 때 거부 둘을 더합니다** — `llm_node_without_prompt`, `tool_node_without_target`(서버 또는 도구 이름 없음). `Agent` 참조가 없는 `TOOL`·`MCP` 는 **기존 사유 `agent_node_without_agent` 를 재사용**합니다(뜻을 "Agent 참조가 필요한 노드에 참조가 없음" 으로 넓힙니다 — 값을 늘리지 않습니다). 사유는 **열네 개**입니다.
+5. **출력.** `LLM` 은 `{"text", "finish_reason"}`, `TOOL`·`MCP` 는 `{"content", "is_error"}` 이고 둘 다 P4-2b 의 상한과 잘림 표시를 그대로 받습니다. `CONDITION` 이 그 값으로 분기할 수 있습니다.
+
+**개정 10 (2026-10-17, P4-5 구현 중 발견 — 사람 결정).** **Workflow 의 도구 호출이 감사에 남지 않았습니다.** `data.tool_call_audit.run_id` 는 `NOT NULL` 이고 `control.runs(id)` FK 가 걸려 있어(마이그레이션 0003) Workflow Run id 를 넣을 수 없는데, `CallToolUseCase` 는 감사 쓰기 실패를 **삼킵니다**(spec 0003 D-10). 그래서 호출은 성공하고 **감사만 조용히 사라집니다** — R-14 가 요구하는 것이 바로 그 기록이고, 조용한 구멍은 침묵하는 대기 장치와 같은 종류의 결함입니다(`improvement-log/2026-10-11-001`).
+
+**마이그레이션 0010 으로 그 FK 를 풀고 `run_kind`(`agent`|`workflow`)를 더합니다**(2026-10-17 사람 결정). 0007 이 같은 이유로 cross-plane FK 둘을 푼 선례가 있습니다 — 이 열들은 "어느 실행의 것인가" 를 가리키는 포인터이고, 두 평면의 Run 을 한 열이 가리키면 FK 로는 표현할 수 없습니다. `run_kind` 가 있어야 감사를 읽는 쪽(Firewall·사후 추적)이 출처를 구별합니다. 대가를 적어 둡니다 — 감사 행의 참조 무결성을 **DB 가 아니라 애플리케이션이** 책임집니다. 기본 deny 와 판정 경로는 **바뀌지 않습니다**(Policy 는 그대로입니다).
+
 ### 2.9 데이터 모델 (마이그레이션 0005, D-5)
 
 | 표 | 평면 | 누가 쓰는가 |
@@ -313,6 +325,8 @@ forbidden_modules =
 
 | 개정 | 내용 |
 | --- | --- |
+| 10 | 2026-10-17, **P4-5 구현 중 발견**(2.9, 사람 결정). Workflow 의 도구 호출이 **감사에 남지 않았습니다** — `data.tool_call_audit.run_id` 의 `control.runs` FK 때문이고, 감사 쓰기 실패는 삼켜지므로 **조용히** 사라집니다. 마이그레이션 0010 으로 그 FK 를 풀고 `run_kind`(`agent`\|`workflow`)를 더합니다. Policy 와 기본 deny 는 바뀌지 않습니다. R-14 는 이 변경으로 비로소 판정됩니다 |
+| 9 | 2026-10-16, **P4-5 착수 전**(2.8). (1) `TOOL`·`MCP` 노드가 **`agent_id` 로 권한 주체를 지목**합니다 — Policy 가 `agent_version_id` 로만 판정하고 그 열에 FK 가 있어 Workflow Version 을 주체로 쓸 수 없습니다. **사람이 고른 선택지**이고(대안은 Policy 확장) Policy 코드·스키마는 바뀌지 않습니다. (2) `MCP`·`TOOL` 을 같게 다룹니다. (3) 노드 설정은 리터럴 + **선언된 경로** 하나씩이고 템플릿 언어를 만들지 않습니다. (4) 거부 둘 추가(`llm_node_without_prompt`·`tool_node_without_target`), Agent 참조 없음은 기존 사유 재사용 — **열네 개**. (5) 두 출력 모양은 P4-2b 의 상한을 받습니다. R-14 의 판정은 그대로입니다 |
 | 8 | 2026-10-16, **P4-3 첫 물결의 실측**(2.7·2.5). (1) `LOOP` 의 판정식이 **본문 출력**을 가리킬 수 있게 했습니다 — `CONDITION` 의 규칙 그대로면 첫 판정에서 경로가 없어 실패하고, 조건 루프가 상한 초과로만 끝납니다. 그래프에 **있는** 노드의 이번 회차 기록이 없을 때만 "계속" 으로 읽고, 오타는 그대로 시끄럽게 실패합니다. (2) **파킹이 lease 를 발행보다 먼저 놓습니다** — "상태는 대기인데 lease 는 잡힌" 창이 실제로 관측됐습니다(통합 3회 중 2회 흔들림). 상태가 대기라고 말하는 순간부터 R-7 은 **항상** 참이어야 합니다 |
 | 7 | 2026-10-16, **P4-3 착수 전**(2.7). (1) `PARALLEL` 의 병렬은 v1 에서 **동시성이 아닙니다** — 한 worker 가 분기를 차례로 전진시키고 `JOIN` 이 모두를 기다립니다(D-15·C-5 를 그 뜻으로 고정). (2) 진행을 **노드 실행 기록**에서 읽습니다 — 분기가 둘 이상이면 `current_node_id` 하나로 말할 수 없습니다. (3) `JOIN` 의 출력은 분기별 결과이고 P4-2b 의 상한을 받습니다. (4) `LOOP` 은 `CONDITION` 의 판정식과 **같은 두 거부**를 재사용합니다(새 사유 없음). (5) **`WAIT` 는 파킹**이고 새 상태 `waiting_timer` + `wake_at`(0009)을 쓰며 **스위퍼가 주 경로**입니다. `wait_seconds` 가 없으면 저장 때 거부 — 사유 **열두 개**. R-9·R-10·R-11 의 판정은 그대로입니다 |
 | 6 | 2026-10-15, **P4-4 구현 중 발견**(2.2). D-14 의 노드 종류 목록에 **`HUMAN`·`APPROVAL` 이 빠져 있었습니다** — 2.6 과 R-4 는 그 노드를 쓰므로 spec 이 스스로 어긋나 있었습니다. 열하나 → **열셋**. 새 거부는 없습니다(두 종류는 종류별 설정이 없습니다 — 승인자를 정의에 넣지 않는 것이 D-6 입니다) |

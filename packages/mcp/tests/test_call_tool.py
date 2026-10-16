@@ -243,3 +243,48 @@ def test_timeout_error_from_client_is_wrapped_and_audited_with_error_kind() -> N
 
     assert len(audit.records) == 1
     assert audit.records[0].error_kind == "TimeoutError"
+
+
+def test_run_kind_defaults_to_agent_and_reaches_every_audit_record() -> None:
+    """spec 0005 2.8 개정 10: `ToolCall.run_kind` 의 기본값은 `agent` - 기존 호출부가
+    그대로 동작하고 allow/deny/error 세 경우 모두 감사 레코드에 실린다."""
+    server = _server()
+    client = FakeMcpClient(tools_by_server={server.name: (Tool(name="echo", description=""),)})
+    audit = FakeAuditSink()
+
+    _gateway(FakeJudge(decision="allow"), client, audit)(_tool_call(server))
+    with pytest.raises(ToolCallDenied):
+        _gateway(FakeJudge(decision="deny"), client, audit)(_tool_call(server))
+
+    assert [r.run_kind for r in audit.records] == ["agent", "agent"]
+
+
+def test_a_workflow_call_is_audited_with_run_kind_workflow_for_allow_deny_and_error() -> None:
+    """spec 0005 2.8 개정 10, R-14: Workflow 의 호출은 `run_kind='workflow'` 로 기록된다.
+    판정 경로는 그대로이므로 deny 도 같은 레코드 하나가 남는다."""
+    server = _server()
+    client = FakeMcpClient(tools_by_server={server.name: (Tool(name="echo", description=""),)})
+    audit = FakeAuditSink()
+    run_id = uuid4()
+
+    def call(name: str) -> ToolCall:
+        return ToolCall(
+            run_id=run_id,
+            agent_version_id=uuid4(),
+            server=server,
+            tool_name=name,
+            arguments={},
+            run_kind="workflow",
+        )
+
+    _gateway(FakeJudge(decision="allow"), client, audit)(call("echo"))
+    with pytest.raises(ToolNotFound):
+        _gateway(FakeJudge(decision="allow"), client, audit)(call("missing"))
+    with pytest.raises(ToolCallDenied):
+        _gateway(FakeJudge(decision="deny"), client, audit)(call("echo"))
+
+    assert [(r.run_kind, r.run_id, r.decision, r.outcome) for r in audit.records] == [
+        ("workflow", run_id, "allow", "ok"),
+        ("workflow", run_id, "allow", "error"),
+        ("workflow", run_id, "deny", "denied"),
+    ]

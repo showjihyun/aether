@@ -176,6 +176,7 @@ class CallToolUseCase:
             error_kind=error_kind,
             started_at=started_at,
             duration_ms=duration_ms,
+            run_kind=call.run_kind,
         )
 
     def _safe_audit(self, record: AuditRecord) -> None:

@@ -22,7 +22,7 @@ import time
 from collections.abc import Callable, Mapping
 from threading import Event, Thread
 from types import FrameType
-from typing import Any, NoReturn
+from typing import Any, Literal, NoReturn
 
 import psycopg
 from aether_context.adapters.outbound.connector.filesystem import FilesystemConnector
@@ -102,6 +102,7 @@ from aether_worker.adapters.outbound.db.parked_workflow_finder import (
 )
 from aether_worker.adapters.outbound.embedder.model_gateway import ModelGatewayEmbedder
 from aether_worker.adapters.outbound.memory.reader import MemoryReaderAdapter
+from aether_worker.adapters.outbound.model_invoker.model_gateway import ModelGatewayInvoker
 from aether_worker.adapters.outbound.otel_trace_context import OtelTraceContext
 from aether_worker.adapters.outbound.redis.heartbeat import Heartbeat
 from aether_worker.adapters.outbound.redis.ingestion_status_notifier import (
@@ -109,6 +110,7 @@ from aether_worker.adapters.outbound.redis.ingestion_status_notifier import (
 )
 from aether_worker.adapters.outbound.redis.workflow_requeuer import RedisWorkflowRequeuer
 from aether_worker.adapters.outbound.telemetry import init_telemetry
+from aether_worker.adapters.outbound.tool_invoker.tool_gateway import ToolGatewayInvoker
 from aether_worker.application.ports.inbound.handle_ingestion_requested import (
     HandleIngestionRequested,
 )
@@ -299,7 +301,10 @@ class _TransportRoutingMcpClient:
 
 
 def _build_tool_gateway(
-    settings: Settings, connect: Callable[[], psycopg.Connection]
+    settings: Settings,
+    connect: Callable[[], psycopg.Connection],
+    *,
+    run_kind: Literal["agent", "workflow"] = "agent",
 ) -> ToolGateway:
     """spec 0003 2.1, 2.5, 2.6, 2.9, D-5, D-9 (P2-6): Gateway 유스케이스(판정 →
     호출 → 감사)를 조립하고 runtime 의 `ToolGateway` 포트로 감쌉니다.
@@ -319,6 +324,9 @@ def _build_tool_gateway(
     import 하지 않습니다. 실제로 어느 쪽을 쓸지는 `_TransportRoutingMcpClient`
     (spec 2.2, P2-5 2단계)가 `McpServerRef.transport` 마다 고릅니다 — HTTP 전송은
     이번 단위로 실제로 연결됩니다(spec 2.9 개정 5의 한계가 풀림).
+
+    `run_kind`(spec 0005 2.8 개정 10): 이 게이트웨이의 `run_id` 가 Agent Run 인지 Workflow Run 인지
+    - 감사 행에만 실립니다. Agent Run 경로는 기본값 `agent` 그대로입니다.
     """
     server_table: dict[str, McpServerRef] = {
         "builtin": McpServerRef(
@@ -339,7 +347,10 @@ def _build_tool_gateway(
     call_tool = CallToolUseCase(judge=judge, client=client, audit=audit)
     discover_tools = DiscoverToolsUseCase(client=client)
     return McpToolGateway(
-        call_tool=call_tool, discover_tools=discover_tools, server_table=server_table
+        call_tool=call_tool,
+        discover_tools=discover_tools,
+        server_table=server_table,
+        run_kind=run_kind,
     )
 
 
@@ -454,7 +465,12 @@ def _build_production_workflow_handler(
 
     spec 0005 2.6 개정 5 (P4-4): 승인은 `PostgresApprovalReader`(`control.workflow_approvals`
     SELECT 만, 마이그레이션 0008)로 **저장된 사실** 을 읽어 판정합니다 - 재큐 메시지는 근거가
-    아닙니다."""
+    아닙니다.
+
+    spec 0005 2.8 개정 9, R-14 (P4-5): `LLM` 노드는 **기존** `_build_model_gateway`(AR-5)를,
+    `TOOL`·`MCP` 노드는 **기존** `_build_tool_gateway`(AR-6: 판정 -> 호출 -> 감사)를 어댑터 뒤에
+    꽂습니다 - 새 통로를 만들지 않습니다. 도구 게이트웨이는 호출마다 새로 만듭니다
+    (`ToolGatewayInvoker`)."""
 
     def connect() -> psycopg.Connection:
         return psycopg.connect(settings.psycopg_dsn)
@@ -473,6 +489,10 @@ def _build_production_workflow_handler(
         owner=settings.worker_consumer,
         lease_ttl_seconds=settings.worker_lease_seconds,
         output_max_bytes=settings.workflow_node_output_max_bytes,
+        models=ModelGatewayInvoker(_build_model_gateway(settings)),
+        tools=ToolGatewayInvoker(
+            lambda: _build_tool_gateway(settings, connect, run_kind="workflow")
+        ),
     )
     return HandleWorkflowRequestedUseCase(advance, OtelTraceContext())
 

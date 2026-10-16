@@ -15,6 +15,8 @@ from uuid import UUID, uuid4
 from aether_runtime.domain.run import RunStatus
 from aether_workflow.application.ports.outbound.agent_run_launcher import AgentRunLaunch
 from aether_workflow.application.ports.outbound.agent_run_reader import AgentVersionRef
+from aether_workflow.application.ports.outbound.model_invoker import ModelAnswer
+from aether_workflow.application.ports.outbound.tool_invoker import ToolOutcome
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
     WorkflowRunDeclaration,
 )
@@ -416,3 +418,52 @@ class FakeAgentRunLauncher:
         if self._fail_with is not None:
             raise self._fail_with
         self.launches.append(request)
+
+
+class FakeWorkflowModelInvoker:
+    """`ModelInvoker` 계약의 인메모리 구현 - 부른 프롬프트를 모으고 정해 둔 답을 돌려줍니다.
+    `fail_with` 를 주면 호출이 그 예외를 냅니다."""
+
+    def __init__(
+        self,
+        answer: ModelAnswer | None = None,
+        *,
+        fail_with: Exception | None = None,
+    ) -> None:
+        self.answer = answer or ModelAnswer(text="echo", finish_reason="stop")
+        self.calls: list[tuple[str, str | None]] = []
+        self._fail_with = fail_with
+
+    def invoke(self, prompt: str, model_id: str | None) -> ModelAnswer:
+        self.calls.append((prompt, model_id))
+        if self._fail_with is not None:
+            raise self._fail_with
+        return self.answer
+
+
+class FakeWorkflowToolInvoker:
+    """`ToolInvoker` 계약의 인메모리 구현 - 부른 것을 모으고 정해 둔 결과를 돌려줍니다.
+    `fail_with` 를 주면 호출이 그 예외를 냅니다(거부는 `ToolInvocationDenied`)."""
+
+    def __init__(
+        self,
+        outcome: ToolOutcome | None = None,
+        *,
+        fail_with: Exception | None = None,
+    ) -> None:
+        self.outcome = outcome or ToolOutcome(content="4", is_error=False)
+        self.calls: list[tuple[UUID, UUID, str, str, dict[str, Any]]] = []
+        self._fail_with = fail_with
+
+    def call(
+        self,
+        workflow_run_id: UUID,
+        agent_version_id: UUID,
+        server: str,
+        tool_name: str,
+        arguments: dict[str, Any],
+    ) -> ToolOutcome:
+        self.calls.append((workflow_run_id, agent_version_id, server, tool_name, arguments))
+        if self._fail_with is not None:
+            raise self._fail_with
+        return self.outcome

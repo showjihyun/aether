@@ -324,6 +324,16 @@ P4-2a 의 파킹이 요구한 셋입니다.
 
 **왜 상태가 하나 더 필요한가.** `WAIT` 가 실제 시간을 블록하면 그것이 D-4 가 금지한 **슬롯 점유**입니다. 파킹하려면 "무엇을 기다리는가" 가 상태로 구별돼야 하고(D-2 의 규칙), 자식 Run·승인과 달리 **깨우는 외부 사건이 없으므로** 스위퍼의 `wake_at <= now()` 가지가 주 경로입니다.
 
+### 마이그레이션 0010 — 감사의 `run_kind`
+
+| 변경 | 내용 |
+| --- | --- |
+| `data.tool_call_audit.run_id` 의 FK | `tool_call_audit_run_id_fkey`(`control.runs`)를 **제거**. 열은 `NOT NULL` 그대로 |
+| `data.tool_call_audit.run_kind` | `text NOT NULL DEFAULT 'agent'`, `CHECK (run_kind IN ('agent','workflow'))` |
+| GRANT·Policy | **변경 없음** |
+
+**왜.** Workflow 의 `TOOL`·`MCP` 노드가 부른 도구 호출은 `run_id` 가 **Workflow Run** 입니다. FK 가 `control.runs` 를 가리키는 한 그 행은 들어갈 수 없고, `CallToolUseCase` 는 감사 쓰기 실패를 **삼키므로**(spec 0003 D-10) 호출은 성공하고 **감사만 조용히 사라집니다**. 두 평면의 Run 을 한 열이 가리키는 것은 FK 로 표현할 수 없으므로 0007 과 같은 근거로 FK 를 풀고, 대신 `run_kind` 가 출처를 말합니다. **대가**: 감사 행의 참조 무결성을 DB 가 아니라 애플리케이션이 책임집니다. `downgrade()` 는 FK 를 되돌리려고 `run_kind='workflow'` 행을 **삭제합니다** — 되돌리기는 감사 기록을 잃습니다.
+
 ### PostgreSQL 이미지
 
 Phase 3 부터 `pgvector/pgvector:pg16`(다이제스트 핀)입니다. 이전은 `postgres:16-alpine` 이었고,

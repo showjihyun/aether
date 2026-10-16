@@ -32,7 +32,7 @@ EXECUTOR = (
 )
 
 # 출력(또는 그 재료)을 만들어 내는 호출
-_PRODUCERS = frozenset({"agent_output", "last_assistant_text"})
+_PRODUCERS = frozenset({"agent_output", "llm_output", "tool_output", "last_assistant_text"})
 # 출력을 읽는 속성
 _OUTPUT_ATTRIBUTES = frozenset({"output", "output_truncated"})
 # 실행기 밖으로 나가는 문 - 이벤트·통지·페이로드·로깅·표준 출력

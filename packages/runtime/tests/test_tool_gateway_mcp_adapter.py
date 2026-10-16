@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
@@ -331,3 +332,31 @@ def test_close_is_a_no_op_that_does_not_raise() -> None:
 
     gateway.bind((_BUILTIN_BINDING,))
     gateway.close()
+
+
+def test_run_kind_defaults_to_agent_and_a_workflow_gateway_carries_workflow() -> None:
+    """spec 0005 2.8 개정 10: 기본값 `agent` 로 기존 조립이 그대로이고, `run_kind="workflow"`
+    게이트웨이는 `CallTool` 까지 그 값을 싣는다. 표지(`(unbound)`) 경로도 같다."""
+    tools: dict[str, tuple[Tool, ...]] = {"builtin": (Tool(name="calculator", description=""),)}
+
+    def build(call_tool: _FakeCallTool, **kwargs: Any) -> McpToolGateway:
+        gateway = McpToolGateway(
+            call_tool=call_tool,
+            discover_tools=_FakeDiscoverTools(by_server=tools),
+            server_table={"builtin": _SERVER},
+            **kwargs,
+        )
+        gateway.bind((_BUILTIN_BINDING,))
+        gateway.discover()
+        return gateway
+
+    default_calls = _FakeCallTool(outcome=ToolResult(content="4"))
+    build(default_calls).call(uuid4(), uuid4(), "calculator", {})
+    workflow_calls = _FakeCallTool(outcome=ToolResult(content="4"))
+    workflow = build(workflow_calls, run_kind="workflow")
+    workflow.call(uuid4(), uuid4(), "calculator", {})
+    with pytest.raises(ToolNotFound):
+        workflow.call(uuid4(), uuid4(), "nope", {})
+
+    assert [c.run_kind for c in default_calls.calls] == ["agent"]
+    assert [c.run_kind for c in workflow_calls.calls] == ["workflow", "workflow"]

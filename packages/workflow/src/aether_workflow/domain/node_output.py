@@ -27,24 +27,44 @@ def serialized_size(value: dict[str, Any]) -> int:
     return len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode("utf-8"))
 
 
-def agent_output(text: str, status: str, max_bytes: int) -> NodeOutput:
-    """`AGENT` 노드의 출력: `{"text": <마지막 assistant 본문, 상한까지>, "status": <종결 상태>}`.
-
-    본문만 자릅니다 - `status` 는 판정에 쓰이므로 줄이지 않습니다. 상한이 틀(`text` 가 빈 채의
-    직렬화)보다 작으면 본문은 빈 문자열이고 그래도 `truncated` 입니다.
-    """
-    whole = {"text": text, "status": status}
+def _capped_text_output(
+    text_key: str, text: str, fixed: dict[str, Any], max_bytes: int
+) -> NodeOutput:
+    """`{text_key: <본문>, **fixed}` 를 상한 안에 넣습니다 - 본문만 자르고 `fixed`(판정에 쓰이는 값)
+    는 줄이지 않습니다. 상한이 틀(본문이 빈 채의 직렬화)보다 작으면 본문은 빈 문자열이고 그래도
+    `truncated` 입니다."""
+    whole = {text_key: text, **fixed}
     if serialized_size(whole) <= max_bytes:
         return NodeOutput(whole)
     # 접두사 길이에 대해 크기가 단조 증가하므로 이진 탐색으로 가장 긴 접두사를 찾는다.
     low, high = 0, len(text)
     while low < high:
         middle = (low + high + 1) // 2
-        if serialized_size({"text": text[:middle], "status": status}) <= max_bytes:
+        if serialized_size({text_key: text[:middle], **fixed}) <= max_bytes:
             low = middle
         else:
             high = middle - 1
-    return NodeOutput({"text": text[:low], "status": status}, truncated=True)
+    return NodeOutput({text_key: text[:low], **fixed}, truncated=True)
+
+
+def agent_output(text: str, status: str, max_bytes: int) -> NodeOutput:
+    """`AGENT` 노드의 출력: `{"text": <마지막 assistant 본문, 상한까지>, "status": <종결 상태>}`.
+
+    본문만 자릅니다 - `status` 는 판정에 쓰이므로 줄이지 않습니다.
+    """
+    return _capped_text_output("text", text, {"status": status}, max_bytes)
+
+
+def llm_output(text: str, finish_reason: str, max_bytes: int) -> NodeOutput:
+    """`LLM` 노드의 출력(spec 0005 2.8 개정 9 (5)): `{"text", "finish_reason"}` - `AGENT` 와 같은
+    상한·같은 잘림 표시. 본문만 자릅니다."""
+    return _capped_text_output("text", text, {"finish_reason": finish_reason}, max_bytes)
+
+
+def tool_output(content: str, is_error: bool, max_bytes: int) -> NodeOutput:
+    """`TOOL`·`MCP` 노드의 출력(개정 9 (5)): `{"content", "is_error"}` - 같은 상한·같은 잘림 표시.
+    본문(`content`)만 자르고 `is_error` 는 줄이지 않습니다."""
+    return _capped_text_output("content", content, {"is_error": is_error}, max_bytes)
 
 
 def join_output(branches: Mapping[str, Any], max_bytes: int) -> NodeOutput:

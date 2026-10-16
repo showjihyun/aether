@@ -18,7 +18,9 @@ import pytest
 from aether_worker.adapters.outbound.db.parked_workflow_finder import (
     PostgresParkedWorkflowFinder,
 )
+from aether_worker.adapters.outbound.model_invoker.model_gateway import ModelGatewayInvoker
 from aether_worker.adapters.outbound.redis.workflow_requeuer import RedisWorkflowRequeuer
+from aether_worker.adapters.outbound.tool_invoker.tool_gateway import ToolGatewayInvoker
 from aether_worker.application.ports.inbound.handle_ingestion_requested import (
     HandleIngestionOutcome,
     IngestionRequestedMessage,
@@ -81,6 +83,9 @@ def test_production_workflow_handler_wires_every_port(
     assert isinstance(advance._notifier, RedisWorkflowStatusNotifier)
     assert isinstance(advance._agent_runs, PostgresAgentRunReader)
     assert isinstance(advance._launcher, RedisAgentRunLauncher)
+    # spec 0005 2.8 (P4-5): 꽂히지 않으면 LLM·TOOL·MCP 노드가 조용히 unsupported 로 실패한다.
+    assert isinstance(advance._models, ModelGatewayInvoker)
+    assert isinstance(advance._tools, ToolGatewayInvoker)
     assert advance._owner == settings.worker_consumer
     assert advance._lease_ttl_seconds == settings.worker_lease_seconds
 

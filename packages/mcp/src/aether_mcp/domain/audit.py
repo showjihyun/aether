@@ -16,6 +16,7 @@ from uuid import UUID
 
 Decision = Literal["allow", "deny"]
 Outcome = Literal["ok", "error", "denied"]
+RunKind = Literal["agent", "workflow"]
 
 
 @dataclass(frozen=True)
@@ -32,3 +33,4 @@ class AuditRecord:
     error_kind: str | None
     started_at: datetime
     duration_ms: int
+    run_kind: RunKind = "agent"

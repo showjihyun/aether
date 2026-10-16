@@ -25,6 +25,12 @@ def serialize_version(version: WorkflowVersion) -> bytes:
             ),
             "condition_value": n.condition_value,
             "wait_seconds": n.wait_seconds,
+            "llm_prompt": n.llm_prompt,
+            "llm_prompt_path": n.llm_prompt_path,
+            "tool_server": n.tool_server,
+            "tool_name": n.tool_name,
+            "tool_arguments": n.tool_arguments,
+            "tool_arguments_path": n.tool_arguments_path,
         }
         for n in sorted(version.nodes, key=lambda n: n.id)
     ]

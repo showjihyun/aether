@@ -51,6 +51,19 @@ assistant 본문과 종결 상태를 `{"text", "status"}` 로 상한(`output_max
 **아무 것도 바꾸지 않고**(이벤트·통지·`seq` 증가 없음) 파킹을 유지합니다. 시계는 주입된 `Clock` 이고
 이 모듈은 어떤 대기 호출도 하지 않습니다(R-11).
 
+**`LLM`·`TOOL`·`MCP`(P4-5, 개정 9, R-14).** 세 종류는 **파킹하지 않고** 한 번 부르고 끝납니다
+(자식 Run 이 없습니다). 모델은 `ModelInvoker`, 도구는 `ToolInvoker` 포트만 지납니다(AR-5·AR-6 -
+이 모듈은 게이트웨이도 SDK 도 모릅니다, 조립은 worker 의 `main`). 프롬프트·인자는
+`_condition_context` 의 같은 맥락에서 `domain.node_input` 이 조립합니다(경로가 없으면
+`condition_path_missing`, 인자 경로가 객체가 아니면 `condition_type_mismatch` - 호출 **전에**
+실패). `TOOL`·`MCP` 는 `agent_id` 의 Version 으로 권한을 행사합니다(`version_for`, 없으면
+`agent_version_not_found`). 거부는 `tool_call_denied`, 호출 실패·`is_error` 는
+`tool_call_failed`, 모델 예외는 `model_call_failed` - 모두 노드와 Workflow 를 실패시킵니다.
+출력은 `{"text","finish_reason"}`·`{"content","is_error"}` 이고 `AGENT` 와 같은 상한을 받습니다.
+**재전달**: 시작만 하고 죽은 노드(`running`)는 다시 부릅니다(at-least-once - 모델 호출은 부수 효과가
+없지만 도구는 있을 수 있습니다). 이미 마친 노드는 다시 부르지 않습니다. 포트가 꽂히지 않은 종류는
+`unsupported_node_kind` 입니다.
+
 **`AGENT` 노드와 파킹(P4-2a B2).** 새 실행이면 Agent Version 을 해석하고(없으면 노드 실패
 `agent_version_not_found`, 요청자가 없으면 `workflow_run_without_requester`), 자식 Run 의 id 를
 **새로 정해 노드 실행 행에 영속(`park_node`)한 뒤에** `AgentRunLauncher.launch` 로 발사하고,
@@ -106,6 +119,11 @@ from aether_workflow.application.ports.outbound.agent_run_reader import (
 )
 from aether_workflow.application.ports.outbound.approval_reader import ApprovalReader
 from aether_workflow.application.ports.outbound.clock import Clock
+from aether_workflow.application.ports.outbound.model_invoker import ModelInvoker
+from aether_workflow.application.ports.outbound.tool_invoker import (
+    ToolInvocationDenied,
+    ToolInvoker,
+)
 from aether_workflow.application.ports.outbound.workflow_event_sink import WorkflowEventSink
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
     WorkflowRunDeclaration,
@@ -136,7 +154,14 @@ from aether_workflow.domain.events import (
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node import Node, NodeKind
 from aether_workflow.domain.node_execution import NodeExecutionRecord, NodeExecutionStatus
-from aether_workflow.domain.node_output import agent_output, join_output
+from aether_workflow.domain.node_input import build_arguments, build_prompt
+from aether_workflow.domain.node_output import (
+    NodeOutput,
+    agent_output,
+    join_output,
+    llm_output,
+    tool_output,
+)
 from aether_workflow.domain.progress import Progress, branch_members
 from aether_workflow.domain.run_execution import WorkflowRunExecution
 from aether_workflow.domain.run_status import (
@@ -148,6 +173,7 @@ from aether_workflow.domain.run_status import (
 
 _APPROVAL_KINDS = frozenset({NodeKind.HUMAN, NodeKind.APPROVAL})
 _BRANCHING_KINDS = frozenset({NodeKind.CONDITION, NodeKind.LOOP, NodeKind.PARALLEL})
+_TOOL_KINDS = frozenset({NodeKind.TOOL, NodeKind.MCP})
 _SUPPORTED_KINDS = frozenset(
     {
         NodeKind.START,
@@ -197,8 +223,17 @@ class AdvanceWorkflowRunUseCase:
         owner: str,
         lease_ttl_seconds: float,
         output_max_bytes: int = 8192,
+        models: ModelInvoker | None = None,
+        tools: ToolInvoker | None = None,
     ) -> None:
         self._output_max_bytes = output_max_bytes
+        self._models = models
+        self._tools = tools
+        self._supported_kinds = (
+            _SUPPORTED_KINDS
+            | (frozenset({NodeKind.LLM}) if models is not None else frozenset())
+            | (_TOOL_KINDS if tools is not None else frozenset())
+        )
         self._store = store
         self._reader = reader
         self._sink = sink
@@ -378,7 +413,7 @@ class AdvanceWorkflowRunUseCase:
     ) -> WorkflowRunStatus | None:
         """`None` 이면 노드를 마쳤으니(또는 분기 안에서 실패로 마쳤으니) 다음 노드로 간다. 아니면
         이 호출이 끝나는 상태(파킹 또는 종결)다."""
-        if node.kind not in _SUPPORTED_KINDS:
+        if node.kind not in self._supported_kinds:
             return self._finish(
                 cursor,
                 WorkflowRunStatus.FAILED,
@@ -387,6 +422,8 @@ class AdvanceWorkflowRunUseCase:
             )
         if node.kind is NodeKind.AGENT:
             return self._run_agent_node(cursor, node, declaration, iteration)
+        if node.kind is NodeKind.LLM or node.kind in _TOOL_KINDS:
+            return self._run_invoke_node(cursor, node, declaration, iteration)
         if node.kind in _APPROVAL_KINDS:
             return self._run_approval_node(cursor, node, iteration)
         if node.kind in (NodeKind.CONDITION, NodeKind.LOOP):
@@ -858,6 +895,105 @@ class AdvanceWorkflowRunUseCase:
             now,
         )
         return WorkflowRunStatus.WAITING_APPROVAL
+
+    # -- LLM / TOOL / MCP 노드 ---------------------------------------------------------
+
+    def _run_invoke_node(
+        self, cursor: _Cursor, node: Node, declaration: WorkflowRunDeclaration, iteration: int
+    ) -> WorkflowRunStatus | None:
+        """`None` 이면 노드를 마쳤으니 다음으로 갑니다(파킹이 없습니다). 아니면 실패로 끝난 상태.
+
+        이미 기록된 노드는 `running`(시작만 하고 죽음)일 때만 다시 부르고, 마쳤으면 건너뜁니다."""
+        run_id = cursor.workflow_run_id
+        node_execution_id = self._store.start_node(run_id, node.id, iteration)
+        if node_execution_id is not None:
+            self._emit_node_event(
+                cursor,
+                "node.started",
+                NodeStartedPayload(
+                    node_id=node.id, kind=node.kind.value, iteration=iteration
+                ).model_dump(),
+                node.id,
+            )
+        else:
+            record = self._record(run_id, node.id, iteration)
+            if record is None:
+                raise RuntimeError(f"node {node.id} of {run_id} is recorded but not readable")
+            if record.status is not NodeExecutionStatus.RUNNING:
+                return None
+            node_execution_id = record.id
+
+        outcome = self._invoke(cursor, node, declaration)
+        if isinstance(outcome, WorkflowFailureReason):
+            return self._fail_node(cursor, node, node_execution_id, outcome, iteration)
+        output, failure = outcome
+        status = (
+            NodeExecutionStatus.FAILED if failure is not None else NodeExecutionStatus.SUCCEEDED
+        )
+        self._store.finish_node(node_execution_id, status, self._clock.now(), failure, output)
+        self._emit_node_event(
+            cursor,
+            "node.finished",
+            NodeFinishedPayload(
+                node_id=node.id, iteration=iteration, status=status.value
+            ).model_dump(),
+            node.id,
+        )
+        if failure is None:
+            return None
+        return self._end_in_failure(cursor, node, failure)
+
+    def _invoke(
+        self, cursor: _Cursor, node: Node, declaration: WorkflowRunDeclaration
+    ) -> tuple[NodeOutput, WorkflowFailureReason | None] | WorkflowFailureReason:
+        """모델 또는 도구를 한 번 부릅니다. 부르기 전에 실패하거나 호출이 예외를 내면 사유만,
+        호출이 결과를 돌려주면 출력과(도구가 `is_error` 면) 실패 사유를 함께 돌려줍니다 - 실패한
+        도구 호출의 결과도 기록에 남기기 위해서입니다."""
+        context = self._condition_context(declaration)
+        try:
+            if node.kind is NodeKind.LLM:
+                return self._call_model(node, context)
+            return self._call_tool(cursor, node, context)
+        except ConditionFailure as failure:
+            return failure.reason
+
+    def _call_model(
+        self, node: Node, context: dict[str, Any]
+    ) -> tuple[NodeOutput, WorkflowFailureReason | None] | WorkflowFailureReason:
+        if self._models is None:  # _supported_kinds 가 이미 걸렀다 - 타입 좁히기
+            raise RuntimeError("LLM node without a model invoker")
+        prompt = build_prompt(node.llm_prompt, node.llm_prompt_path, context)
+        try:
+            answer = self._models.invoke(prompt, None)
+        except Exception:  # noqa: BLE001 - 어떤 모델 실패든 노드 실패이고, 내용은 사유에 담지 않는다
+            return WorkflowFailureReason.MODEL_CALL_FAILED
+        return llm_output(answer.text, answer.finish_reason, self._output_max_bytes), None
+
+    def _call_tool(
+        self, cursor: _Cursor, node: Node, context: dict[str, Any]
+    ) -> tuple[NodeOutput, WorkflowFailureReason | None] | WorkflowFailureReason:
+        if self._tools is None:  # _supported_kinds 가 이미 걸렀다 - 타입 좁히기
+            raise RuntimeError("tool node without a tool invoker")
+        if node.agent_id is None or node.tool_server is None or node.tool_name is None:
+            return WorkflowFailureReason.AGENT_VERSION_NOT_FOUND
+        ref = self._agent_runs.version_for(node.agent_id, node.agent_version)
+        if ref is None:
+            return WorkflowFailureReason.AGENT_VERSION_NOT_FOUND
+        arguments = build_arguments(node.tool_arguments, node.tool_arguments_path, context)
+        try:
+            result = self._tools.call(
+                cursor.workflow_run_id,
+                ref.agent_version_id,
+                node.tool_server,
+                node.tool_name,
+                arguments,
+            )
+        except ToolInvocationDenied:
+            return WorkflowFailureReason.TOOL_CALL_DENIED
+        except Exception:  # noqa: BLE001 - 호출 실패는 종류와 상관없이 노드 실패
+            return WorkflowFailureReason.TOOL_CALL_FAILED
+        output = tool_output(result.content, result.is_error, self._output_max_bytes)
+        return output, (WorkflowFailureReason.TOOL_CALL_FAILED if result.is_error else None)
 
     # -- AGENT 노드와 파킹 -----------------------------------------------------
 

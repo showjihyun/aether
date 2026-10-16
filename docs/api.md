@@ -176,10 +176,13 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 | `condition_operator` | `equals`·`not_equals`·`contains`·`gt`·`lt`·`exists` 중 하나. **열거형**이므로 다른 값은 `422` 입니다 |
 | `condition_value` | 비교할 JSON 스칼라(문자열·숫자·불리언). `exists` 면 없음. `null` 은 "값 없음" 으로 읽으므로 `equals null` 은 표현하지 않습니다 |
 | `wait_seconds` | `WAIT` 전용(필수, 0 보다 큼). 없으면 저장 때 `wait_node_without_duration` |
+| `llm_prompt` · `llm_prompt_path` | `LLM` 전용. 리터럴 프롬프트(필수)와, 맥락에서 끌어와 **뒤에 덧붙일** 값의 경로(선택) |
+| `tool_server` · `tool_name` | `TOOL`·`MCP` 전용(필수). 없으면 `tool_node_without_target` |
+| `tool_arguments` · `tool_arguments_path` | `TOOL`·`MCP` 전용. 리터럴 객체(선택)와 맥락 경로(선택) — **경로 값이 리터럴을 이깁니다** |
 
 분기는 나가는 간선의 `label` 이 `"true"`/`"false"` 인 쪽입니다 — 선언 순서와 무관합니다. `contains` 는 문자열의 부분 문자열·리스트의 원소·객체의 키를 봅니다. `gt`·`lt` 는 **숫자만**이고 불리언은 숫자로 취급하지 않습니다. 경로는 객체 키만 따라가므로 배열 인덱스를 쓸 수 없고, 노드 id 에 `.` 이 있으면 그 노드의 출력은 경로로 가리킬 수 없습니다 — 모호한 문법을 늘리지 않았습니다.
 
-`reason` 은 열두 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`·**`agent_node_without_agent`**(`AGENT` 에 `agent_id` 가 없음, 개정 3)·**`condition_node_without_predicate`**·**`condition_node_without_both_branches`**(개정 4 — `LOOP` 에도 같은 두 사유를 씁니다, 개정 7)·**`wait_node_without_duration`**(개정 7). 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1·3·4).
+`reason` 은 열네 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`·**`agent_node_without_agent`**(`AGENT` 에 `agent_id` 가 없음, 개정 3)·**`condition_node_without_predicate`**·**`condition_node_without_both_branches`**(개정 4 — `LOOP` 에도 같은 두 사유를 씁니다, 개정 7)·**`wait_node_without_duration`**(개정 7)·**`llm_node_without_prompt`**·**`tool_node_without_target`**(개정 9). `agent_node_without_agent` 의 뜻은 **"Agent 참조가 필요한 노드(`AGENT`·`TOOL`·`MCP`)에 참조가 없음"** 으로 넓어졌습니다(개정 9). 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1·3·4).
 
 ## 9. Workflow Run (P4-2a)
 
@@ -197,6 +200,20 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 **`waiting_run_id` 는 상태에서 유도됩니다** — `waiting_run` 일 때만 값이 있고 다른 상태로 가면 비워집니다. 투영 스트림(6절)은 값을 **지우는** 신호를 실을 수 없으므로(값 없는 선택 필드는 키 자체가 없고, 투영은 `COALESCE(new, old)` 입니다) 이것을 불변식으로 둡니다. 그러지 않으면 `succeeded` 인 Run 이 자식 Run 을 기다리는 것처럼 보입니다.
 
 `GET` 이 보는 것은 `control.workflow_runs` 의 **투영**입니다. 실행 상태의 정본은 `data.workflow_run_executions` 이고(spec 0005 2.9 개정 2) worker 가 씁니다 — 적재의 상태를 api 가 투영하는 것과 같은 경계입니다(6절). 그래서 조회는 상태 메시지가 도착한 뒤에 바뀝니다.
+
+### 9.1 LLM · MCP · TOOL 노드 (P4-5)
+
+Agent 를 거치지 않고 **한 번** 부르는 노드 셋입니다. 파킹하지 않습니다(자식 Run 이 없습니다).
+
+**통로를 새로 만들지 않았습니다** — 모델은 `ModelGateway`(AR-5), 도구는 MCP Gateway(AR-6, 판정 → 호출 → 감사를 이미 하는 그 경로)를 지납니다. `aether_workflow` 는 포트만 선언하고 `httpx`·벤더 SDK·`mcp` 를 import 하지 않습니다(`api-arch` 가 판정). 조립은 worker 의 `main` 뿐입니다(AR-10).
+
+**`MCP` 와 `TOOL` 은 v1 에서 같습니다**(spec 0005 개정 9) — 모든 도구 호출이 MCP Gateway 를 지나므로 구현이 같고, 쓰이지 않는 분기를 만들지 않습니다.
+
+**권한 주체는 노드가 지목한 Agent 입니다**(개정 9, 사람 결정 2026-10-16). Policy 는 `agent_version_id` 로만 판정하고 그 열에는 `control.agent_versions` FK 가 걸려 있어 **Workflow Version 을 주체로 쓸 수 없습니다.** 그래서 `TOOL`·`MCP` 노드가 `agent_id`(선택 `agent_version`)를 지목하고 도구 호출은 **그 Agent Version 의 권한으로** 나갑니다. Policy 의 코드·스키마는 바뀌지 않았고 **기본 deny 가 그대로**입니다 — 권한이 없으면 노드가 `tool_call_denied` 로 **실패**합니다(조용히 넘어가지 않습니다). Workflow 자신을 주체로 보는 모델은 Phase 8 의 자리입니다.
+
+출력은 `LLM` 이 `{"text", "finish_reason"}`, `TOOL`·`MCP` 가 `{"content", "is_error"}` 이고 9.2 의 상한을 그대로 받습니다. 도구가 `is_error` 면 노드 실패(`tool_call_failed`), 모델 호출이 터지면 `model_call_failed` 입니다.
+
+**감사는 남습니다 — 그러려고 FK 를 풀었습니다**(개정 10). `data.tool_call_audit.run_id` 가 `control.runs` 를 FK 로 가리키고 있어서 Workflow Run 의 도구 호출은 감사 행을 쓸 수 없었고, 감사 쓰기 실패는 **삼켜지므로**(spec 0003 D-10) 호출은 성공하고 기록만 조용히 사라졌습니다. 마이그레이션 0010 이 그 FK 를 풀고 `run_kind`(`agent`·`workflow`)를 더해 **어느 평면의 Run 인지**를 남깁니다. 도구 호출은 Agent Run 이든 Workflow Run 이든 같은 표에 같은 모양으로 쌓입니다.
 
 ### 9.1 분기·합류·루프·대기 (P4-3)
 
