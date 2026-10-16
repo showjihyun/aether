@@ -15,6 +15,7 @@ condition_path_missing)` 입니다. 비교할 수 없는 타입(`gt`·`lt` 에 �
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from enum import StrEnum
 from typing import Any
 
@@ -74,6 +75,23 @@ def _contains(actual: Any, expected: Any) -> bool:
             raise ConditionFailure(WorkflowFailureReason.CONDITION_TYPE_MISMATCH)
         return expected in actual
     raise ConditionFailure(WorkflowFailureReason.CONDITION_TYPE_MISMATCH)
+
+
+def points_at_unrecorded_node(
+    path: str, declared_node_ids: Iterable[str], recorded_node_ids: Iterable[str]
+) -> bool:
+    """`LOOP` 의 판정식 전용(spec 0005 2.7 개정 8 (1)): 경로가 `nodes.<id>.…` 이고 `<id>` 가 이
+    Version 의 노드인데 그 노드의 기록이 아직 하나도 없는가. 그러면 판정식은 "아직 볼 출력이
+    없다" 이고 실행기가 "계속"(참)으로 읽습니다 - 본문 출력으로 탈출하는 조건 루프의 첫 판정.
+
+    그래프에 **없는** 노드 id(오타)는 `False` 입니다 - 그대로 `condition_path_missing` 으로
+    시끄럽게 실패합니다. 기록이 있는 노드의 없는 필드(`nodes.work.txt`)도 `False` 입니다.
+    `CONDITION` 에는 쓰지 않습니다(그 노드는 상류가 이미 실행된 자리에서만 평가됩니다)."""
+    segments = path.split(".")
+    if len(segments) < 2 or segments[0] != "nodes":
+        return False
+    node_id = segments[1]
+    return node_id in set(declared_node_ids) and node_id not in set(recorded_node_ids)
 
 
 def evaluate_condition(

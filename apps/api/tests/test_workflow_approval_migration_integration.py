@@ -28,7 +28,14 @@ from alembic.config import Config
 pytestmark = pytest.mark.integration
 
 _Factory = Callable[[], psycopg.Connection]
-_NODE_STATUSES = ("running", "waiting_run", "waiting_approval", "succeeded", "failed")
+_NODE_STATUSES = (
+    "running",
+    "waiting_run",
+    "waiting_approval",
+    "waiting_timer",
+    "succeeded",
+    "failed",
+)
 _AGENT_RUN_STATUSES = (
     "queued",
     "running",

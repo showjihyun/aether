@@ -21,3 +21,5 @@ class WorkflowRunExecution:
     waiting_run_id: UUID | None = None
     waiting_node_execution_id: UUID | None = None
     """`waiting_approval` 일 때만 값이 있다 - 승인이 지목해야 하는 노드 실행(R-12)."""
+    wake_at: datetime | None = None
+    """`waiting_timer` 일 때만 값이 있다 - `WAIT` 가 깨어날 시각(spec 0005 2.7 개정 7 (5))."""

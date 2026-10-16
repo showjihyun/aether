@@ -35,8 +35,13 @@ class Node:
     **무시**합니다(`max_iterations` 가 `LOOP` 아닌 노드에서 무시되는 것과 같은 규칙).
     `agent_version` 이 없으면 실행 시점의 최신 Version 을 뜻합니다.
 
-    `condition_path`·`condition_operator`·`condition_value` 는 `CONDITION` 에서만 뜻이 있습니다
-    (개정 4) - 같은 자리, 같은 규칙입니다. 연산자가 `exists` 면 `condition_value` 는 없습니다.
+    `condition_path`·`condition_operator`·`condition_value` 는 `CONDITION` 과 `LOOP` 에서만 뜻이
+    있습니다(개정 4, 개정 7 의 4) - 같은 자리, 같은 규칙입니다. `LOOP` 에서는 `true` 간선이 본문이고
+    `false` 간선이 탈출입니다. 연산자가 `exists` 면 `condition_value` 는 없습니다.
+
+    `wait_seconds` 는 `WAIT` 에서만 뜻이 있습니다(개정 7 (5)) - 필수이고 양수여야 하며(저장 때
+    검증), 다른 종류의 노드에 있는 값은 무시합니다. 직렬화(R-2)에 **반드시** 들어갑니다 - 빠지면
+    기다리는 시간만 다른 두 정의가 같은 바이트를 냅니다.
     """
 
     id: str
@@ -47,11 +52,12 @@ class Node:
     condition_path: str | None = None
     condition_operator: ConditionOperator | None = None
     condition_value: Any = None
+    wait_seconds: int | None = None
 
 
 @dataclass(frozen=True)
 class Edge:
-    """`label` 은 `CONDITION` 의 분기 이름(`"true"`·`"false"`)입니다."""
+    """`label` 은 `CONDITION`·`LOOP` 의 분기 이름(`"true"`·`"false"`)입니다."""
 
     source: str
     target: str

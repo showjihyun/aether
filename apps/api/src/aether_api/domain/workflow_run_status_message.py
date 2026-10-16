@@ -26,6 +26,7 @@ class WorkflowRunStatusMessage(BaseModel):
     current_node_id: str | None = None
     waiting_run_id: UUID | None = None
     waiting_node_execution_id: UUID | None = None
+    wake_at: datetime | None = None
     started_at: datetime | None = None
     finished_at: datetime | None = None
     failure_reason: str | None = None

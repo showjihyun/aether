@@ -175,10 +175,11 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 | `condition_path` | 판정 대상의 경로(점 표기). 맥락은 `{"input": <Workflow Run 의 입력>, "nodes": {"<노드 id>": <그 노드의 출력>}}` — 예 `input.q`, `nodes.ask.text` |
 | `condition_operator` | `equals`·`not_equals`·`contains`·`gt`·`lt`·`exists` 중 하나. **열거형**이므로 다른 값은 `422` 입니다 |
 | `condition_value` | 비교할 JSON 스칼라(문자열·숫자·불리언). `exists` 면 없음. `null` 은 "값 없음" 으로 읽으므로 `equals null` 은 표현하지 않습니다 |
+| `wait_seconds` | `WAIT` 전용(필수, 0 보다 큼). 없으면 저장 때 `wait_node_without_duration` |
 
 분기는 나가는 간선의 `label` 이 `"true"`/`"false"` 인 쪽입니다 — 선언 순서와 무관합니다. `contains` 는 문자열의 부분 문자열·리스트의 원소·객체의 키를 봅니다. `gt`·`lt` 는 **숫자만**이고 불리언은 숫자로 취급하지 않습니다. 경로는 객체 키만 따라가므로 배열 인덱스를 쓸 수 없고, 노드 id 에 `.` 이 있으면 그 노드의 출력은 경로로 가리킬 수 없습니다 — 모호한 문법을 늘리지 않았습니다.
 
-`reason` 은 열한 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`·**`agent_node_without_agent`**(`AGENT` 에 `agent_id` 가 없음, 개정 3)·**`condition_node_without_predicate`**·**`condition_node_without_both_branches`**(개정 4). 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1·3·4).
+`reason` 은 열두 값 중 하나입니다 — `no_start`·`multiple_start`·`end_unreachable`·`orphan_node`·`dangling_edge`·`duplicate_node_id`·`loop_without_bound`·`parallel_without_join`·**`agent_node_without_agent`**(`AGENT` 에 `agent_id` 가 없음, 개정 3)·**`condition_node_without_predicate`**·**`condition_node_without_both_branches`**(개정 4 — `LOOP` 에도 같은 두 사유를 씁니다, 개정 7)·**`wait_node_without_duration`**(개정 7). 한 정의가 여러 규칙을 어기면 **전부** 돌려줍니다(spec 0005 2.2 와 개정 1·3·4).
 
 ## 9. Workflow Run (P4-2a)
 
@@ -196,6 +197,20 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 **`waiting_run_id` 는 상태에서 유도됩니다** — `waiting_run` 일 때만 값이 있고 다른 상태로 가면 비워집니다. 투영 스트림(6절)은 값을 **지우는** 신호를 실을 수 없으므로(값 없는 선택 필드는 키 자체가 없고, 투영은 `COALESCE(new, old)` 입니다) 이것을 불변식으로 둡니다. 그러지 않으면 `succeeded` 인 Run 이 자식 Run 을 기다리는 것처럼 보입니다.
 
 `GET` 이 보는 것은 `control.workflow_runs` 의 **투영**입니다. 실행 상태의 정본은 `data.workflow_run_executions` 이고(spec 0005 2.9 개정 2) worker 가 씁니다 — 적재의 상태를 api 가 투영하는 것과 같은 경계입니다(6절). 그래서 조회는 상태 메시지가 도착한 뒤에 바뀝니다.
+
+### 9.1 분기·합류·루프·대기 (P4-3)
+
+**진행은 노드 실행 기록에서 읽습니다.** 분기가 둘 이상이면 "현재 노드" 하나로 진행을 말할 수 없습니다 — 전진할 수 있는 노드는 **들어오는 간선이 모두 결판나고 그중 하나 이상이 활성**인 노드입니다. 간선은 출발 노드가 `succeeded` 면 활성이고, `CONDITION`·`LOOP` 은 **고른 `label` 의 간선만** 활성입니다(타지 않은 분기의 하류는 실행되지 않습니다). `current_node_id` 는 이제 **"마지막으로 전진한 노드"**(관측용)입니다.
+
+**`PARALLEL` 의 병렬은 동시성이 아닙니다**(spec 0005 개정 7). 한 worker 가 분기를 차례로 전진시키고 `JOIN` 이 전부를 기다립니다. 보장하는 것은 "모든 분기가 실행되고 합류 뒤 다음 노드가 **한 번**"(R-9)입니다. 분기 안에서 파킹이 일어나면 Run 전체가 파킹되고 재개 때 남은 분기를 잇습니다 — 그래서 자식 Run 을 가진 분기들은 직렬화됩니다. 목표는 표현력이고 처리량이 아닙니다(C-5).
+
+`JOIN` 의 출력은 `{"branches": {"<들어오는 노드 id>": <그 노드의 출력 또는 null>}}` 이고 9.2 의 상한을 그대로 받습니다 — 넘치면 **가장 큰 분기 출력부터** `null` 로 바꾸고 `output_truncated` 를 켭니다. **분기 하나라도 실패하면** Workflow Run 이 `failed` + `branch_failed` 입니다.
+
+**`LOOP`** 은 `CONDITION` 과 **같은 판정식 키**를 쓰고 `true` 간선이 본문, `false` 가 탈출입니다. 회차는 `iteration` 이고 본문 노드는 한 바퀴마다 1씩 늘어납니다. `max_iterations` 를 넘기면 `failed` + `loop_limit_exceeded` 입니다(R-10) — 분기 안에서도 이 사유는 `branch_failed` 로 덮이지 않습니다. 판정식이 **본문 출력**(`nodes.<본문>.…`)을 가리킬 때, 그 노드가 이 Version 에 있는데 이번 회차 기록이 아직 없으면 "계속" 으로 읽습니다(개정 8) — 그래프에 **없는** 노드 id(오타)는 그대로 `condition_path_missing` 으로 시끄럽게 실패합니다.
+
+**`WAIT` 는 파킹입니다.** `waiting_timer` 와 `wake_at`(= 파킹 시각 + `wait_seconds`)으로 멈추고 **worker 슬롯을 놓습니다** — 실제 시간을 블록하면 그것이 D-4 가 금지한 점유입니다. 깨우는 외부 사건이 없으므로 **스위퍼가 안전망이 아니라 주 경로**입니다(`wake_at <= now()` 를 주워 재큐). 재개한 호출은 `clock.now() >= wake_at` 을 다시 확인하고, 아직이면 아무 것도 바꾸지 않습니다. 새 이벤트 타입은 없습니다 — `workflow.status` 의 값이 `waiting_timer` 입니다.
+
+**파킹은 상태를 저장한 뒤 lease 를 놓고, 그 다음에 이벤트·통지를 냅니다**(개정 8). 상태가 "대기" 라고 말하는 순간부터 lease 는 비어 있습니다 — 그 순서가 아니면 R-7 이 "결국" 참일 뿐입니다. 대가 하나: 해제와 발행 사이에 다른 worker 가 이어받아 더 큰 `seq` 를 먼저 발행하면, 뒤늦은 파킹 이벤트는 스트림의 explicit ID 규칙에 걸려 **버려집니다**(순서가 섞이지 않고 하나가 사라집니다). 상태·투영은 `seq` 로 멱등이므로 영향이 없습니다.
 
 ### 9.1 승인 (P4-4, 🔒)
 

@@ -21,6 +21,7 @@ class NodeExecutionStatus(StrEnum):
     RUNNING = "running"
     WAITING_RUN = "waiting_run"
     WAITING_APPROVAL = "waiting_approval"
+    WAITING_TIMER = "waiting_timer"
     SUCCEEDED = "succeeded"
     FAILED = "failed"
 

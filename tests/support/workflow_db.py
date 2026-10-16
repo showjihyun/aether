@@ -51,6 +51,14 @@ def declare_workflow_run(
                                 "max_iterations": n.max_iterations,
                                 "agent_id": str(n.agent_id) if n.agent_id is not None else None,
                                 "agent_version": n.agent_version,
+                                "condition_path": n.condition_path,
+                                "condition_operator": (
+                                    n.condition_operator.value
+                                    if n.condition_operator is not None
+                                    else None
+                                ),
+                                "condition_value": n.condition_value,
+                                "wait_seconds": n.wait_seconds,
                             }
                             for n in nodes
                         ]

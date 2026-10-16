@@ -129,7 +129,10 @@ def test_parking_releases_the_lease_so_a_waiting_run_holds_no_slot() -> None:
     rig.advance(run_id)
 
     assert rig.store.lease_owner[run_id] is None
-    assert rig.store.released == [(run_id, _OWNER)]
+    # 파킹이 발행 앞에서 한 번, `finally` 가 한 번 더 놓는다(개정 8 (2) - 같은 owner 조건부 UPDATE
+    # 라
+    # 두 번째는 무해). 이 owner 만이 놓았다는 것이 판정이다.
+    assert set(rig.store.released) == {(run_id, _OWNER)}
 
 
 def test_a_failure_while_announcing_the_wait_still_releases_the_lease() -> None:

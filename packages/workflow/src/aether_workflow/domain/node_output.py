@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -44,3 +45,27 @@ def agent_output(text: str, status: str, max_bytes: int) -> NodeOutput:
         else:
             high = middle - 1
     return NodeOutput({"text": text[:low], "status": status}, truncated=True)
+
+
+def join_output(branches: Mapping[str, Any], max_bytes: int) -> NodeOutput:
+    """`JOIN` 노드의 출력: `{"branches": {"<들어오는 노드 id>": <그 노드의 출력 또는 null>}}`
+    (spec 0005 2.7 개정 7 (3)).
+
+    같은 상한(`serialized_size`)과 같은 잘림 표시를 씁니다. 넘으면 **가장 큰 분기 출력부터**
+    `null` 로
+    바꿔 상한 안에 들어올 때까지 줄이고 `truncated` 를 함께 참으로 둡니다(크기가 같으면 id 순). 분기
+    id 는 줄이지 않으므로 상한이 id 들의 틀보다 작으면 틀이 그대로 남고 그래도 `truncated` 입니다.
+    """
+    kept: dict[str, Any] = dict(branches)
+    whole = {"branches": kept}
+    if serialized_size(whole) <= max_bytes:
+        return NodeOutput(whole)
+    by_size = sorted(
+        (key for key, value in kept.items() if value is not None),
+        key=lambda key: (-serialized_size({"branches": {key: kept[key]}}), key),
+    )
+    for key in by_size:
+        kept[key] = None
+        if serialized_size({"branches": kept}) <= max_bytes:
+            break
+    return NodeOutput({"branches": kept}, truncated=True)

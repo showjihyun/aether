@@ -161,23 +161,79 @@ def test_duplicate_node_id_rejected() -> None:
     assert _reasons(v) == {Reason.DUPLICATE_NODE_ID}
 
 
+def _loop_version(max_iterations: int | None) -> WorkflowVersion:
+    """`LOOP` 은 `CONDITION` 과 같은 판정식·`true`/`false` 두 분기를 가진다(spec 개정 7 (4)) - 다른
+    사유를 보려는 테스트가 그 사유들로 오염되지 않게 한다."""
+    return WorkflowVersion(
+        number=1,
+        nodes=(
+            _n("s", NodeKind.START),
+            Node(
+                id="l",
+                kind=NodeKind.LOOP,
+                max_iterations=max_iterations,
+                condition_path="input.q",
+                condition_operator=ConditionOperator.EQUALS,
+                condition_value="x",
+            ),
+            _n("b", NodeKind.AGENT),
+            _n("e", NodeKind.END),
+        ),
+        edges=(
+            Edge("s", "l"),
+            Edge("l", "b", "true"),
+            Edge("b", "l"),
+            Edge("l", "e", "false"),
+        ),
+    )
+
+
 @pytest.mark.parametrize("bad", [None, 0, -1])
 def test_loop_without_positive_max_iterations_rejected(bad: int | None) -> None:
     """spec R-3, D-11: max_iterations 가 없거나 0 이하인 LOOP 는 거부된다."""
-    v = _version(
-        [_n("s", NodeKind.START), _n("l", NodeKind.LOOP, bad), _n("e", NodeKind.END)],
-        [("s", "l"), ("l", "e")],
-    )
-    assert _reasons(v) == {Reason.LOOP_WITHOUT_BOUND}
+    assert _reasons(_loop_version(bad)) == {Reason.LOOP_WITHOUT_BOUND}
 
 
 def test_loop_with_positive_max_iterations_passes() -> None:
     """spec R-3: 양수 max_iterations 의 LOOP 는 통과한다."""
-    v = _version(
-        [_n("s", NodeKind.START), _n("l", NodeKind.LOOP, 3), _n("e", NodeKind.END)],
-        [("s", "l"), ("l", "e")],
+    assert validate_version(_loop_version(3)) == ()
+
+
+@pytest.mark.parametrize(
+    "node",
+    [
+        Node(id="c", kind=NodeKind.LOOP, max_iterations=3),
+        Node(
+            id="c",
+            kind=NodeKind.LOOP,
+            max_iterations=3,
+            condition_path="input.q",
+            condition_operator=ConditionOperator.EQUALS,
+        ),
+    ],
+    ids=["bare", "no-value"],
+)
+def test_loop_without_a_predicate_is_rejected_with_the_condition_reason(node: Node) -> None:
+    """spec 0005 개정 7 (4): `LOOP` 은 `CONDITION` 의 거부를 **같은 사유로** 받는다 - 새 사유
+    없음."""
+    v = _branching(node, ["true", "false"])
+    assert validate_version(v) == (Violation(Reason.CONDITION_NODE_WITHOUT_PREDICATE, "c"),)
+
+
+@pytest.mark.parametrize("labels", [["true"], ["false"], [None, None]])
+def test_loop_without_both_branches_is_rejected_with_the_condition_reason(
+    labels: list[str | None],
+) -> None:
+    node = Node(
+        id="c",
+        kind=NodeKind.LOOP,
+        max_iterations=3,
+        condition_path="input.q",
+        condition_operator=ConditionOperator.EQUALS,
+        condition_value="x",
     )
-    assert validate_version(v) == ()
+    v = _branching(node, labels)
+    assert validate_version(v) == (Violation(Reason.CONDITION_NODE_WITHOUT_BOTH_BRANCHES, "c"),)
 
 
 def test_parallel_without_join_rejected() -> None:
@@ -218,10 +274,11 @@ def test_six_rejections_have_distinct_reasons() -> None:
     "각각" 을 요구합니다), spec 목록에 없던 `DUPLICATE_NODE_ID` 를 더했습니다
     (spec 0005 개정 1). 아홉 번째 `AGENT_NODE_WITHOUT_AGENT` 는 개정 3, 열 번째와 열한 번째
     (`CONDITION_NODE_WITHOUT_PREDICATE`·`CONDITION_NODE_WITHOUT_BOTH_BRANCHES`)는 개정 4 입니다.
+    열두 번째 `WAIT_NODE_WITHOUT_DURATION` 은 개정 7 (5) 입니다.
     이 숫자를 늘릴 때는 spec 2.2 의 표도 함께 고칩니다 — 그래서 여기 상수로 못 박습니다.
     """
-    assert len(list(Reason)) == 11
-    assert len({r.value for r in Reason}) == 11
+    assert len(list(Reason)) == 12
+    assert len({r.value for r in Reason}) == 12
 
 
 def test_agent_node_without_agent_rejected() -> None:
@@ -330,9 +387,9 @@ def test_version_is_immutable() -> None:
 
 
 def test_status_values() -> None:
-    """spec 2.3: 상태는 정확히 일곱 값이고 timed_out 이 없다."""
+    """spec 2.3: 상태는 정확히 여덟 값(`waiting_timer` 는 개정 7 (5))이고 timed_out 이 없다."""
     assert {s.value for s in WorkflowRunStatus} == {
-        "queued", "running", "waiting_run", "waiting_approval",
+        "queued", "running", "waiting_run", "waiting_approval", "waiting_timer",
         "succeeded", "failed", "cancelled",
     }  # fmt: skip
 
@@ -353,7 +410,12 @@ def test_terminal_set_is_exact() -> None:
 
 
 @pytest.mark.parametrize(
-    "waiting", [WorkflowRunStatus.WAITING_RUN, WorkflowRunStatus.WAITING_APPROVAL]
+    "waiting",
+    [
+        WorkflowRunStatus.WAITING_RUN,
+        WorkflowRunStatus.WAITING_APPROVAL,
+        WorkflowRunStatus.WAITING_TIMER,
+    ],
 )
 def test_cancel_possible_while_waiting(waiting: WorkflowRunStatus) -> None:
     """spec 2.3: cancelled 는 대기 중에도 가능하다."""
@@ -368,6 +430,68 @@ def test_normal_path_transitions() -> None:
     assert can_transition(S.WAITING_RUN, S.RUNNING)
     assert can_transition(S.RUNNING, S.SUCCEEDED)
     assert not can_transition(S.QUEUED, S.SUCCEEDED)
+
+
+def test_waiting_timer_is_entered_from_running_and_leaves_to_running_failed_or_cancelled() -> None:
+    """spec 0005 2.3, 개정 7 (5): `waiting_timer` 는 다른 대기와 같은 모양의 전이를 가진다 -
+    `running` 에서 들어가고 `running`·`failed`·`cancelled` 로 나간다. 성공으로 바로 끝나지
+    않는다."""
+    S = WorkflowRunStatus
+    assert can_transition(S.RUNNING, S.WAITING_TIMER)
+    assert can_transition(S.WAITING_TIMER, S.RUNNING)
+    assert can_transition(S.WAITING_TIMER, S.FAILED)
+    assert not can_transition(S.WAITING_TIMER, S.SUCCEEDED)
+    assert not can_transition(S.QUEUED, S.WAITING_TIMER)
+
+
+# --- P4-3: WAIT ------------------------------------------------------------------------
+
+
+def _wait_version(wait_seconds: int | None) -> WorkflowVersion:
+    return _version(
+        [
+            _n("s", NodeKind.START),
+            Node(id="w", kind=NodeKind.WAIT, wait_seconds=wait_seconds),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "w"), ("w", "e")],
+    )
+
+
+def test_a_wait_node_with_a_positive_duration_passes() -> None:
+    """spec 0005 2.7 개정 7 (5): `wait_seconds` 가 있는 `WAIT` 는 통과한다."""
+    assert validate_version(_wait_version(60)) == ()
+
+
+@pytest.mark.parametrize("wait_seconds", [None, 0, -5])
+def test_a_wait_node_without_a_positive_duration_is_rejected(wait_seconds: int | None) -> None:
+    """R-1, 개정 7 (5): `wait_seconds` 가 없거나 0 이하인 `WAIT` 는 그 노드만 위반이다 - 실행 중에
+    발견하면 이미 앞 노드들이 지나간 뒤다."""
+    assert validate_version(_wait_version(wait_seconds)) == (
+        Violation(Reason.WAIT_NODE_WITHOUT_DURATION, "w"),
+    )
+
+
+def test_wait_seconds_is_ignored_on_other_kinds() -> None:
+    """`max_iterations` 가 `LOOP` 아닌 노드에서 무시되는 것과 같은 규칙: 다른 종류의 `wait_seconds`
+    는 거부하지 않는다."""
+    v = _version(
+        [
+            _n("s", NodeKind.START),
+            Node(id="a", kind=NodeKind.AGENT, agent_id=_AGENT_ID, wait_seconds=0),
+            _n("e", NodeKind.END),
+        ],
+        [("s", "a"), ("a", "e")],
+    )
+    assert validate_version(v) == ()
+
+
+def test_serialization_differs_when_only_the_wait_seconds_differs() -> None:
+    """spec R-2: 두 정의가 `wait_seconds` 만 다르면 바이트가 달라야 한다 - 이 단언이 없으면 새
+    필드가
+    직렬화에서 빠져도 R-2 가 공허하게 통과한다."""
+    assert serialize_version(_wait_version(60)) == serialize_version(_wait_version(60))
+    assert serialize_version(_wait_version(60)) != serialize_version(_wait_version(61))
 
 
 # --- P4-2b: CONDITION ------------------------------------------------------------------

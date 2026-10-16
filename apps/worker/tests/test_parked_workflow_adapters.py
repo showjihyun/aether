@@ -10,7 +10,7 @@
 from __future__ import annotations
 
 import uuid
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 
 import psycopg
 import pytest
@@ -249,3 +249,101 @@ def test_the_approval_branch_does_not_disturb_the_child_run_branch(
 
     assert ready.count(waiting_run) == 1
     assert ready.count(waiting_approval) == 1
+
+
+# --- P4-3: 타이머 대기는 스위퍼가 주 경로다 -----------------------------------------------
+
+
+def _waiting_timer(admin: _Factory, wake_at_sql: str) -> ParkedWorkflow:
+    """`waiting_timer` Workflow Run 하나. `wake_at_sql` 은 `now()` 기준 SQL 식(`NULL` 포함)이다."""
+    run_id, version_id = declare_workflow_run(
+        admin,
+        (Node("s", NodeKind.START), Node("e", NodeKind.END)),
+        (Edge("s", "e"),),
+    )
+    conn = admin()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO data.workflow_run_executions (workflow_run_id, status, wake_at)"
+                f" VALUES (%s, 'waiting_timer'::control.workflow_run_status, {wake_at_sql})",
+                (run_id,),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+    return ParkedWorkflow(workflow_run_id=run_id, workflow_version_id=version_id)
+
+
+@pytest.fixture
+def timer_waits(admin_connection_factory: _Factory) -> Iterator[Callable[[str], ParkedWorkflow]]:
+    """`waiting_timer` Run 을 만들고, 테스트가 끝나면 `cancelled` 로 치운다 - DB 는 세션 안에서
+    공유되고 `wake_at` 이 지난 `waiting_timer` 는 다른 테스트의 `sweep()` 이 줍기 때문이다."""
+    created: list[ParkedWorkflow] = []
+
+    def make(wake_at_sql: str) -> ParkedWorkflow:
+        parked = _waiting_timer(admin_connection_factory, wake_at_sql)
+        created.append(parked)
+        return parked
+
+    yield make
+
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE data.workflow_run_executions SET status = 'cancelled'"
+                " WHERE workflow_run_id = ANY(%s)",
+                ([p.workflow_run_id for p in created],),
+            )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_a_timer_wait_whose_wake_time_has_passed_is_ready(
+    timer_waits: Callable[[str], ParkedWorkflow], data_connection_factory: _Factory
+) -> None:
+    """spec 0005 2.7 개정 7 (5): `WAIT` 에는 깨우는 외부 사건이 없다 - `wake_at <= now()` 인
+    `waiting_timer` 를 스위퍼가 줍는다(안전망이 아니라 주 경로)."""
+    parked = timer_waits("now() - interval '1 minute'")
+
+    assert parked in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_a_timer_wait_whose_wake_time_has_not_come_is_not_ready(
+    timer_waits: Callable[[str], ParkedWorkflow], data_connection_factory: _Factory
+) -> None:
+    """아직이면 줍지 않는다 - 줍으면 매 주기마다 실행기가 헛되이 깨어난다."""
+    parked = timer_waits("now() + interval '1 day'")
+
+    assert parked not in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_a_timer_wait_without_a_wake_time_is_never_ready(
+    timer_waits: Callable[[str], ParkedWorkflow], data_connection_factory: _Factory
+) -> None:
+    """fail-closed: 깨어날 시각이 비어 있으면 근거가 없다(`NULL <= now()` 는 참이 아니다)."""
+    parked = timer_waits("NULL")
+
+    assert parked not in PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+
+def test_the_timer_branch_does_not_disturb_the_other_two_branches(
+    admin_connection_factory: _Factory,
+    timer_waits: Callable[[str], ParkedWorkflow],
+    data_connection_factory: _Factory,
+) -> None:
+    """회귀(R-13): 한 번의 조회가 세 대기를 함께 줍는다 - 각자 한 번씩만 나온다."""
+    awaited = uuid.uuid4()
+    waiting_run = _parked(
+        admin_connection_factory, "waiting_run", _child(admin_connection_factory, "failed")
+    )
+    waiting_approval = _waiting_approval(admin_connection_factory, awaited, approved=[awaited])
+    waiting_timer = timer_waits("now() - interval '1 second'")
+
+    ready = PostgresParkedWorkflowFinder(data_connection_factory).ready_to_resume()
+
+    assert ready.count(waiting_run) == 1
+    assert ready.count(waiting_approval) == 1
+    assert ready.count(waiting_timer) == 1

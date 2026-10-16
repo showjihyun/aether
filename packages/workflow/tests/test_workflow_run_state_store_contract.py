@@ -321,3 +321,49 @@ def test_finish_node_records_the_output_and_the_truncation_flag_together(
     (record,) = store.node_executions(run_id)
     assert record.output == value
     assert record.output_truncated is truncated
+
+
+def test_wake_at_exists_only_while_the_status_is_waiting_timer(make: _Factory) -> None:
+    """spec 0005 2.7 개정 7 (5) (P4-3): `wake_at` 은 `waiting_run_id` 와 같은 불변식 - 상태에서
+    유도된다. `waiting_timer` 일 때만 값이 있고, 주지 않은 `waiting_timer` 호출은 이전 값을 지우지
+    않으며, 다른 상태(`running`)로 가면 지워진다. `waiting_timer` 가 아닌 상태에 값을 줘도 남지
+    않는다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    wake = datetime(2026, 10, 16, 13, 0, tzinfo=UTC)
+
+    store.set_status(run_id, WorkflowRunStatus.RUNNING, seq=1, wake_at=wake)
+    ignored = store.load(run_id)
+    store.set_status(
+        run_id, WorkflowRunStatus.WAITING_TIMER, seq=2, current_node_id="w", wake_at=wake
+    )
+    parked = store.load(run_id)
+    store.set_status(run_id, WorkflowRunStatus.WAITING_TIMER, seq=3)
+    still = store.load(run_id)
+    store.set_status(run_id, WorkflowRunStatus.RUNNING, seq=4)
+    resumed = store.load(run_id)
+
+    assert ignored is not None and parked is not None and still is not None and resumed is not None
+    assert ignored.wake_at is None
+    assert parked.status is WorkflowRunStatus.WAITING_TIMER
+    assert parked.wake_at == wake
+    assert parked.waiting_run_id is None and parked.waiting_node_execution_id is None
+    assert still.wake_at == wake
+    assert resumed.wake_at is None
+
+
+def test_park_node_for_timer_marks_only_the_node_as_waiting_timer(make: _Factory) -> None:
+    """spec 0005 2.7 개정 7 (5) (P4-3): 노드 실행 행은 `start_node` 가 이미 만들었다 - 이 호출은
+    상태만 `waiting_timer` 로 바꾼다(깨어날 시각은 Run 상태가 소유한다)."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "w", 0)
+    assert node_execution_id is not None
+
+    store.park_node_for_timer(node_execution_id)
+
+    (record,) = store.node_executions(run_id)
+    assert record.id == node_execution_id
+    assert record.status is NodeExecutionStatus.WAITING_TIMER
+    assert record.finished_at is None
+    assert store.start_node(run_id, "w", 0) is None

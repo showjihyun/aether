@@ -22,7 +22,7 @@ from aether_workflow.domain.node import Edge, Node, NodeKind
 def _node(raw: dict[str, Any]) -> Node:
     """`agent_id`·`agent_version` 키는 B1 이 더했습니다 - 그 전에 저장된 Version 에는 **없으므로**
     `.get` 입니다(`KeyError` 로 터지면 옛 Run 이 전부 죽습니다). `condition_*` 세 키(P4-2b)도
-    같습니다."""
+    같습니다. `wait_seconds`(P4-3)도 그렇습니다."""
     agent_id = raw.get("agent_id")
     operator = raw.get("condition_operator")
     return Node(
@@ -34,6 +34,7 @@ def _node(raw: dict[str, Any]) -> Node:
         condition_path=raw.get("condition_path"),
         condition_operator=ConditionOperator(operator) if operator is not None else None,
         condition_value=raw.get("condition_value"),
+        wait_seconds=raw.get("wait_seconds"),
     )
 
 

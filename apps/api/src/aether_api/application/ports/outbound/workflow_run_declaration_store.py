@@ -48,6 +48,7 @@ class WorkflowRunDeclarationStore(Protocol):
         finished_at: datetime | None,
         failure_reason: str | None,
         waiting_node_execution_id: UUID | None = None,
+        wake_at: datetime | None = None,
     ) -> bool:
         """`seq` 가 저장된 `status_seq` 보다 클 때만 한 UPDATE 로 적용합니다.
 
@@ -57,6 +58,6 @@ class WorkflowRunDeclarationStore(Protocol):
 
         `waiting_run_id`·`waiting_node_execution_id` 는 예외입니다: **상태에서 유도**합니다 - 각각
         `waiting_run`·`waiting_approval` 일 때만 값이 있고(주지 않으면 이전 값) 다른 상태로 가면
-        지워집니다.
+        지워집니다. `wake_at`(P4-3)도 같은 규칙이고 `waiting_timer` 일 때만 값이 있습니다.
         """
         ...

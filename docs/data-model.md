@@ -310,6 +310,20 @@ P4-2a 의 파킹이 요구한 셋입니다.
 
 **FK 를 푼 이유**(리뷰 대상). 파킹의 순서는 ① 자식 Run 의 id 를 정해 **영속** ② api 에 선언 요청 ③ 파킹 통지입니다. ①을 ② 뒤로 미룰 수 없습니다 — 그러면 재전달에서 id 를 다시 만들어 자식 Run 이 둘이 됩니다(spec 0005 R-8). 그런데 ① 시점에는 `control.runs` 행이 아직 없어 FK 가 거부합니다. `waiting_run_id` 는 같은 경쟁입니다 — 파킹 통지와 자식 선언을 **서로 다른 api 소비자**가 받으므로 투영이 선언보다 먼저 적용될 수 있고, 그때 FK 위반은 투영 스레드를 죽입니다. 이 열들은 "무엇을 기다리는가" 를 가리키는 포인터이고, 무결성의 보증은 FK 가 아니라 **id 를 한 곳(실행기)에서 정해 멱등 선언하는 구조**가 맡습니다. `data.workflow_run_executions.waiting_run_id`(0006)가 처음부터 FK 없이 열린 것과 같은 근거이고, 4절의 cross-schema FK 수명 논의와도 같은 방향입니다.
 
+### 마이그레이션 0009 — 시각 대기(`WAIT`)
+
+| 대상 | 변경 |
+| --- | --- |
+| `control.workflow_run_status` | **`waiting_timer`** 추가 — 여덟 값 |
+| `data.workflow_node_execution_status` | **`waiting_timer`** 추가 — 여섯 값 |
+| `data.workflow_run_executions.wake_at` | `timestamptz NULL` — **정본**. `waiting_timer` 일 때만 값이 있습니다 |
+| `control.workflow_runs.wake_at` | 같은 열의 **투영** |
+| GRANT | **변경 없음** |
+
+`downgrade()` 는 enum 값을 지울 수 없으므로 **타입을 새로 만들어 바꿔 끼웁니다**(0008 이 노드 상태에서 한 것과 같은 모양). `waiting_timer` 행은 `running` 으로 둡니다.
+
+**왜 상태가 하나 더 필요한가.** `WAIT` 가 실제 시간을 블록하면 그것이 D-4 가 금지한 **슬롯 점유**입니다. 파킹하려면 "무엇을 기다리는가" 가 상태로 구별돼야 하고(D-2 의 규칙), 자식 Run·승인과 달리 **깨우는 외부 사건이 없으므로** 스위퍼의 `wake_at <= now()` 가지가 주 경로입니다.
+
 ### PostgreSQL 이미지
 
 Phase 3 부터 `pgvector/pgvector:pg16`(다이제스트 핀)입니다. 이전은 `postgres:16-alpine` 이었고,

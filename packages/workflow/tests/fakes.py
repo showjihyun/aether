@@ -46,6 +46,14 @@ class FakeWorkflowClock:
         self._now += timedelta(seconds=1)
         return self._now
 
+    def peek(self) -> datetime:
+        """시계를 움직이지 않고 지금 값을 본다."""
+        return self._now
+
+    def jump(self, seconds: float) -> None:
+        """시계를 앞으로 돌린다(R-11) - 실제로 기다리지 않는다."""
+        self._now += timedelta(seconds=seconds)
+
 
 class FakeWorkflowRunStateStore:
     """`WorkflowRunStateStore` 계약의 인메모리 구현. lease 는 시간 없이 "쥔 owner 가 있으면
@@ -60,6 +68,11 @@ class FakeWorkflowRunStateStore:
         self.set_status_calls: list[tuple[WorkflowRunStatus, int]] = []
         self.events_log: list[tuple[str, UUID]] = []
         """`park_node`·`launch` 가 일어난 순서 - 영속이 발사보다 먼저인지 판정합니다."""
+        self.call_log: list[str] = []
+        """`set_status:<상태>`·`release`·`publish:<타입>[:<상태>]`·`notify:<상태>` 가 일어난 순서 -
+        파킹이 lease 를 발행·통지보다 먼저 놓는지 판정합니다(spec 0005 2.5 개정 8 (2)). 발행·통지
+        쪽은
+        `LoggingWorkflowEventSink`·`LoggingWorkflowStatusNotifier` 가 같은 목록에 적습니다."""
 
     def seed(
         self,
@@ -87,19 +100,31 @@ class FakeWorkflowRunStateStore:
         status: NodeExecutionStatus,
         *,
         agent_run_id: UUID | None = None,
+        iteration: int = 0,
+        output: dict[str, Any] | None = None,
     ) -> NodeExecutionRecord:
         record = NodeExecutionRecord(
             agent_run_id=agent_run_id,
             id=uuid4(),
             workflow_run_id=workflow_run_id,
             node_id=node_id,
-            iteration=0,
+            iteration=iteration,
             status=status,
             started_at=_EPOCH,
             finished_at=None if status is NodeExecutionStatus.RUNNING else _EPOCH,
+            output=output,
         )
         self.nodes.setdefault(workflow_run_id, []).append(record)
         return record
+
+    def replace_output(self, workflow_run_id: UUID, node_id: str, output: dict[str, Any]) -> None:
+        """이미 기록된 노드의 출력을 바꿉니다 - 루프 판정의 맥락이 회차 사이에 바뀌는 것을
+        흉내냅니다."""
+        for index, record in enumerate(self.nodes[workflow_run_id]):
+            if record.node_id == node_id:
+                self.nodes[workflow_run_id][index] = replace(record, output=output)
+                return
+        raise KeyError(node_id)
 
     def hold(self, workflow_run_id: UUID, owner: str) -> None:
         self.lease_owner[workflow_run_id] = owner
@@ -116,6 +141,7 @@ class FakeWorkflowRunStateStore:
         return self.lease_owner.get(workflow_run_id) == owner
 
     def release(self, workflow_run_id: UUID, owner: str) -> None:
+        self.call_log.append("release")
         self.released.append((workflow_run_id, owner))
         if self.lease_owner.get(workflow_run_id) == owner:
             self.lease_owner[workflow_run_id] = None
@@ -135,8 +161,10 @@ class FakeWorkflowRunStateStore:
         finished_at: datetime | None = None,
         waiting_run_id: UUID | None = None,
         waiting_node_execution_id: UUID | None = None,
+        wake_at: datetime | None = None,
     ) -> None:
         self.set_status_calls.append((status, seq))
+        self.call_log.append(f"set_status:{status.value}")
         old = self.executions[workflow_run_id]
         if status is WorkflowRunStatus.WAITING_RUN:
             waiting = waiting_run_id if waiting_run_id is not None else old.waiting_run_id
@@ -150,12 +178,17 @@ class FakeWorkflowRunStateStore:
             )
         else:
             waiting_node = None
+        if status is WorkflowRunStatus.WAITING_TIMER:
+            wake = wake_at if wake_at is not None else old.wake_at
+        else:
+            wake = None
         self.executions[workflow_run_id] = replace(
             old,
             status=status,
             status_seq=seq,
             waiting_run_id=waiting,
             waiting_node_execution_id=waiting_node,
+            wake_at=wake,
             current_node_id=current_node_id or old.current_node_id,
             failure_reason=failure_reason.value if failure_reason else old.failure_reason,
             started_at=started_at or old.started_at,
@@ -188,6 +221,10 @@ class FakeWorkflowRunStateStore:
     def park_node_for_approval(self, node_execution_id: UUID) -> None:
         self.events_log.append(("park_node_for_approval", node_execution_id))
         self._update_node(node_execution_id, status=NodeExecutionStatus.WAITING_APPROVAL)
+
+    def park_node_for_timer(self, node_execution_id: UUID) -> None:
+        self.events_log.append(("park_node_for_timer", node_execution_id))
+        self._update_node(node_execution_id, status=NodeExecutionStatus.WAITING_TIMER)
 
     def finish_node(
         self,
@@ -261,6 +298,19 @@ class FakeWorkflowEventSink:
         self.events.append(event)
 
 
+class LoggingWorkflowEventSink(FakeWorkflowEventSink):
+    """발행이 `store.call_log` 에도 적히는 sink - 저장소 호출과 발행의 **상대 순서**를 봅니다."""
+
+    def __init__(self, log: list[str]) -> None:
+        super().__init__()
+        self._log = log
+
+    def publish(self, event: WorkflowEvent) -> None:
+        status = event.payload.get("status")
+        self._log.append(f"publish:{event.type}" + (f":{status}" if status else ""))
+        super().publish(event)
+
+
 class FakeWorkflowStatusNotifier:
     def __init__(self) -> None:
         self.messages: list[WorkflowStatusMessage] = []
@@ -286,6 +336,18 @@ class FakeApprovalReader:
     def approval_for(self, node_execution_id: UUID) -> Approval | None:
         self.lookups.append(node_execution_id)
         return self._granted.get(node_execution_id)
+
+
+class LoggingWorkflowStatusNotifier(FakeWorkflowStatusNotifier):
+    """통지가 `store.call_log` 에도 적히는 notifier."""
+
+    def __init__(self, log: list[str]) -> None:
+        super().__init__()
+        self._log = log
+
+    def notify(self, message: WorkflowStatusMessage) -> None:
+        self._log.append(f"notify:{message.status.value}")
+        super().notify(message)
 
 
 def start_end_graph() -> tuple[tuple[Node, ...], tuple[Edge, ...]]:

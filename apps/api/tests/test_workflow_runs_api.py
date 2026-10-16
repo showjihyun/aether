@@ -181,3 +181,32 @@ def test_get_shows_waiting_approval_and_the_awaited_node_execution_apart_from_wa
     assert body["waiting_node_execution_id"] == str(awaited)
     assert body["waiting_run_id"] is None
     assert body["current_node_id"] == "gate"
+
+
+def test_get_shows_waiting_timer_with_the_wake_time_apart_from_the_other_waits() -> None:
+    """spec 0005 2.7 개정 7 (5), R-13 (P4-3): 타이머 대기는 상태만으로 다른 대기와 구별되고 깨어날
+    시각이 본문에 나온다(다른 포인터는 비어 있다). 대기가 아니면 `wake_at` 은 `null` 이다."""
+    client, repo, store, _notifier = _client()
+    created = store.create(_workflow(repo), 1, None, _KEY)
+    before = client.get(f"/workflow-runs/{created.workflow_run_id}").json()
+    wake = datetime(2026, 10, 16, 13, 0, tzinfo=UTC)
+    store.apply_status(
+        created.workflow_run_id,
+        seq=2,
+        status=WorkflowRunStatus.WAITING_TIMER,
+        current_node_id="w",
+        waiting_run_id=None,
+        started_at=datetime(2026, 1, 1, tzinfo=UTC),
+        finished_at=None,
+        failure_reason=None,
+        wake_at=wake,
+    )
+
+    body = client.get(f"/workflow-runs/{created.workflow_run_id}").json()
+
+    assert before["wake_at"] is None
+    assert body["status"] == "waiting_timer"
+    assert datetime.fromisoformat(body["wake_at"]) == wake
+    assert body["waiting_run_id"] is None
+    assert body["waiting_node_execution_id"] is None
+    assert body["current_node_id"] == "w"

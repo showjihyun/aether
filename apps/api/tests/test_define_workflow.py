@@ -1,4 +1,4 @@
-"""spec 0005 2.2, R-1: `DefineWorkflow` — 열한 거부 사유가 각각 다른 사유로 400, 올바른 그래프는
+"""spec 0005 2.2, R-1: `DefineWorkflow` — 열두 거부 사유가 각각 다른 사유로 400, 올바른 그래프는
 201 이고 Version 1. DB 없음(fake 저장소)."""
 
 from __future__ import annotations
@@ -20,14 +20,14 @@ from apps.api.tests.workflow_support import (
 
 
 def test_rejection_cases_cover_every_reason() -> None:
-    """spec 0005 2.2: 사유 값은 열한 개이고 이 파일의 사례가 전부를 덮는다(자기 증명)."""
-    assert len(Reason) == 11
+    """spec 0005 2.2: 사유 값은 열두 개이고 이 파일의 사례가 전부를 덮는다(자기 증명)."""
+    assert len(Reason) == 12
     assert set(_REJECTIONS) == set(Reason)
 
 
 @pytest.mark.parametrize("reason", list(Reason), ids=lambda r: r.value)
 def test_post_rejects_each_invalid_graph_with_its_own_reason(reason: Reason) -> None:
-    """spec 0005 R-1: 열한 거부가 각각 다른 사유로 400 이다."""
+    """spec 0005 R-1: 열두 거부가 각각 다른 사유로 400 이다."""
     client, repo = _client()
 
     response = client.post("/workflows", json={"name": "bad", **_REJECTIONS[reason]})
@@ -187,3 +187,40 @@ def test_node_without_condition_keys_is_accepted_for_every_kind() -> None:
     assert all("condition_path" not in n for n in body["nodes"])
 
     assert client.post("/workflows", json=body).status_code == 201
+
+
+def test_wait_seconds_round_trips_and_a_non_positive_one_is_rejected() -> None:
+    """spec 0005 2.7 개정 7 (5): `WAIT` 의 `wait_seconds` 를 받고 그대로 돌려준다. 0 이하는 `WAIT`
+    가 기간을 모르는 것과 같은 사유(`wait_node_without_duration`)로 400 이다."""
+    client, _ = _client()
+    ok = {
+        "name": "waits",
+        "nodes": [_n("s", "START"), _n("w", "WAIT", wait_seconds=90), _n("e", "END")],
+        "edges": [_e("s", "w"), _e("w", "e")],
+    }
+
+    created = client.post("/workflows", json=ok)
+    fetched = client.get(f"/workflows/{created.json()['id']}")
+    rejected = client.post(
+        "/workflows",
+        json={**ok, "nodes": [_n("s", "START"), _n("w", "WAIT"), _n("e", "END")]},
+    )
+    zero = client.post(
+        "/workflows",
+        json={
+            **ok,
+            "name": "zero",
+            "nodes": [
+                {**_n("s", "START")},
+                {**_n("w", "WAIT"), "wait_seconds": 0},
+                {**_n("e", "END")},
+            ],
+        },
+    )
+
+    assert created.status_code == 201, created.text
+    assert {n["id"]: n["wait_seconds"] for n in fetched.json()["nodes"]}["w"] == 90
+    assert rejected.status_code == 400
+    assert [v["reason"] for v in rejected.json()["violations"]] == ["wait_node_without_duration"]
+    assert zero.status_code == 400
+    assert [v["reason"] for v in zero.json()["violations"]] == ["wait_node_without_duration"]

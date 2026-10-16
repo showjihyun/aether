@@ -721,6 +721,8 @@ export interface components {
             condition_operator?: components["schemas"]["ConditionOperator"] | null;
             /** Condition Value */
             condition_value?: string | number | boolean | null;
+            /** Wait Seconds */
+            wait_seconds?: number | null;
         };
         /** Policy */
         Policy: {
@@ -957,6 +959,8 @@ export interface components {
             waiting_run_id: string | null;
             /** Waiting Node Execution Id */
             waiting_node_execution_id: string | null;
+            /** Wake At */
+            wake_at: string | null;
             /**
              * Requested At
              * Format: date-time
@@ -985,7 +989,7 @@ export interface components {
          * WorkflowRunStatus
          * @enum {string}
          */
-        WorkflowRunStatus: "queued" | "running" | "waiting_run" | "waiting_approval" | "succeeded" | "failed" | "cancelled";
+        WorkflowRunStatus: "queued" | "running" | "waiting_run" | "waiting_approval" | "waiting_timer" | "succeeded" | "failed" | "cancelled";
         /**
          * WorkflowVersionResponse
          * @description `GET /workflows/{id}/versions/{version}` 의 성공 응답.
