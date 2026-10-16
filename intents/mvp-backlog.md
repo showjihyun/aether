@@ -456,6 +456,8 @@ plan 0005 리뷰로 P4-2 → **P4-2a·P4-2b** 로 분할했고(범위의 합은 
 
 **Phase 완료 판정** — START → AGENT → CONDITION 분기 → HUMAN 승인 → AGENT → END 인 Workflow 가 worker 에서 실행되고, 승인에서 멈췄다가 사람의 승인 API 호출로 재개되며, PARALLEL·LOOP·WAIT 노드가 동작합니다.
 
+**Phase 4 완료 (2026-10-17)** — 단위 여섯 전부 병합. 완료 판정의 시나리오는 `apps/api/tests/test_workflow_chain_integration.py` 가 api → worker 사슬 그대로(모델만 fake) 통과시킵니다(R-4). `PARALLEL`·`JOIN`·`LOOP`·`WAIT` 는 P4-3 이, `LLM`·`MCP`·`TOOL` 은 P4-5 가 더했습니다. **남은 사람 몫 하나**: compose 에서 승인 대기 → 승인 → 재개 수동 확인 1회(plan 0005 3절). spec 0005 는 **개정 10** 까지 왔습니다 — 구현이 발견한 것들이 그 목록입니다.
+
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
 | P4-1 | Workflow 모델과 영속 · 마이그레이션 0005(다섯 표) | P0-8 | — | 완료 (PR #146) |
