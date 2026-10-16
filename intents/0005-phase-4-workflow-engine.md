@@ -5,7 +5,7 @@
 | 번호 | 0005 |
 | 작성일 | 2026-10-12 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 Phase 4 (Week 13~16) — 원본 로드맵 9장 |
-| 상태 | 승인됨 |
+| 상태 | **완료 (2026-10-17)** — 단위 여섯 전부 병합(PR #146·#148·#149·#150·#151·#155·#156). 사람 몫 하나가 남아 있습니다: compose 에서 승인 대기 → 승인 API → 재개 **수동 확인 1회**(plan 0005 3절, `smoke` 에는 넣지 않습니다 — D-16) |
 | 승인 | showjihyun, 2026-10-12 |
 | 후속 spec | [../specs/0005-phase-4-workflow-engine.md](../specs/0005-phase-4-workflow-engine.md) (승인됨 2026-10-12, D-1 ~ D-16) |
 

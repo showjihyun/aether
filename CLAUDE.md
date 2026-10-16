@@ -30,7 +30,7 @@
 
 ## 아직 없는 것
 
-Phase 4 이후의 것 — Workflow·HITL(`packages/workflow`), 제품 Evaluation(`packages/evaluation`), 그리고 `apps/web` 의 화면. 그 두 패키지는 아직 세 층의 빈 껍데기입니다. Phase 2·3 이 채운 `packages/{mcp,policy,context,memory}` 는 더 이상 껍데기가 아닙니다. 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
+Phase 5 이후의 것 — 제품 Evaluation(`packages/evaluation`)과 `apps/web` 의 화면(Workflow 편집·Run 상세). `packages/evaluation` 이 아직 세 층의 빈 껍데기입니다. Phase 2·3·4 가 채운 `packages/{mcp,policy,context,memory,workflow}` 는 더 이상 껍데기가 아닙니다 — Workflow 의 **조회 API 와 화면**은 없습니다(노드 실행 조회는 api 역할이 `data` 를 볼 수 없어 투영이 필요하고, 그것은 Phase 5 입니다). 어느 단위가 무엇을 만드는지는 [intents/mvp-backlog.md](intents/mvp-backlog.md) 가 정본이고, 아직 없는 것을 참조하는 코드를 만들지 않습니다.
 
 ## 이 파일의 규칙
 
