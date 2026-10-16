@@ -230,6 +230,61 @@ def test_waiting_run_id_exists_only_while_the_status_is_waiting_run(make: _Facto
     assert store.acquire_lease(run_id, "b", 60.0) is True, "release 뒤에는 누구든 다시 잡는다"
 
 
+def test_park_node_for_approval_marks_only_the_node_as_waiting_approval(make: _Factory) -> None:
+    """spec 0005 2.6 개정 5, R-12 (P4-4): 승인은 노드 실행을 **지목**하므로 행은 `start_node` 가
+    이미
+    만들었고, 파킹은 상태만 `waiting_approval` 로 바꾼다 - 자식 Run 의 id 는 없다. 같은 노드를 다시
+    시작하면 `None` 이다(멱등)."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "gate", 0)
+    assert node_execution_id is not None
+
+    store.park_node_for_approval(node_execution_id)
+
+    (record,) = store.node_executions(run_id)
+    assert record.id == node_execution_id
+    assert record.status is NodeExecutionStatus.WAITING_APPROVAL
+    assert record.agent_run_id is None
+    assert record.finished_at is None
+    assert store.start_node(run_id, "gate", 0) is None
+
+
+def test_waiting_node_execution_id_exists_only_while_the_status_is_waiting_approval(
+    make: _Factory,
+) -> None:
+    """spec 0005 2.6 개정 5 (1) (P4-4): 지목 대상은 `waiting_run_id` 와 같은 불변식 - 상태에서
+    유도된다. `waiting_approval` 일 때만 값이 있고, 주지 않은 `waiting_approval` 호출은 이전 값을
+    지우지 않으며, 다른 상태(`running`)로 가면 지워진다. 대기 중에도 lease 열은 건드리지 않는다."""
+    store, run_id = make()
+    store.acquire_lease(run_id, "a", 60.0)
+    node_execution_id = store.start_node(run_id, "gate", 0)
+    assert node_execution_id is not None
+
+    store.set_status(run_id, WorkflowRunStatus.RUNNING, seq=1)
+    store.set_status(
+        run_id,
+        WorkflowRunStatus.WAITING_APPROVAL,
+        seq=2,
+        current_node_id="gate",
+        waiting_node_execution_id=node_execution_id,
+    )
+    parked = store.load(run_id)
+    store.set_status(run_id, WorkflowRunStatus.WAITING_APPROVAL, seq=3)
+    still = store.load(run_id)
+    store.release(run_id, "a")
+    store.set_status(run_id, WorkflowRunStatus.RUNNING, seq=4)
+    resumed = store.load(run_id)
+
+    assert parked is not None and still is not None and resumed is not None
+    assert parked.status is WorkflowRunStatus.WAITING_APPROVAL
+    assert parked.waiting_node_execution_id == node_execution_id
+    assert parked.waiting_run_id is None
+    assert still.waiting_node_execution_id == node_execution_id
+    assert resumed.waiting_node_execution_id is None
+    assert store.acquire_lease(run_id, "b", 60.0) is True, "release 뒤에는 누구든 다시 잡는다"
+
+
 def test_finish_node_without_output_leaves_the_output_empty(make: _Factory) -> None:
     """spec 0005 2.4 개정 4: 출력이 없는 노드(`START`·`END`·`CONDITION`)는 `NULL` 이다 - 빈 객체가
     아니다."""

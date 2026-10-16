@@ -69,3 +69,23 @@ def test_malformed_messages_are_rejected(fields: dict[str, str]) -> None:
     """`timed_out` 은 Agent Run 의 값입니다(spec 2.3 — Workflow Run 에는 없습니다)."""
     with pytest.raises(ValidationError):
         WorkflowRunStatusMessage.model_validate(fields)
+
+
+def test_waiting_node_execution_id_is_parsed_and_defaults_to_none() -> None:
+    """spec 0005 2.6 개정 5 (1) (P4-4): `waiting_approval` 통지는 기다리는 노드 실행의 id 를 싣고,
+    없으면 `None` 이다."""
+    run_id, awaited = uuid4(), uuid4()
+    base = {
+        "workflow_run_id": str(run_id),
+        "seq": "4",
+        "status": "waiting_approval",
+        "at": _AT,
+    }
+
+    with_pointer = WorkflowRunStatusMessage.model_validate(
+        {**base, "waiting_node_execution_id": str(awaited)}
+    )
+    without = WorkflowRunStatusMessage.model_validate(base)
+
+    assert with_pointer.waiting_node_execution_id == awaited
+    assert without.waiting_node_execution_id is None

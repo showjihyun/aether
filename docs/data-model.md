@@ -254,12 +254,12 @@ Phase 4 의 Control Plane 네 표입니다(spec 0005 2.9, P4-1). 평면을 가�
 | --- | --- | --- |
 | `workflows` | 이름과 `current_version` | 가변 |
 | `workflow_versions` | `nodes`·`edges`(jsonb), `unique(workflow_id, version)` | **트리거로 불변** |
-| `workflow_runs` | 선언(`workflow_version_id`·`input`·`requested_at`)과 **투영**(`status`·`status_seq`·`current_node_id`·`waiting_run_id`·시각 열) | 가변 |
-| `workflow_approvals` | `workflow_run_id`·`node_execution_id`·`approved_by`·`approved_at`·`note` | **트리거로 append-only** |
+| `workflow_runs` | 선언(`workflow_version_id`·`input`·`requested_at`·`requested_by`)과 **투영**(`status`·`status_seq`·`current_node_id`·`waiting_run_id`·`waiting_node_execution_id`·시각 열) | 가변 |
+| `workflow_approvals` | `workflow_run_id`·`node_execution_id`·`approved_by`·`approved_at`·`note`, `unique(workflow_run_id, node_execution_id)`(0008 — 승인은 노드 실행당 한 건) | **트리거로 append-only** |
 
 **상태 enum 은 새로 만들었습니다** — `control.workflow_run_status` 의 일곱 값이고 `data.run_execution_status`(0001)는 건드리지 않았습니다(spec 0005 D-1·D-2). `timed_out` 은 없습니다 — Phase 4 는 Workflow 전체 타임아웃을 만들지 않고, 자식 Agent Run 의 타임아웃은 그 Run 의 것이며 Workflow 는 그것을 `failed` 로 받습니다.
 
-`aether_data` 는 `workflow_versions`·`workflow_runs` 에 **SELECT 만** 가집니다(worker 가 실행할 그래프와 Run 선언을 읽어야 합니다). `workflows`·`workflow_approvals` 에는 **아무 권한이 없습니다** — worker 는 이름도 승인 기록도 읽을 이유가 없습니다. `workflow_approvals` 는 승인을 **기록**만 하고 권한 판정은 하지 않습니다(spec 0005 D-6, 그 공백은 Phase 8).
+`aether_data` 는 `workflow_versions`·`workflow_runs`·**`workflow_approvals`** 에 **SELECT 만** 가집니다. 앞의 둘은 worker 가 실행할 그래프와 Run 선언을 읽기 위한 것이고, `workflow_approvals` 의 SELECT 는 **마이그레이션 0008 이 더했습니다**(P4-4, 사람 검토 H-1) — 실행기는 전진의 근거를 **저장된 사실**에서 읽어야 하고 재큐 메시지를 근거로 삼으면 떠돌이 메시지 하나가 승인 없이 전진시킵니다(spec 0005 개정 5). `workflows` 에는 **아무 권한이 없습니다** — worker 는 이름을 읽을 이유가 없습니다. `workflow_approvals` 는 승인을 **기록**만 하고 권한 판정은 하지 않습니다(spec 0005 D-6, 그 공백은 Phase 8).
 
 `workflow_approvals.node_execution_id` 에는 **FK 를 두지 않았습니다** — `control` 에서 `data` 로의 참조는 평면 경계를 거스릅니다. 지목한 실행이 실제로 `waiting_approval` 인지는 **P4-4 의 애플리케이션 판정**입니다(spec 0005 R-12).
 
@@ -287,6 +287,17 @@ Workflow Run 의 **실행 상태와 lease** 입니다(마이그레이션 0006, s
 
 `output`(jsonb)과 `output_truncated` 는 **P4-2b 가 씁니다**(2026-10-15 적용). 상한은 **직렬화된 UTF-8 바이트** 기준이고 애플리케이션이 지킵니다 — 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다. 집합은 P4-2a 의 실행기가 정했습니다(`aether_workflow.domain.node_execution.NodeExecutionStatus`) — 컬럼을 enum 으로 좁히는 것은 파킹이 `waiting_run` 을 더하는 **같은 단위의 두 번째 PR** 로 미룹니다(마이그레이션 하나로 끝내기 위해서입니다).
 
+### 마이그레이션 0008 — 승인 경로
+
+P4-4 가 요구한 넷입니다. **네 번째 줄이 사람 검토 항목(H-1)** 입니다.
+
+| 변경 | 내용 |
+| --- | --- |
+| `control.workflow_runs.waiting_node_execution_id` | uuid NULL, **FK 없음**(평면을 넘는 포인터 — 0007 의 두 열과 같은 근거). api 가 R-12 의 4xx 를 내려면 "지금 어느 노드 실행을 기다리는가" 가 `control` 안에 있어야 합니다. `waiting_approval` 일 때만 값이 있습니다(상태에서 유도) |
+| `data.workflow_run_executions.waiting_node_execution_id` | 같은 열의 **정본** 쪽(worker 가 씁니다) |
+| `data.workflow_node_execution_status` | `waiting_approval` 추가 — 다섯 값(`running`·`waiting_run`·`waiting_approval`·`succeeded`·`failed`) |
+| **`GRANT SELECT ON control.workflow_approvals TO aether_data`** | 실행기가 승인을 **저장된 사실**로 확인합니다. 0005 가 "승인 경로가 필요로 하면 그때 검토를 거쳐 더한다" 고 비워 둔 자리이고, **읽기 하나뿐**입니다(쓰기는 여전히 api 만). 열 단위 GRANT 로 더 좁히는 선택지는 마이그레이션 docstring 에 남겼습니다 |
+
 ### 마이그레이션 0007 — 요청자·노드 상태 enum·FK 둘
 
 P4-2a 의 파킹이 요구한 셋입니다.
@@ -294,7 +305,7 @@ P4-2a 의 파킹이 요구한 셋입니다.
 | 변경 | 내용 |
 | --- | --- |
 | `control.workflow_runs.requested_by` | uuid NULL, FK `control.api_keys(id)`. 자식 Agent Run 이 **그대로 물려받습니다** — 비우면 `GET /runs/{id}` 가 500 입니다(`RunView` 가 값을 필수로 요구). 사람 주체를 발명하지 않고 Workflow 를 시작한 주체를 넘깁니다 |
-| `data.workflow_node_executions.status` | `text` → enum `data.workflow_node_execution_status`(`running`·`waiting_run`·`succeeded`·`failed`). `data.run_execution_status`(0001)와 **다른 타입**입니다 — Agent Run 의 `queued`·`timed_out` 은 노드 실행에 없습니다. 0005 가 열어 둔 자리를 실행기가 집합을 정한 뒤 좁혔습니다 |
+| `data.workflow_node_executions.status` | `text` → enum `data.workflow_node_execution_status`(`running`·`waiting_run`·`succeeded`·`failed`, 0008 이 `waiting_approval` 을 더해 다섯). `data.run_execution_status`(0001)와 **다른 타입**입니다 — Agent Run 의 `queued`·`timed_out` 은 노드 실행에 없습니다. 0005 가 열어 둔 자리를 실행기가 집합을 정한 뒤 좁혔습니다 |
 | **FK 둘 제거** | `data.workflow_node_executions.agent_run_id` 와 `control.workflow_runs.waiting_run_id` 가 가리킨 `control.runs(id)` |
 
 **FK 를 푼 이유**(리뷰 대상). 파킹의 순서는 ① 자식 Run 의 id 를 정해 **영속** ② api 에 선언 요청 ③ 파킹 통지입니다. ①을 ② 뒤로 미룰 수 없습니다 — 그러면 재전달에서 id 를 다시 만들어 자식 Run 이 둘이 됩니다(spec 0005 R-8). 그런데 ① 시점에는 `control.runs` 행이 아직 없어 FK 가 거부합니다. `waiting_run_id` 는 같은 경쟁입니다 — 파킹 통지와 자식 선언을 **서로 다른 api 소비자**가 받으므로 투영이 선언보다 먼저 적용될 수 있고, 그때 FK 위반은 투영 스레드를 죽입니다. 이 열들은 "무엇을 기다리는가" 를 가리키는 포인터이고, 무결성의 보증은 FK 가 아니라 **id 를 한 곳(실행기)에서 정해 멱등 선언하는 구조**가 맡습니다. `data.workflow_run_executions.waiting_run_id`(0006)가 처음부터 FK 없이 열린 것과 같은 근거이고, 4절의 cross-schema FK 수명 논의와도 같은 방향입니다.

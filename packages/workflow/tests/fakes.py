@@ -21,6 +21,7 @@ from aether_workflow.application.ports.outbound.workflow_run_declaration_reader 
 from aether_workflow.application.ports.outbound.workflow_status_notifier import (
     WorkflowStatusMessage,
 )
+from aether_workflow.domain.approval import Approval
 from aether_workflow.domain.events import WorkflowEvent
 from aether_workflow.domain.failure import WorkflowFailureReason
 from aether_workflow.domain.node import Edge, Node, NodeKind
@@ -133,6 +134,7 @@ class FakeWorkflowRunStateStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
         waiting_run_id: UUID | None = None,
+        waiting_node_execution_id: UUID | None = None,
     ) -> None:
         self.set_status_calls.append((status, seq))
         old = self.executions[workflow_run_id]
@@ -140,11 +142,20 @@ class FakeWorkflowRunStateStore:
             waiting = waiting_run_id if waiting_run_id is not None else old.waiting_run_id
         else:
             waiting = None
+        if status is WorkflowRunStatus.WAITING_APPROVAL:
+            waiting_node = (
+                waiting_node_execution_id
+                if waiting_node_execution_id is not None
+                else old.waiting_node_execution_id
+            )
+        else:
+            waiting_node = None
         self.executions[workflow_run_id] = replace(
             old,
             status=status,
             status_seq=seq,
             waiting_run_id=waiting,
+            waiting_node_execution_id=waiting_node,
             current_node_id=current_node_id or old.current_node_id,
             failure_reason=failure_reason.value if failure_reason else old.failure_reason,
             started_at=started_at or old.started_at,
@@ -173,6 +184,10 @@ class FakeWorkflowRunStateStore:
         self._update_node(
             node_execution_id, status=NodeExecutionStatus.WAITING_RUN, agent_run_id=agent_run_id
         )
+
+    def park_node_for_approval(self, node_execution_id: UUID) -> None:
+        self.events_log.append(("park_node_for_approval", node_execution_id))
+        self._update_node(node_execution_id, status=NodeExecutionStatus.WAITING_APPROVAL)
 
     def finish_node(
         self,
@@ -252,6 +267,25 @@ class FakeWorkflowStatusNotifier:
 
     def notify(self, message: WorkflowStatusMessage) -> None:
         self.messages.append(message)
+
+
+class FakeApprovalReader:
+    """`ApprovalReader` 계약의 인메모리 구현. 승인은 테스트가 `grant` 로 **저장**한 것만 있고,
+    `lookups` 는 실행기가 어느 노드 실행의 승인을 물었는지 모읍니다 - 전진의 근거가 저장된
+    승인이지 다른 신호가 아님을 판정합니다."""
+
+    def __init__(self) -> None:
+        self._granted: dict[UUID, Approval] = {}
+        self.lookups: list[UUID] = []
+
+    def grant(self, node_execution_id: UUID) -> None:
+        self._granted[node_execution_id] = Approval(
+            node_execution_id=node_execution_id, approved_at=_EPOCH
+        )
+
+    def approval_for(self, node_execution_id: UUID) -> Approval | None:
+        self.lookups.append(node_execution_id)
+        return self._granted.get(node_execution_id)
 
 
 def start_end_graph() -> tuple[tuple[Node, ...], tuple[Edge, ...]]:

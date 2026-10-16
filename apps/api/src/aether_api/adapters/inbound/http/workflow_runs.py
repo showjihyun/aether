@@ -6,7 +6,8 @@
 
 `status` 는 `aether_workflow.domain.run_status.WorkflowRunStatus` 를 그대로 씁니다 — api 는
 `aether_workflow.domain` 만 import 합니다. `waiting_run`·`waiting_approval` 이 상태만으로
-구별됩니다(R-13).
+구별됩니다(R-13). `waiting_node_execution_id` 는 `waiting_approval` 일 때 승인이 지목해야 하는
+노드 실행의 id 입니다(P4-4, R-12).
 
 의도적으로 `from __future__ import annotations` 을 쓰지 않습니다 — `runs.py`·`workflows.py`
 와 같은 이유(PEP 563 이 팩토리 지역 변수를 캡처한 `Annotated[...]` 의존성을 깨뜨립니다,
@@ -57,6 +58,7 @@ class WorkflowRunDetailResponse(BaseModel):
     status: WorkflowRunStatus
     current_node_id: str | None
     waiting_run_id: UUID | None
+    waiting_node_execution_id: UUID | None
     requested_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
@@ -130,6 +132,7 @@ def build_workflow_runs_router(
             status=view.status,
             current_node_id=view.current_node_id,
             waiting_run_id=view.waiting_run_id,
+            waiting_node_execution_id=view.waiting_node_execution_id,
             requested_at=view.requested_at,
             started_at=view.started_at,
             finished_at=view.finished_at,

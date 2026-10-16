@@ -17,7 +17,10 @@ NOTHING RETURNING id` 라서 같은 `(workflow_run_id, node_id, iteration)` 를 
 `park_node` 는 자식 Run 의 id 와 `waiting_run` 을 **한 UPDATE** 로 영속합니다 - 발사 전에 부릅니다.
 `set_status` 의 `waiting_run_id` 는 `COALESCE` 가 아니라 **상태에서 유도**합니다(`waiting_run` 일
 때만 값이 있고 주지 않으면 이전 값, 다른 상태로 가면 NULL) - api 의 투영(`apply_status`)과 같은
-불변식입니다. 이 어댑터의 어떤 메서드도 파킹 때문에 lease 열을 새로 쓰지 않습니다: lease 를 놓는
+불변식입니다. `waiting_node_execution_id` 도 같은 규칙입니다(`waiting_approval` 일 때만 값이 있고
+주지
+않으면 이전 값, 다른 상태로 가면 NULL - P4-4). 이 어댑터의 어떤 메서드도 파킹 때문에 lease 열을 새로
+쓰지 않습니다: lease 를 놓는
 것은 `release` 하나이고 호출자의 `finally` 가 부릅니다(R-7).
 """
 
@@ -95,7 +98,7 @@ class PostgresWorkflowRunStateStore:
             cur.execute(
                 """
                 SELECT status::text, status_seq, current_node_id, started_at, finished_at,
-                       failure_reason, waiting_run_id
+                       failure_reason, waiting_run_id, waiting_node_execution_id
                 FROM data.workflow_run_executions
                 WHERE workflow_run_id = %s
                 """,
@@ -112,6 +115,7 @@ class PostgresWorkflowRunStateStore:
             finished_at,
             failure_reason,
             waiting_run_id,
+            waiting_node_execution_id,
         ) = row
         return WorkflowRunExecution(
             workflow_run_id=workflow_run_id,
@@ -122,6 +126,7 @@ class PostgresWorkflowRunStateStore:
             finished_at=finished_at,
             failure_reason=failure_reason,
             waiting_run_id=waiting_run_id,
+            waiting_node_execution_id=waiting_node_execution_id,
         )
 
     def set_status(
@@ -135,6 +140,7 @@ class PostgresWorkflowRunStateStore:
         started_at: datetime | None = None,
         finished_at: datetime | None = None,
         waiting_run_id: UUID | None = None,
+        waiting_node_execution_id: UUID | None = None,
     ) -> None:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -147,6 +153,11 @@ class PostgresWorkflowRunStateStore:
                     waiting_run_id = CASE
                         WHEN %(status)s::text = 'waiting_run'
                         THEN COALESCE(%(waiting_run_id)s, waiting_run_id)
+                        ELSE NULL
+                    END,
+                    waiting_node_execution_id = CASE
+                        WHEN %(status)s::text = 'waiting_approval'
+                        THEN COALESCE(%(waiting_node_execution_id)s, waiting_node_execution_id)
                         ELSE NULL
                     END,
                     started_at = COALESCE(%(started_at)s, started_at),
@@ -162,6 +173,7 @@ class PostgresWorkflowRunStateStore:
                     "current_node_id": current_node_id,
                     "failure_reason": failure_reason.value if failure_reason else None,
                     "waiting_run_id": waiting_run_id,
+                    "waiting_node_execution_id": waiting_node_execution_id,
                     "started_at": started_at,
                     "finished_at": finished_at,
                 },
@@ -198,6 +210,17 @@ class PostgresWorkflowRunStateStore:
                 WHERE id = %s
                 """,
                 (agent_run_id, node_execution_id),
+            )
+
+    def park_node_for_approval(self, node_execution_id: UUID) -> None:
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE data.workflow_node_executions
+                SET status = 'waiting_approval'::data.workflow_node_execution_status
+                WHERE id = %s
+                """,
+                (node_execution_id,),
             )
 
     def finish_node(

@@ -11,6 +11,7 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from aether_api.domain.workflow import WorkflowNotFound, WorkflowVersionNotFound, WorkflowView
+from aether_api.domain.workflow_approval import AlreadyApproved, WorkflowApprovalView
 from aether_api.domain.workflow_run import WorkflowRunView
 from aether_workflow.domain.node import Edge, Node
 from aether_workflow.domain.run_status import WorkflowRunStatus
@@ -93,6 +94,7 @@ class FakeWorkflowRunDeclarationStore:
             status=WorkflowRunStatus.QUEUED,
             current_node_id=None,
             waiting_run_id=None,
+            waiting_node_execution_id=None,
             requested_at=datetime(2026, 1, 1, tzinfo=UTC),
             started_at=None,
             finished_at=None,
@@ -118,6 +120,7 @@ class FakeWorkflowRunDeclarationStore:
         started_at: datetime | None,
         finished_at: datetime | None,
         failure_reason: str | None,
+        waiting_node_execution_id: UUID | None = None,
     ) -> bool:
         view = self._runs.get(workflow_run_id)
         if view is None or self._status_seq[workflow_run_id] >= seq:
@@ -129,12 +132,63 @@ class FakeWorkflowRunDeclarationStore:
             current_node_id=current_node_id
             if current_node_id is not None
             else view.current_node_id,
-            waiting_run_id=waiting_run_id if waiting_run_id is not None else view.waiting_run_id,
+            waiting_run_id=_derived(
+                status is WorkflowRunStatus.WAITING_RUN, waiting_run_id, view.waiting_run_id
+            ),
+            waiting_node_execution_id=_derived(
+                status is WorkflowRunStatus.WAITING_APPROVAL,
+                waiting_node_execution_id,
+                view.waiting_node_execution_id,
+            ),
             started_at=started_at if started_at is not None else view.started_at,
             finished_at=finished_at if finished_at is not None else view.finished_at,
             failure_reason=failure_reason if failure_reason is not None else view.failure_reason,
         )
         return True
+
+
+def _derived(waiting: bool, new: UUID | None, old: UUID | None) -> UUID | None:
+    """상태에서 유도되는 포인터(`waiting_run_id`·`waiting_node_execution_id`): 그 대기 상태일 때만
+    값이 있고(주지 않으면 이전 값) 다른 상태로 가면 지워진다 - PostgreSQL 구현의 `CASE` 와 같다."""
+    if not waiting:
+        return None
+    return new if new is not None else old
+
+
+class FakeWorkflowApprovalStore:
+    """`WorkflowApprovalStore` 포트 계약의 인메모리 구현. 노드 실행당 한 건 - 두 번째 `record` 는
+    `AlreadyApproved`(PostgreSQL 의 `unique(workflow_run_id, node_execution_id)` 와 같다)."""
+
+    def __init__(self) -> None:
+        self.approvals: list[WorkflowApprovalView] = []
+
+    def record(
+        self, workflow_run_id: UUID, node_execution_id: UUID, approved_by: str, note: str | None
+    ) -> WorkflowApprovalView:
+        if self.get(workflow_run_id, node_execution_id) is not None:
+            raise AlreadyApproved(workflow_run_id, node_execution_id)
+        view = WorkflowApprovalView(
+            workflow_run_id=workflow_run_id,
+            node_execution_id=node_execution_id,
+            approved_by=approved_by,
+            approved_at=datetime(2026, 1, 1, 0, len(self.approvals), tzinfo=UTC),
+            note=note,
+        )
+        self.approvals.append(view)
+        return view
+
+    def get(self, workflow_run_id: UUID, node_execution_id: UUID) -> WorkflowApprovalView | None:
+        return next(
+            (
+                a
+                for a in self.approvals
+                if a.workflow_run_id == workflow_run_id and a.node_execution_id == node_execution_id
+            ),
+            None,
+        )
+
+    def list_for(self, workflow_run_id: UUID) -> tuple[WorkflowApprovalView, ...]:
+        return tuple(a for a in self.approvals if a.workflow_run_id == workflow_run_id)
 
 
 class FakeWorkflowRunNotifier:

@@ -216,17 +216,18 @@ def test_data_role_reads_workflow_versions_and_runs_but_cannot_write_them(
         conn.close()
 
 
-def test_data_role_has_no_access_to_workflows_or_approvals(
+def test_data_role_has_no_access_to_the_workflows_name_table(
     data_connection_factory: _Factory,
 ) -> None:
-    """spec 0005 2.9: 실행기는 이름 표와 승인 기록을 읽을 이유가 없어 SELECT 도 주지 않았다."""
+    """spec 0005 2.9: 실행기는 이름 표를 읽을 이유가 없어 SELECT 도 주지 않았다. (승인 기록은
+    0008(P4-4)이 SELECT 만 더했다 - `test_workflow_approval_migration_integration.py` 가
+    읽기 가능·쓰기 불가를 판정한다.)"""
     conn = data_connection_factory()
     try:
-        for table in ("control.workflows", "control.workflow_approvals"):
-            with pytest.raises(psycopg.errors.InsufficientPrivilege):
-                with conn.cursor() as cur:
-                    cur.execute(f"SELECT * FROM {table}")
-            conn.rollback()
+        with pytest.raises(psycopg.errors.InsufficientPrivilege):
+            with conn.cursor() as cur:
+                cur.execute("SELECT * FROM control.workflows")
+        conn.rollback()
     finally:
         conn.close()
 

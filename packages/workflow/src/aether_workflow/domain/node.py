@@ -22,6 +22,8 @@ class NodeKind(StrEnum):
     LLM = "LLM"
     MCP = "MCP"
     TOOL = "TOOL"
+    HUMAN = "HUMAN"
+    APPROVAL = "APPROVAL"
 
 
 @dataclass(frozen=True)

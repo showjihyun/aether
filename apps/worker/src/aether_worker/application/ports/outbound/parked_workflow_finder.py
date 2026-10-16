@@ -27,7 +27,9 @@ class ParkedWorkflowFinder(Protocol):
         ...
 
     def ready_to_resume(self) -> tuple[ParkedWorkflow, ...]:
-        """`status = waiting_run` 이고 기다리는 자식이 **이미 종결**인 Workflow Run 전부 - 한 번의
-        조회(JOIN)입니다. 스위퍼가 부릅니다. 자식의 실행 행이 아직 없는 것(worker 가 집지 않음)은
+        """재개할 수 있는 파킹 Workflow Run 전부 - 한 번의 조회(JOIN)입니다. 둘을 줍습니다:
+        `status = waiting_run` 이고 기다리는 자식이 **이미 종결**인 것, 그리고
+        `status = waiting_approval` 이고 기다리는 노드 실행의 **승인이 이미 저장된** 것
+        (P4-4). 스위퍼가 부릅니다. 자식의 실행 행이 아직 없는 것(worker 가 집지 않음)은
         종결이 아니므로 줍지 않습니다."""
         ...

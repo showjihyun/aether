@@ -595,3 +595,289 @@ def test_a_reply_over_the_default_8_kib_limit_is_stored_truncated(
         assert truncated is True
         size = len(json.dumps(value, ensure_ascii=False, separators=(",", ":")).encode())
         assert 8000 < size <= 8192, size
+
+
+# --- P4-4: HUMAN / APPROVAL 과 승인 API (R-4, R-8, R-12, R-13) ----------------------------
+
+
+def _define_approval_flow(stack: _Stack, *, gate_kind: str = "HUMAN") -> str:
+    """R-4 의 그래프 그대로: `START -> AGENT -> CONDITION -> HUMAN -> AGENT -> END`. 조건의 `false`
+    분기는 곧장 `END` 다(`CONDITION` 은 두 분기가 다 있어야 저장된다)."""
+    agent = {"agent_id": stack.agent_id, "agent_version": None}
+    created = stack.client.post(
+        "/workflows",
+        json={
+            "name": f"chain-approval-{uuid4()}",
+            "nodes": [
+                _node("s", "START"),
+                {**_node("a1", "AGENT"), **agent},
+                {
+                    **_node("c", "CONDITION"),
+                    "condition_path": "nodes.a1.text",
+                    "condition_operator": "contains",
+                    "condition_value": "yes",
+                },
+                _node("h", gate_kind),
+                {**_node("a2", "AGENT"), **agent},
+                _node("e", "END"),
+                _node("end_false", "END"),
+            ],
+            "edges": [
+                {"source": "s", "target": "a1", "label": None},
+                {"source": "a1", "target": "c", "label": None},
+                {"source": "c", "target": "h", "label": "true"},
+                {"source": "c", "target": "end_false", "label": "false"},
+                {"source": "h", "target": "a2", "label": None},
+                {"source": "a2", "target": "e", "label": None},
+            ],
+        },
+        headers=stack.headers,
+    )
+    assert created.status_code == 201, created.text
+    workflow_id: str = created.json()["id"]
+    return workflow_id
+
+
+def _start(stack: _Stack, workflow_id: str, input: dict[str, Any]) -> tuple[str, UUID]:
+    started = stack.client.post(
+        f"/workflows/{workflow_id}/runs", json={"input": input}, headers=stack.headers
+    )
+    assert started.status_code == 202, started.text
+    run_id: str = started.json()["workflow_run_id"]
+    (version_id,) = {
+        UUID(f["workflow_version_id"])
+        for _, f in stream_entries(stack.redis, _WORKFLOW_REQUESTED)
+        if f["workflow_run_id"] == run_id
+    }
+    return run_id, version_id
+
+
+def _approve(stack: _Stack, run_id: str, node_execution_id: str, note: str | None = None) -> Any:
+    return stack.client.post(
+        f"/workflow-runs/{run_id}/approvals",
+        json={"node_execution_id": node_execution_id, "note": note},
+        headers=stack.headers,
+    )
+
+
+def _node_execution_id(stack: _Stack, run_id: str, node_id: str) -> str:
+    ((found,),) = stack.query(
+        "SELECT id FROM data.workflow_node_executions WHERE workflow_run_id = %s AND node_id = %s",
+        run_id,
+        node_id,
+    )
+    return str(found)
+
+
+def _wait_for_approval(stack: _Stack, run_id: str) -> dict[str, Any]:
+    assert wait_until(
+        lambda: stack.detail(run_id)["status"] == "waiting_approval", timeout=_CHAIN_TIMEOUT
+    ), f"승인 대기가 투영되지 않았습니다 -- 마지막으로 본 투영: {stack.detail(run_id)}"
+    return stack.detail(run_id)
+
+
+def _requested_twice(stack: _Stack, run_id: str, version_id: UUID) -> None:
+    """승인 없는 **재큐 메시지만** 두 번 넣고, worker 가 둘 다 처리(ack)할 때까지 기다린다."""
+    for _ in range(2):
+        stack.redis.xadd(
+            _WORKFLOW_REQUESTED,
+            {"workflow_run_id": run_id, "workflow_version_id": str(version_id), "traceparent": ""},
+        )
+    assert wait_until(
+        lambda: (
+            stack.redis.xpending(_WORKFLOW_REQUESTED, "aether-worker")["pending"] == 0
+            and stack.redis.xinfo_groups(_WORKFLOW_REQUESTED)[0]["lag"] == 0
+        ),
+        timeout=_CHAIN_TIMEOUT,
+    ), "재큐 메시지가 처리(ack)되지 않았습니다"
+
+
+def test_the_full_approval_workflow_stops_at_the_gate_and_resumes_on_approval(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """**R-4 (Phase 완료 판정)**, R-8, R-12, R-13: `START -> AGENT -> CONDITION -> HUMAN -> AGENT ->
+    END` 1건을 api -> worker 사슬 **프로덕션 조립 그대로**(모델만 fake) 돈다.
+
+    - 첫 `AGENT` 동안은 `waiting_run`, 게이트에서는 `waiting_approval` -- **상태만으로** 구별된다
+      (R-13). 승인 대기 중 lease 는 비어 있다(R-7).
+    - 승인 없이 재큐 메시지만 넣어도 전진하지 않는다(R-12).
+    - 대기가 아닌 노드 실행을 지목한 승인은 4xx 다(R-12). 올바른 승인은 201 이고 `approved_by` 는
+      인증된 주체의 id 그대로다.
+    - 재개되어 `succeeded` 에 닿고 노드 실행 기록이 **순서대로** 남는다(R-4).
+    - 승인 API 를 다시 불러도 `already_approved` 이고 승인 1건·노드 실행 행은 노드당
+    1행이다(R-8)."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        run_id, version_id = _start(stack, _define_approval_flow(stack), {"q": "yes please"})
+
+        # R-13: 자식 Run 을 기다릴 때는 `waiting_run` (게이트가 닫혀 있어 관측이 확정적이다).
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "waiting_run", timeout=_CHAIN_TIMEOUT
+        )
+        waiting_run = stack.detail(run_id)
+        assert waiting_run["waiting_run_id"] is not None
+        assert waiting_run["waiting_node_execution_id"] is None
+        stack.release_children.set()
+
+        parked = _wait_for_approval(stack, run_id)
+        gate = _node_execution_id(stack, run_id, "h")
+        assert parked["current_node_id"] == "h", parked
+        assert parked["waiting_node_execution_id"] == gate, parked
+        assert parked["waiting_run_id"] is None, parked
+        assert stack.visited(run_id) == ["s", "a1", "c", "h"]
+        assert stack.query(
+            "SELECT status::text FROM data.workflow_node_executions"
+            " WHERE workflow_run_id = %s AND node_id = 'h'",
+            run_id,
+        ) == [("waiting_approval",)]
+        assert stack.query(
+            "SELECT lease_owner, lease_until FROM data.workflow_run_executions"
+            " WHERE workflow_run_id = %s",
+            run_id,
+        ) == [(None, None)], "승인을 기다리는 동안 lease 를 쥐지 않는다(R-7)"
+        empty = stack.client.get(f"/workflow-runs/{run_id}/approvals", headers=stack.headers)
+        assert empty.json() == {"items": []}
+
+        # R-12: 승인 없는 재큐는 전진시키지 않는다 -- 상태·seq·노드 기록이 그대로다.
+        seq_sql = "SELECT status_seq FROM data.workflow_run_executions WHERE workflow_run_id = %s"
+        seq_before = stack.query(seq_sql, run_id)
+        _requested_twice(stack, run_id, version_id)
+        assert stack.detail(run_id)["status"] == "waiting_approval"
+        assert stack.visited(run_id) == ["s", "a1", "c", "h"]
+        assert stack.query(seq_sql, run_id) == seq_before, "재큐만으로는 seq 도 늘지 않는다(R-8)"
+
+        # R-12: 대기가 아닌 노드 실행을 지목한 승인은 거부된다.
+        elsewhere = _approve(stack, run_id, _node_execution_id(stack, run_id, "a1"))
+        assert elsewhere.status_code == 400, elsewhere.text
+        assert elsewhere.json() == {"detail": "node_execution_not_waiting"}
+        unknown = _approve(stack, run_id, str(uuid4()))
+        assert unknown.json() == {"detail": "node_execution_not_waiting"}
+        assert stack.detail(run_id)["status"] == "waiting_approval"
+
+        approved = _approve(stack, run_id, gate, "looks fine")
+        assert approved.status_code == 201, approved.text
+        body = approved.json()
+        assert body["approved_by"] == str(stack.key_id), "인증된 주체의 id 그대로"
+        assert body["node_execution_id"] == gate
+        assert body["note"] == "looks fine"
+
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "succeeded", timeout=_CHAIN_TIMEOUT
+        ), f"승인 뒤 재개되지 않았습니다 -- 마지막으로 본 투영: {stack.detail(run_id)}"
+        final = stack.detail(run_id)
+        assert final["current_node_id"] == "e", final
+        assert final["waiting_node_execution_id"] is None, final
+        assert final["failure_reason"] is None, final
+        assert stack.visited(run_id) == ["s", "a1", "c", "h", "a2", "e"]
+
+        # R-12: 승인 기록이 조회에 나온다.
+        listed = stack.client.get(f"/workflow-runs/{run_id}/approvals", headers=stack.headers)
+        assert listed.status_code == 200, listed.text
+        (item,) = listed.json()["items"]
+        assert item["node_execution_id"] == gate
+        assert item["approved_by"] == str(stack.key_id)
+        assert item["approved_at"] is not None
+
+        # R-8: 다시 불러도 이미 승인됨이고, 기록과 노드 실행은 늘지 않는다.
+        again = _approve(stack, run_id, gate)
+        assert again.status_code == 400, again.text
+        assert again.json() == {"detail": "already_approved"}
+        relisted = stack.client.get(f"/workflow-runs/{run_id}/approvals", headers=stack.headers)
+        assert len(relisted.json()["items"]) == 1
+        assert stack.query(
+            "SELECT node_id, count(*) FROM data.workflow_node_executions"
+            " WHERE workflow_run_id = %s GROUP BY node_id ORDER BY node_id",
+            run_id,
+        ) == [("a1", 1), ("a2", 1), ("c", 1), ("e", 1), ("h", 1), ("s", 1)]
+
+        # R-13 회귀: Agent Run 의 enum 은 그대로(`waiting` 포함 일곱 값)다.
+        assert stack.query("SELECT enum_range(NULL::data.run_execution_status)::text") == [
+            ("{queued,running,waiting,succeeded,failed,cancelled,timed_out}",)
+        ]
+
+
+def test_an_approval_node_of_kind_approval_parks_and_resumes_the_same_way(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 2.6 개정 5 (5): `APPROVAL` 은 `HUMAN` 과 v1 에서 같다 -- 같은 경로로 파킹되고 승인으로
+    재개된다."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        stack.release_children.set()
+        run_id, _ = _start(stack, _define_approval_flow(stack, gate_kind="APPROVAL"), {"q": "yes"})
+        _wait_for_approval(stack, run_id)
+
+        approved = _approve(stack, run_id, _node_execution_id(stack, run_id, "h"))
+
+        assert approved.status_code == 201, approved.text
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "succeeded", timeout=_CHAIN_TIMEOUT
+        )
+        assert stack.visited(run_id) == ["s", "a1", "c", "h", "a2", "e"]
+
+
+def test_a_lost_requeue_after_the_approval_is_recovered_by_the_sweeper(
+    control_database_url: str,
+    db_host_port: tuple[str, int],
+    redis_url: str,
+    redis_client: Redis,
+    control_connection_factory: Callable[[], psycopg.Connection],
+    admin_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 2.5 (P4-4): 이벤트만 믿지 않는다. 승인은 저장됐는데 재큐(XADD)가 유실된 Workflow 는
+    스위퍼가 줍는다 -- 여기서는 승인 기록을 api 를 거치지 않고 직접 심어(재큐 없음) 재큐가 없는
+    상태를 재현하고, 스위퍼만으로 `succeeded` 에 닿는 것을 본다."""
+    with _stack(
+        control_database_url,
+        db_host_port,
+        redis_url,
+        redis_client,
+        control_connection_factory,
+        admin_connection_factory,
+    ) as stack:
+        stack.release_children.set()
+        run_id, _ = _start(stack, _define_approval_flow(stack), {"q": "yes"})
+        _wait_for_approval(stack, run_id)
+        gate = _node_execution_id(stack, run_id, "h")
+        requests_before = len(redis_client.xrange(_WORKFLOW_REQUESTED, min="-", max="+") or [])
+
+        conn = admin_connection_factory()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "INSERT INTO control.workflow_approvals"
+                    " (workflow_run_id, node_execution_id, approved_by) VALUES (%s, %s, 'direct')",
+                    (run_id, gate),
+                )
+            conn.commit()
+        finally:
+            conn.close()
+        requests_after = len(redis_client.xrange(_WORKFLOW_REQUESTED, min="-", max="+") or [])
+        assert requests_after == requests_before, "이 시나리오는 재큐가 없어야 한다"
+
+        assert wait_until(
+            lambda: stack.detail(run_id)["status"] == "succeeded", timeout=_CHAIN_TIMEOUT
+        ), f"스위퍼가 승인된 대기를 줍지 못했습니다 -- 마지막 투영: {stack.detail(run_id)}"
+        assert stack.visited(run_id) == ["s", "a1", "c", "h", "a2", "e"]

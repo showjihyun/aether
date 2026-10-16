@@ -76,11 +76,12 @@ def _valid() -> WorkflowVersion:
     )
 
 
-def test_node_kinds_are_exactly_eleven() -> None:
-    """spec D-14: 노드 종류는 열 한 개이고 WEBHOOK·SCHEDULE 은 없다."""
+def test_node_kinds_are_exactly_thirteen() -> None:
+    """spec D-14: 노드 종류는 열 열세 개이고 WEBHOOK·SCHEDULE 은 없다. `HUMAN`·`APPROVAL` 은 P4-4
+    가 더했다(spec 2.6 개정 5 (5) - 둘은 v1 에서 같게 다룬다)."""
     assert {k.name for k in NodeKind} == {
         "START", "END", "AGENT", "CONDITION", "PARALLEL", "JOIN",
-        "LOOP", "WAIT", "LLM", "MCP", "TOOL",
+        "LOOP", "WAIT", "LLM", "MCP", "TOOL", "HUMAN", "APPROVAL",
     }  # fmt: skip
 
 
