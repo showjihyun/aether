@@ -373,6 +373,8 @@ def _n(
         "max_iterations": max_iterations,
         "agent_id": agent_id,
         "agent_version": agent_version,
+        # `LLM` 은 프롬프트가 필수다(개정 9 (4) `llm_node_without_prompt`).
+        **({"llm_prompt": "p"} if kind == "LLM" else {}),
     }
 
 

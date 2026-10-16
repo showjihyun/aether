@@ -33,7 +33,8 @@ class WorkflowFailureReason(StrEnum):
     분기로 가는 Workflow 는 디버깅할 수 없어 실행 실패로 끝냅니다(spec 0005 2.4 개정 4)."""
 
     CONDITION_TYPE_MISMATCH = "condition_type_mismatch"
-    """`CONDITION` 의 연산자가 그 타입의 값에 적용될 수 없습니다(`gt`·`lt` 에 숫자가 아닌 값 등)."""
+    """`CONDITION` 의 연산자가 그 타입의 값에 적용될 수 없습니다(`gt`·`lt` 에 숫자가 아닌 값 등).
+    `TOOL`·`MCP` 의 인자 경로가 객체가 아닌 값을 가리킬 때도 씁니다(P4-5, 병합할 수 없음)."""
 
     WORKFLOW_RUN_WITHOUT_REQUESTER = "workflow_run_without_requester"
     """Workflow Run 에 요청자가 없습니다(마이그레이션 0007 이전에 만들어진 행). 비운 채로 자식 Run
@@ -47,3 +48,14 @@ class WorkflowFailureReason(StrEnum):
     LOOP_LIMIT_EXCEEDED = "loop_limit_exceeded"
     """`LOOP` 가 `max_iterations` 번 본문을 돈 뒤에도 판정식이 참입니다(R-10). 본문을 한 번 더
     돌리지 않고 끝납니다 - 상한 초과로 구별되는 사유입니다."""
+
+    MODEL_CALL_FAILED = "model_call_failed"
+    """`LLM` 노드의 모델 호출이 예외를 냈습니다(P4-5). 예외의 내용은 사유에 담지 않습니다."""
+
+    TOOL_CALL_DENIED = "tool_call_denied"
+    """`TOOL`·`MCP` 노드의 도구 호출을 Policy 가 거부했습니다(P4-5, 기본 deny). 조용히 넘어가지
+    않고 노드를 실패시킵니다 - 권한이 없는 Workflow 가 성공으로 끝나면 안 됩니다."""
+
+    TOOL_CALL_FAILED = "tool_call_failed"
+    """`TOOL`·`MCP` 노드의 도구 호출이 실패했거나(없는 도구·연결 실패·타임아웃) 결과가
+    `is_error` 입니다(P4-5). 거부(`tool_call_denied`)와 구별됩니다."""

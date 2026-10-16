@@ -15,6 +15,11 @@
 `WAIT_NODE_WITHOUT_DURATION` 은 열두 번째입니다(개정 7 (5)) - `wait_seconds` 가 없거나 0 이하인
 `WAIT`. 얼마나 기다릴지 모르는 노드는 실행 중에 발견하면 이미 앞 노드들이 지나간 뒤입니다.
 `wait_seconds` 는 `WAIT` 가 아닌 노드에서 **무시**합니다(`max_iterations` 와 같은 규칙).
+`LLM_NODE_WITHOUT_PROMPT`·`TOOL_NODE_WITHOUT_TARGET` 은 열세 번째와 열네 번째입니다(개정 9 (4)) -
+프롬프트 리터럴이 없는 `LLM`, 서버 또는 도구 이름이 없는 `TOOL`·`MCP`. 두 종류의 값은 다른 종류의
+노드에서 **무시**합니다. **`AGENT_NODE_WITHOUT_AGENT` 의 뜻이 넓어졌습니다**: "Agent 참조가 필요한
+노드에 참조가 없음" - `AGENT` 뿐 아니라 `TOOL`·`MCP` 도(권한 주체가 `agent_id` 입니다, 개정 9 (1))
+이 사유를 씁니다. 값을 늘리지 않고 기존 사유를 재사용합니다.
 한 정의가 여러 규칙을 어기면 위반을 전부 돌려줍니다. 한 위반이 다른 위반의 파생
 증상으로 중복 보고되지 않도록, 고아 노드는 `END_UNREACHABLE` 에서 제외하고 끊긴
 간선은 도달 가능성 계산에서 무시합니다.
@@ -44,6 +49,8 @@ class Reason(StrEnum):
     CONDITION_NODE_WITHOUT_PREDICATE = "condition_node_without_predicate"
     CONDITION_NODE_WITHOUT_BOTH_BRANCHES = "condition_node_without_both_branches"
     WAIT_NODE_WITHOUT_DURATION = "wait_node_without_duration"
+    LLM_NODE_WITHOUT_PROMPT = "llm_node_without_prompt"
+    TOOL_NODE_WITHOUT_TARGET = "tool_node_without_target"
 
 
 @dataclass(frozen=True)
@@ -51,6 +58,10 @@ class Violation:
     reason: Reason
     node_id: str | None = None
     """위반이 가리키는 노드. START 개수처럼 그래프 전체에 대한 위반이면 `None`."""
+
+
+_TOOL_KINDS = frozenset({NodeKind.TOOL, NodeKind.MCP})
+_AGENT_REFERENCE_KINDS = frozenset({NodeKind.AGENT}) | _TOOL_KINDS
 
 
 def _reachable(start: str, adjacency: dict[str, list[str]]) -> set[str]:
@@ -107,8 +118,14 @@ def validate_version(version: WorkflowVersion) -> tuple[Violation, ...]:
             violations.append(Violation(Reason.LOOP_WITHOUT_BOUND, n.id))
 
     for n in sorted(version.nodes, key=lambda n: n.id):
-        if n.kind is NodeKind.AGENT and n.agent_id is None:
+        if n.kind in _AGENT_REFERENCE_KINDS and n.agent_id is None:
             violations.append(Violation(Reason.AGENT_NODE_WITHOUT_AGENT, n.id))
+
+    for n in sorted(version.nodes, key=lambda n: n.id):
+        if n.kind is NodeKind.LLM and not n.llm_prompt:
+            violations.append(Violation(Reason.LLM_NODE_WITHOUT_PROMPT, n.id))
+        if n.kind in _TOOL_KINDS and not (n.tool_server and n.tool_name):
+            violations.append(Violation(Reason.TOOL_NODE_WITHOUT_TARGET, n.id))
 
     for n in sorted(version.nodes, key=lambda n: n.id):
         if n.kind is NodeKind.WAIT and (n.wait_seconds is None or n.wait_seconds <= 0):

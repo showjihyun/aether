@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 import psycopg
 import pytest
 from aether_mcp.adapters.outbound.audit_sink.postgres import PostgresAuditSink
-from aether_mcp.domain.audit import AuditRecord
+from aether_mcp.domain.audit import AuditRecord, RunKind
 
 pytestmark = pytest.mark.integration
 
@@ -160,3 +160,48 @@ def test_data_role_can_select_but_not_write_control_tool_permissions(
         data_conn.rollback()
     finally:
         data_conn.close()
+
+
+def test_postgres_audit_sink_stores_run_kind_and_a_workflow_run_id(
+    admin_connection_factory: Callable[[], psycopg.Connection],
+    data_connection_factory: Callable[[], psycopg.Connection],
+) -> None:
+    """spec 0005 개정 10, R-14: `run_kind` 가 열에 실리고(기본 `agent`), `workflow` 는
+    `control.runs` 에 없는 Workflow Run id 로도 들어간다(0010 이 FK 를 풀었다)."""
+    admin_conn = admin_connection_factory()
+    try:
+        version_id, agent_run_id = _insert_agent_version_and_run(admin_conn)
+    finally:
+        admin_conn.close()
+    workflow_run_id = uuid.uuid4()
+    sink = PostgresAuditSink(connect=data_connection_factory)
+
+    def record(run_id: uuid.UUID, run_kind: RunKind = "agent") -> AuditRecord:
+        return AuditRecord(
+            run_id=run_id,
+            agent_version_id=version_id,
+            server_name="echo",
+            tool_name="echo",
+            decision="allow",
+            outcome="ok",
+            result_bytes=1,
+            error_kind=None,
+            started_at=datetime.now(UTC),
+            duration_ms=1,
+            run_kind=run_kind,
+        )
+
+    sink.record(record(agent_run_id))
+    sink.record(record(workflow_run_id, run_kind="workflow"))
+
+    conn = admin_connection_factory()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT run_id, run_kind FROM data.tool_call_audit WHERE run_id IN (%s, %s) "
+                "ORDER BY run_kind",
+                (agent_run_id, workflow_run_id),
+            )
+            assert cur.fetchall() == [(agent_run_id, "agent"), (workflow_run_id, "workflow")]
+    finally:
+        conn.close()

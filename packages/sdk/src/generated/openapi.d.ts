@@ -723,6 +723,20 @@ export interface components {
             condition_value?: string | number | boolean | null;
             /** Wait Seconds */
             wait_seconds?: number | null;
+            /** Llm Prompt */
+            llm_prompt?: string | null;
+            /** Llm Prompt Path */
+            llm_prompt_path?: string | null;
+            /** Tool Server */
+            tool_server?: string | null;
+            /** Tool Name */
+            tool_name?: string | null;
+            /** Tool Arguments */
+            tool_arguments?: {
+                [key: string]: unknown;
+            } | null;
+            /** Tool Arguments Path */
+            tool_arguments_path?: string | null;
         };
         /** Policy */
         Policy: {

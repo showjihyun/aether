@@ -51,6 +51,15 @@ def _resolve(context: dict[str, Any], path: str) -> Any:
     return current
 
 
+def resolve_path(context: dict[str, Any], path: str) -> Any:
+    """경로의 값. 없으면 `ConditionFailure(condition_path_missing)` - `CONDITION` 이 아닌 노드
+    (`LLM`·`TOOL`·`MCP`, 개정 9 (3))가 같은 맥락·같은 규칙으로 경로를 읽는 문입니다."""
+    actual = _resolve(context, path)
+    if actual is _MISSING:
+        raise ConditionFailure(WorkflowFailureReason.CONDITION_PATH_MISSING)
+    return actual
+
+
 def _is_number(value: Any) -> bool:
     return isinstance(value, int | float) and not isinstance(value, bool)
 

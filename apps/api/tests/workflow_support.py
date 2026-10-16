@@ -1,5 +1,5 @@
 """spec 0005 R-1, R-2: Workflow 정의 유스케이스 단위 테스트가 공유하는 지원 코드 — 앱 조립과
-열두 거부 사례. 테스트가 아니라 지원 모듈입니다(`fakes_workflow.py` 와 같은 자리)."""
+열네 거부 사례. 테스트가 아니라 지원 모듈입니다(`fakes_workflow.py` 와 같은 자리)."""
 
 from __future__ import annotations
 
@@ -52,19 +52,29 @@ def _n(
     bare: bool = False,
     condition: dict[str, Any] | None = None,
     wait_seconds: int | None = None,
+    extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """`AGENT` 는 기본으로 Agent 를 가리킵니다 — 다른 사유를 보려는 사례가 아홉 번째 사유
     (`agent_node_without_agent`)로 오염되지 않게 합니다. `bare=True` 가 참조 없는 `AGENT` 입니다."""
-    if kind == "AGENT" and agent_id is None and not bare:
+    if kind in ("AGENT", "TOOL", "MCP") and agent_id is None and not bare:
         agent_id = AGENT_ID
+    # `LLM` 도 같은 이유로 기본 프롬프트를 답니다(개정 9 의 `llm_node_without_prompt`) —
+    # 다른 사유를 보려는 사례가 그 사유로 오염되지 않게 합니다. `bare=True` 면 비웁니다.
+    defaults: dict[str, Any] = {}
+    if kind == "LLM" and not bare:
+        defaults["llm_prompt"] = "p"
+    if kind in ("TOOL", "MCP") and not bare:
+        defaults |= {"tool_server": "builtin", "tool_name": "clock"}
     return {
         "id": node_id,
         "kind": kind,
         "max_iterations": max_iterations,
         "agent_id": agent_id,
         "agent_version": agent_version,
+        **defaults,
         **(condition or {}),
         **({"wait_seconds": wait_seconds} if wait_seconds is not None else {}),
+        **(extra or {}),
     }
 
 
@@ -148,5 +158,21 @@ _REJECTIONS: dict[Reason, dict[str, Any]] = {
         # `wait_seconds` 가 없는 `WAIT` (0 이하도 같은 사유다).
         "nodes": [_n("s", "START"), _n("w", "WAIT"), _n("e", "END")],
         "edges": [_e("s", "w"), _e("w", "e")],
+    },
+    Reason.LLM_NODE_WITHOUT_PROMPT: {
+        # 프롬프트 리터럴이 없는 `LLM` (개정 9 (4)). `bare=True` 가 헬퍼의 기본 프롬프트를 막습니다.
+        "nodes": [_n("s", "START"), _n("m", "LLM", bare=True), _n("e", "END")],
+        "edges": [_e("s", "m"), _e("m", "e")],
+    },
+    Reason.TOOL_NODE_WITHOUT_TARGET: {
+        # Agent 참조는 **명시로** 두고 서버·도구 이름만 없는 `TOOL` (개정 9 (4)) —
+        # `bare=True` 가 헬퍼의 기본 서버·도구를 막고, agent_id 를 직접 주어 아홉 번째
+        # 사유로 오염되지 않게 합니다.
+        "nodes": [
+            _n("s", "START"),
+            _n("t", "TOOL", agent_id=AGENT_ID, bare=True),
+            _n("e", "END"),
+        ],
+        "edges": [_e("s", "t"), _e("t", "e")],
     },
 }

@@ -41,6 +41,12 @@ def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
                 ),
                 "condition_value": n.condition_value,
                 "wait_seconds": n.wait_seconds,
+                "llm_prompt": n.llm_prompt,
+                "llm_prompt_path": n.llm_prompt_path,
+                "tool_server": n.tool_server,
+                "tool_name": n.tool_name,
+                "tool_arguments": n.tool_arguments,
+                "tool_arguments_path": n.tool_arguments_path,
             }
             for n in nodes
         ]
@@ -49,7 +55,7 @@ def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
 
 def _node_from_json(n: dict[str, Any]) -> Node:
     """`agent_id`·`agent_version` 은 P4-2a B1 이, `condition_*` 세 키는 P4-2b 가, `wait_seconds` 는
-    P4-3 이 더한 키입니다 —
+    P4-3 이, `llm_*`·`tool_*` 여섯 키는 P4-5 가 더한 키입니다 —
     그 전에 저장된 Version 의 행에는 **없으므로** `.get` 으로 읽고 없으면 `None` 입니다(`KeyError`
     로 터지지 않게)."""
     raw_agent_id = n.get("agent_id")
@@ -64,6 +70,12 @@ def _node_from_json(n: dict[str, Any]) -> Node:
         condition_operator=ConditionOperator(operator) if operator is not None else None,
         condition_value=n.get("condition_value"),
         wait_seconds=n.get("wait_seconds"),
+        llm_prompt=n.get("llm_prompt"),
+        llm_prompt_path=n.get("llm_prompt_path"),
+        tool_server=n.get("tool_server"),
+        tool_name=n.get("tool_name"),
+        tool_arguments=n.get("tool_arguments"),
+        tool_arguments_path=n.get("tool_arguments_path"),
     )
 
 

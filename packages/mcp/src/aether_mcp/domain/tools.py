@@ -12,6 +12,7 @@ from typing import Any, Literal
 from uuid import UUID
 
 Transport = Literal["stdio", "http"]
+RunKind = Literal["agent", "workflow"]
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,8 @@ class ToolCall:
     """spec 0003 2.4, D-9: `CallToolUseCase` 가 받는 호출 요청 하나.
 
     `run_id`·`agent_version_id` 는 감사(spec 2.7)와 판정(D-6)의 신분입니다.
+    `run_kind` 는 `run_id` 가 어느 평면의 Run 을 가리키는지(`agent`|`workflow`, spec 0005 개정 10)
+    - 감사에만 실리고 판정에는 쓰이지 않습니다. 기본값 `agent` 라 기존 호출부는 그대로입니다.
     """
 
     run_id: UUID
@@ -66,3 +69,4 @@ class ToolCall:
     server: McpServerRef
     tool_name: str
     arguments: dict[str, Any] = field(default_factory=dict)
+    run_kind: RunKind = "agent"

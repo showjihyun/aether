@@ -25,9 +25,9 @@ class PostgresAuditSink:
                 INSERT INTO data.tool_call_audit (
                     run_id, agent_version_id, server_name, tool_name,
                     decision, outcome, result_bytes, error_kind,
-                    started_at, duration_ms
+                    started_at, duration_ms, run_kind
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """,
                 (
                     record.run_id,
@@ -40,5 +40,6 @@ class PostgresAuditSink:
                     record.error_kind,
                     record.started_at,
                     record.duration_ms,
+                    record.run_kind,
                 ),
             )
