@@ -121,6 +121,7 @@ class FakeWorkflowRunDeclarationStore:
         finished_at: datetime | None,
         failure_reason: str | None,
         waiting_node_execution_id: UUID | None = None,
+        wake_at: datetime | None = None,
     ) -> bool:
         view = self._runs.get(workflow_run_id)
         if view is None or self._status_seq[workflow_run_id] >= seq:
@@ -139,6 +140,11 @@ class FakeWorkflowRunDeclarationStore:
                 status is WorkflowRunStatus.WAITING_APPROVAL,
                 waiting_node_execution_id,
                 view.waiting_node_execution_id,
+            ),
+            wake_at=(
+                (wake_at if wake_at is not None else view.wake_at)
+                if status is WorkflowRunStatus.WAITING_TIMER
+                else None
             ),
             started_at=started_at if started_at is not None else view.started_at,
             finished_at=finished_at if finished_at is not None else view.finished_at,

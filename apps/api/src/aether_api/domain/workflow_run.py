@@ -9,6 +9,8 @@ JOIN 해 `workflow_id`·`workflow_version`(번호)까지 담습니다. 실행 �
 `waiting_run_id` 는 `waiting_run` 상태에서 기다리는 자식 Agent Run 의 id 입니다(R-13 의
 절반 — 조회에 나타납니다). `waiting_node_execution_id` 는 `waiting_approval` 상태에서 승인이
 지목해야 하는 노드 실행의 id 입니다(P4-4, R-12) - 같은 모양의 투영이고 같은 불변식입니다.
+`wake_at` 은 `waiting_timer` 상태에서 `WAIT` 노드가 깨어날 시각입니다(P4-3, spec 0005 2.7 개정 7
+(5)) - 역시 상태에서 유도되는 투영입니다.
 """
 
 from __future__ import annotations
@@ -36,6 +38,7 @@ class WorkflowRunView:
     started_at: datetime | None
     finished_at: datetime | None
     failure_reason: str | None
+    wake_at: datetime | None = None
 
 
 class WorkflowRunNotFound(Exception):

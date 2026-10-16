@@ -200,3 +200,40 @@ def test_status_message_carries_the_awaited_node_execution_only_when_present(
         "waiting_node_execution_id": str(awaited),
     }
     assert "waiting_node_execution_id" not in running
+
+
+def test_status_message_carries_the_wake_time_only_when_present(redis_client: Redis) -> None:
+    """spec 0005 2.7 개정 7 (5) (P4-3): `waiting_timer` 통지는 깨어날 시각을 `wake_at`(ISO 8601)으로
+    싣고, 없으면 필드 자체를 보내지 않는다(A1 계약)."""
+    run_id = uuid.uuid4()
+    wake_at = _AT.replace(hour=13)
+    notifier = RedisWorkflowStatusNotifier(redis_client)
+
+    notifier.notify(
+        WorkflowStatusMessage(
+            workflow_run_id=run_id,
+            seq=4,
+            status=WorkflowRunStatus.WAITING_TIMER,
+            at=_AT,
+            current_node_id="w",
+            wake_at=wake_at,
+        )
+    )
+    notifier.notify(
+        WorkflowStatusMessage(
+            workflow_run_id=run_id, seq=5, status=WorkflowRunStatus.RUNNING, at=_AT
+        )
+    )
+
+    parked, running = (
+        fields for _, fields in _entries(redis_client, "aether:workflow_runs:status")
+    )
+    assert parked == {
+        "workflow_run_id": str(run_id),
+        "seq": "4",
+        "status": "waiting_timer",
+        "at": _AT.isoformat(),
+        "current_node_id": "w",
+        "wake_at": wake_at.isoformat(),
+    }
+    assert "wake_at" not in running

@@ -281,7 +281,7 @@ def test_an_unsupported_node_kind_ends_failed_with_the_reason_persisted_and_noti
     """plan 부록 A: 지원하지 않는 종류는 `failed` + 구별되는 사유 - DB 와 통지에 남는다."""
     run_id, _ = declare_workflow_run(
         env.admin,
-        (Node("start", NodeKind.START), Node("a", NodeKind.WAIT), Node("end", NodeKind.END)),
+        (Node("start", NodeKind.START), Node("a", NodeKind.LLM), Node("end", NodeKind.END)),
         (Edge("start", "a"), Edge("a", "end")),
     )
 

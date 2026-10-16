@@ -42,6 +42,7 @@ _RUN_STATUS_VALUES = [
     "running",
     "waiting_run",
     "waiting_approval",
+    "waiting_timer",
     "succeeded",
     "failed",
     "cancelled",
@@ -380,8 +381,18 @@ def _e(source: str, target: str, label: str | None = None) -> dict[str, Any]:
 
 
 _V1 = {
-    "nodes": [_n("s", "START"), _n("a", "AGENT"), _n("l", "LOOP", 3), _n("e", "END")],
-    "edges": [_e("s", "a"), _e("a", "l"), _e("l", "e", "done")],
+    "nodes": [
+        _n("s", "START"),
+        _n("a", "AGENT"),
+        {
+            **_n("l", "LOOP", 3),
+            "condition_path": "input.q",
+            "condition_operator": "equals",
+            "condition_value": "go",
+        },
+        _n("e", "END"),
+    ],
+    "edges": [_e("s", "a"), _e("a", "l"), _e("l", "a", "true"), _e("l", "e", "false")],
 }
 _V2 = {
     "nodes": [_n("s", "START"), _n("b", "LLM"), _n("e", "END")],

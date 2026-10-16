@@ -15,7 +15,8 @@ class WorkflowFailureReason(StrEnum):
     """`START`·`END` 외의 노드 종류를 만났습니다(이 실행기가 아직 모르는 종류)."""
 
     UNSUPPORTED_BRANCHING = "unsupported_branching"
-    """`CONDITION` 이 아닌 노드의 나가는 간선이 둘 이상입니다 - 조용히 하나를 고르지 않습니다."""
+    """`CONDITION`·`LOOP`·`PARALLEL` 이 아닌 노드의 나가는 간선이 둘 이상입니다 - 조용히 하나를
+    고르지 않습니다."""
 
     INVALID_GRAPH = "invalid_graph"
     """저장 시점 검증을 통과했다면 생기지 않는 모양(START 없음, 나가는 간선 없는 비-END)."""
@@ -38,3 +39,11 @@ class WorkflowFailureReason(StrEnum):
     """Workflow Run 에 요청자가 없습니다(마이그레이션 0007 이전에 만들어진 행). 비운 채로 자식 Run
     을
     발사하면 `GET /runs/{id}` 가 500 이라 조용히 넘기지 않고 노드를 실패시킵니다."""
+
+    BRANCH_FAILED = "branch_failed"
+    """`PARALLEL` 의 분기 하나 이상이 실패한 채 `JOIN` 에 닿았습니다(R-9). 실패한 분기의 노드는
+    그 노드의 사유로 `failed` 로 남고, 합류 노드와 Workflow 가 이 사유로 끝납니다."""
+
+    LOOP_LIMIT_EXCEEDED = "loop_limit_exceeded"
+    """`LOOP` 가 `max_iterations` 번 본문을 돈 뒤에도 판정식이 참입니다(R-10). 본문을 한 번 더
+    돌리지 않고 끝납니다 - 상한 초과로 구별되는 사유입니다."""

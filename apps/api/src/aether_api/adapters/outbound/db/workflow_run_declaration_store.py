@@ -15,8 +15,9 @@
 `WHERE id = %s AND status_seq < %s`. 나머지 열은 `COALESCE(new, old)` 로 `None` 이 기존 값을
 지우지 않게 합니다.
 
-**예외 둘 — `waiting_run_id` 와 `waiting_node_execution_id`(P4-4).** 뒤의 열은 `waiting_approval`
-일 때만 값이 있고 같은 규칙입니다. 앞의 열은 `COALESCE` 로 두지 않고 **상태에서 유도**합니다:
+**예외 셋 — `waiting_run_id`·`waiting_node_execution_id`(P4-4)·`wake_at`(P4-3).** 뒤의 두 열은
+`waiting_approval`·`waiting_timer` 일 때만 값이 있고 같은 규칙입니다. 앞의 열은 `COALESCE` 로 두지
+않고 **상태에서 유도**합니다:
 `waiting_run` 일 때만 값이 있고 다른 상태로 가면 `NULL` 입니다. `COALESCE` 로 두면 기다림이
 끝난 뒤에도 "무엇을 기다리는가" 가 남아(스트림이 값을 **지우는** 신호를 실을 수 없으므로)
 `succeeded` 인 Run 이 자식 Run 을 기다리는 것처럼 보입니다. 지우는 신호를 계약에 더하는 대신
@@ -55,12 +56,13 @@ _SelectRow = tuple[
     datetime | None,  # started_at
     datetime | None,  # finished_at
     str | None,  # failure_reason
+    datetime | None,  # wake_at
 ]
 
 _SELECT_COLUMNS = """
     r.id, v.workflow_id, v.version, r.workflow_version_id, r.status::text,
     r.current_node_id, r.waiting_run_id, r.waiting_node_execution_id, r.requested_at,
-    r.started_at, r.finished_at, r.failure_reason
+    r.started_at, r.finished_at, r.failure_reason, r.wake_at
 """
 
 _FROM_JOIN = """
@@ -83,6 +85,7 @@ def _row_to_view(row: _SelectRow) -> WorkflowRunView:
         started_at,
         finished_at,
         failure_reason,
+        wake_at,
     ) = row
     return WorkflowRunView(
         workflow_run_id=workflow_run_id,
@@ -97,6 +100,7 @@ def _row_to_view(row: _SelectRow) -> WorkflowRunView:
         started_at=started_at,
         finished_at=finished_at,
         failure_reason=failure_reason,
+        wake_at=wake_at,
     )
 
 
@@ -169,6 +173,7 @@ class PostgresWorkflowRunDeclarationStore:
         finished_at: datetime | None,
         failure_reason: str | None,
         waiting_node_execution_id: UUID | None = None,
+        wake_at: datetime | None = None,
     ) -> bool:
         with self._connect() as conn, conn.cursor() as cur:
             cur.execute(
@@ -187,6 +192,11 @@ class PostgresWorkflowRunDeclarationStore:
                         THEN COALESCE(%(waiting_node_execution_id)s, waiting_node_execution_id)
                         ELSE NULL
                     END,
+                    wake_at = CASE
+                        WHEN %(status)s::text = 'waiting_timer'
+                        THEN COALESCE(%(wake_at)s, wake_at)
+                        ELSE NULL
+                    END,
                     started_at = COALESCE(%(started_at)s, started_at),
                     finished_at = COALESCE(%(finished_at)s, finished_at),
                     failure_reason = COALESCE(%(failure_reason)s, failure_reason)
@@ -200,6 +210,7 @@ class PostgresWorkflowRunDeclarationStore:
                     "current_node_id": current_node_id,
                     "waiting_run_id": waiting_run_id,
                     "waiting_node_execution_id": waiting_node_execution_id,
+                    "wake_at": wake_at,
                     "started_at": started_at,
                     "finished_at": finished_at,
                     "failure_reason": failure_reason,

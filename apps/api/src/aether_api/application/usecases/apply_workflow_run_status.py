@@ -26,6 +26,7 @@ class ApplyWorkflowRunStatusUseCase:
             current_node_id=message.current_node_id,
             waiting_run_id=message.waiting_run_id,
             waiting_node_execution_id=message.waiting_node_execution_id,
+            wake_at=message.wake_at,
             started_at=message.started_at,
             finished_at=message.finished_at,
             failure_reason=message.failure_reason,

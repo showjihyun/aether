@@ -41,6 +41,7 @@ _EXPECTED_COLUMNS = {
     "current_node_id",
     "waiting_run_id",
     "waiting_node_execution_id",
+    "wake_at",
     "lease_owner",
     "lease_until",
     "started_at",
@@ -558,3 +559,30 @@ def test_waiting_node_execution_id_is_cleared_when_the_status_leaves_waiting_app
     assert child_wait.waiting_run_id == child
     assert child_wait.waiting_node_execution_id is None
     assert done.waiting_node_execution_id is None, "종결 상태는 무엇도 기다리지 않습니다"
+
+
+def test_wake_at_is_cleared_when_the_status_leaves_waiting_timer(
+    control_connection_factory: _Factory,
+) -> None:
+    """spec 0005 2.7 개정 7 (5) (P4-3): `wake_at` 도 **상태에서 유도**된다 - `waiting_timer` 일 때만
+    값이 있고, 주지 않은 `waiting_timer` 통지는 이전 값을 지우지 않으며, 다른 상태로 가면 지워진다.
+    다른 대기의 포인터는 건드리지 않는다."""
+    run_id = _seed_workflow_run(control_connection_factory)
+    store = _store(control_connection_factory)
+    wake = datetime(2099, 1, 1, tzinfo=UTC)
+
+    assert _apply(
+        store, run_id, 1, status=WorkflowRunStatus.WAITING_TIMER, current_node_id="w", wake_at=wake
+    )
+    parked = store.get(run_id)
+    assert _apply(store, run_id, 2, status=WorkflowRunStatus.WAITING_TIMER)
+    still = store.get(run_id)
+    assert _apply(store, run_id, 3, status=WorkflowRunStatus.RUNNING, wake_at=wake)
+    resumed = store.get(run_id)
+
+    assert parked is not None and still is not None and resumed is not None
+    assert parked.status == WorkflowRunStatus.WAITING_TIMER
+    assert parked.wake_at == wake
+    assert parked.waiting_run_id is None and parked.waiting_node_execution_id is None
+    assert still.wake_at == wake
+    assert resumed.wake_at is None

@@ -28,8 +28,17 @@ from alembic.config import Config
 pytestmark = pytest.mark.integration
 
 _Factory = Callable[[], psycopg.Connection]
-_NODE_STATUSES = ("running", "waiting_run", "waiting_approval", "succeeded", "failed")
-"""0007 이 만든 네 값 + 0008(P4-4)이 더한 `waiting_approval`. head 기준입니다."""
+_NODE_STATUSES = (
+    "running",
+    "waiting_run",
+    "waiting_approval",
+    "waiting_timer",
+    "succeeded",
+    "failed",
+)
+"""0007 이 만든 네 값 + 0008(P4-4)의 `waiting_approval` + 0009(P4-3)의 `waiting_timer`.
+
+head 기준입니다."""
 
 
 def _column_type(conn: psycopg.Connection, schema: str, table: str, column: str) -> tuple[str, str]:

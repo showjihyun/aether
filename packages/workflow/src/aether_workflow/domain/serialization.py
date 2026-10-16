@@ -24,6 +24,7 @@ def serialize_version(version: WorkflowVersion) -> bytes:
                 n.condition_operator.value if n.condition_operator is not None else None
             ),
             "condition_value": n.condition_value,
+            "wait_seconds": n.wait_seconds,
         }
         for n in sorted(version.nodes, key=lambda n: n.id)
     ]

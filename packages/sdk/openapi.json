@@ -1945,6 +1945,17 @@
               }
             ],
             "title": "Condition Value"
+          },
+          "wait_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Seconds"
           }
         },
         "type": "object",
@@ -2433,6 +2444,18 @@
             ],
             "title": "Waiting Node Execution Id"
           },
+          "wake_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wake At"
+          },
           "requested_at": {
             "type": "string",
             "format": "date-time",
@@ -2484,6 +2507,7 @@
           "current_node_id",
           "waiting_run_id",
           "waiting_node_execution_id",
+          "wake_at",
           "requested_at",
           "started_at",
           "finished_at",
@@ -2529,6 +2553,7 @@
           "running",
           "waiting_run",
           "waiting_approval",
+          "waiting_timer",
           "succeeded",
           "failed",
           "cancelled"

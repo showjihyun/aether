@@ -89,3 +89,25 @@ def test_waiting_node_execution_id_is_parsed_and_defaults_to_none() -> None:
 
     assert with_pointer.waiting_node_execution_id == awaited
     assert without.waiting_node_execution_id is None
+
+
+def test_wake_at_is_parsed_and_defaults_to_none() -> None:
+    """spec 0005 2.7 개정 7 (5) (P4-3): `waiting_timer` 통지는 깨어날 시각을 싣고, 없으면 `None`
+    이다. `waiting_timer` 는 Workflow Run 의 상태 어휘다."""
+    base = {
+        "workflow_run_id": str(uuid4()),
+        "seq": "4",
+        "status": "waiting_timer",
+        "at": _AT,
+    }
+
+    with_wake = WorkflowRunStatusMessage.model_validate(
+        {**base, "wake_at": "2026-10-16T13:00:00+00:00"}
+    )
+    without = WorkflowRunStatusMessage.model_validate(base)
+
+    assert with_wake.status.value == "waiting_timer"
+    assert with_wake.wake_at is not None and with_wake.wake_at.isoformat() == (
+        "2026-10-16T13:00:00+00:00"
+    )
+    assert without.wake_at is None

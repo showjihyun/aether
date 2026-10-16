@@ -116,3 +116,32 @@ def test_waiting_approval_projects_the_awaited_node_execution_and_clears_it_on_l
     assert parked.waiting_node_execution_id == awaited
     assert parked.waiting_run_id is None
     assert resumed.waiting_node_execution_id is None
+
+
+def test_waiting_timer_projects_the_wake_time_and_clears_it_on_leaving() -> None:
+    """spec 0005 2.7 개정 7 (5) (P4-3): `wake_at` 은 `waiting_timer` 일 때만 값이 있다(상태에서
+    유도). 다른 대기의 포인터와 섞이지 않는다."""
+    store, run_id = _store_with_run()
+    apply = ApplyWorkflowRunStatusUseCase(store)
+    wake = datetime(2026, 10, 16, 13, 0, tzinfo=UTC)
+
+    apply(
+        _message(
+            run_id,
+            seq=2,
+            status=WorkflowRunStatus.WAITING_TIMER,
+            current_node_id="w",
+            wake_at=wake,
+        )
+    )
+    parked = _get(store, run_id)
+    apply(_message(run_id, seq=3, status=WorkflowRunStatus.WAITING_TIMER))
+    still = _get(store, run_id)
+    apply(_message(run_id, seq=4, status=WorkflowRunStatus.RUNNING, wake_at=wake))
+    resumed = _get(store, run_id)
+
+    assert parked.status == WorkflowRunStatus.WAITING_TIMER
+    assert parked.wake_at == wake
+    assert parked.waiting_run_id is None and parked.waiting_node_execution_id is None
+    assert still.wake_at == wake
+    assert resumed.wake_at is None

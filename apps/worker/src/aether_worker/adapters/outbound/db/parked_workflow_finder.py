@@ -12,8 +12,13 @@ PostgreSQL 구현. **읽기만** 합니다(P4-2a 는 새 GRANT 가 없었고, �
   검토 항목 H-1).
 
 `ready_to_resume` 은 한 번의 SQL(JOIN)입니다. `waiting_run` 은 자식이 종결인 건을,
-`waiting_approval` 은 **기다리는 그 노드 실행의 승인이 이미 저장된** 건을 줍습니다
-(`UNION ALL`). 승인 뒤 재큐(XADD)가 유실돼도 Workflow 가 영원히 멈추지 않게 하는
+`waiting_approval` 은 **기다리는 그 노드 실행의 승인이 이미 저장된** 건을, `waiting_timer`
+는 **`wake_at` 이 지난** 건을 줍니다(`UNION ALL`). 셋째 가지(P4-3)는 안전망이 아니라 **주
+경로**입니다:
+`WAIT` 에는 깨우는 외부 사건(자식 종결 통지, 승인 API)이 없어서 이 조회만이 `wake_at` 이 지난 것을
+알아챕니다. 시각 비교는 DB 시계(`now()`)입니다 - lease 와 같은 선이며, 깨어난 실행기가 자기 시계로
+`wake_at` 을 다시 확인하므로 두 시계가 어긋나도 이른 전진은 없습니다(늦으면 다음 주기에 다시
+줍습니다). 승인 뒤 재큐(XADD)가 유실돼도 Workflow 가 영원히 멈추지 않게 하는
 안전망입니다 - 이벤트만 믿지 않습니다(`improvement-log/2026-10-11-001`). 지목 대상이
 비어 있으면 어떤 승인도 근거가 되지 못합니다.
 
@@ -71,6 +76,11 @@ class PostgresParkedWorkflowFinder:
                         ON a.workflow_run_id = w.workflow_run_id
                        AND a.node_execution_id = w.waiting_node_execution_id
                     WHERE w.status = 'waiting_approval'
+                    UNION ALL
+                    SELECT w.workflow_run_id, r.workflow_version_id, w.updated_at
+                    FROM data.workflow_run_executions w
+                    JOIN control.workflow_runs r ON r.id = w.workflow_run_id
+                    WHERE w.status = 'waiting_timer' AND w.wake_at <= now()
                 ) ready
                 ORDER BY updated_at
                 """,
