@@ -11,6 +11,7 @@ resolution-markers = [
 members = [
     "aether",
     "aether-api",
+    "aether-cli",
     "aether-context",
     "aether-evaluation",
     "aether-mcp",
@@ -86,6 +87,11 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.1.1" },
     { name = "uvicorn", specifier = ">=0.53.0" },
 ]
+
+[[package]]
+name = "aether-cli"
+version = "0.0.0"
+source = { editable = "apps/cli" }
 
 [[package]]
 name = "aether-context"

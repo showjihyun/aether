@@ -10,6 +10,7 @@ package = false
 [tool.uv.workspace]
 members = [
     "apps/api",
+    "apps/cli",
     "apps/worker",
     "packages/runtime",
     "packages/workflow",
@@ -46,6 +47,7 @@ exclude = ["tests/arch/fixtures"]
 explicit_package_bases = true
 mypy_path = [
     "apps/api/src",
+    "apps/cli/src",
     "apps/worker/src",
     "packages/runtime/src",
     "packages/workflow/src",
