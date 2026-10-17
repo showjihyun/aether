@@ -4,9 +4,9 @@
 | --- | --- |
 | 번호 | 0006 |
 | 작성일 | 2026-10-17 |
-| 선행 intent | [../intents/0006-mvp-integration.md](../intents/0006-mvp-integration.md) (초안 2026-10-17, 승인 대기) |
-| 상태 | **초안** — 사람 승인 전입니다 |
-| 승인 | (대기) |
+| 선행 intent | [../intents/0006-mvp-integration.md](../intents/0006-mvp-integration.md) (승인됨 2026-10-17) |
+| 상태 | **승인됨** |
+| 승인 | showjihyun, 2026-10-17 |
 | 대상 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 MVP-1 ~ MVP-5 |
 | 후속 plan | (승인 뒤 `plans/0006-mvp-integration.md`) |
 

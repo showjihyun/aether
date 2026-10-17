@@ -5,9 +5,9 @@
 | 번호 | 0006 |
 | 작성일 | 2026-10-17 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 **MVP 통합**(Month 4) — 원본 로드맵 10장 |
-| 상태 | **초안** — 사람 승인 전입니다 |
-| 승인 | (대기) |
-| 후속 spec | [../specs/0006-mvp-integration.md](../specs/0006-mvp-integration.md) (**초안 2026-10-17** — 사람이 답한 셋을 D-1·D-3·D-6 으로, 나머지 셋을 D-4·D-5·D-7 로 고정했습니다) |
+| 상태 | **승인됨** |
+| 승인 | showjihyun, 2026-10-17 |
+| 후속 spec | [../specs/0006-mvp-integration.md](../specs/0006-mvp-integration.md) (**승인됨 2026-10-17**, D-1 ~ D-11) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 MVP-1 ~ MVP-5 가 소유합니다. 이 문서는 그 다섯 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
 
