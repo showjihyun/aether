@@ -52,6 +52,7 @@ plan 은 실행 중에 바뀌는 문서입니다. 단위를 끝내면 [../intent
 | [0003](0003-phase-2-mcp-gateway.md) | Phase 2 — Enterprise MCP Gateway | [specs/0003](../specs/0003-phase-2-mcp-gateway.md) | 승인됨 (2026-09-25, 개정 1) |
 | [0004](0004-phase-3-context-compiler.md) | Phase 3 — Context Compiler / RAG | [specs/0004](../specs/0004-phase-3-context-compiler.md) | 승인됨 (2026-10-06, 개정 1) |
 | [0005](0005-phase-4-workflow-engine.md) | Phase 4 — Workflow Engine | [specs/0005](../specs/0005-phase-4-workflow-engine.md) | 승인됨 (2026-10-13) |
+| [0006](0006-mvp-integration.md) | MVP 통합 — CLI·화면 넷·오프라인·e2e·TTFSA | [specs/0006](../specs/0006-mvp-integration.md) | 승인됨 (2026-10-17) |
 
 0003·0004 의 행은 2026-10-13 에 더했습니다 — 두 plan 이 병합될 때 이 표에 행이 들어가지 않았습니다. 상태의 정본은 각 plan 의 머리 표이고 이 표는 목차입니다.
 
