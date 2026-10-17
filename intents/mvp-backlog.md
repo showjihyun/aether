@@ -530,13 +530,27 @@ Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17). Spec: [../specs/
 
 **Phase 완료 판정** — 로드맵 10장의 시나리오가 자동 테스트로 성립하고, 처음 보는 사람이 clone 부터 첫 Run 성공까지 10분 안에 도달한 측정 기록이 있습니다.
 
+**행의 순서가 실행 순서입니다**(plan 0006 1절이 소유합니다). plan 리뷰로 둘을 바꿨습니다 — **MVP-0 을 신설**해 목록 API·SDK 를 화면보다 **앞**에 뒀고(지금 사이드바가 404 넷을 가리키는 상태가 "화면이 데이터 없이 먼저 선" 실패입니다), **MVP-2 를 2a·2b·2c 로 쪼갰습니다**(범위의 합은 불변: 목록 → 상세 → 대화). 보호 파일 둘이 단위 **앞**에 갑니다 — `.importlinter` 의 **AR-14**(MVP-1 앞)와 `harness.config` 의 **`e2e` 단계 + 예산 결정**(MVP-3 앞).
+
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| MVP-1 | CLI | P1-6, P0-3 | — | 대기 |
-| MVP-2 | Basic UI: Chat, Run 목록, Run 상세(스트림·트레이스) | P1-6, P1-8, P0-3 | — | 대기 |
-| MVP-3 | Local LLM 을 compose 에 | P1-3, P0-5 | Q6 | 대기 |
-| MVP-4 | 오프라인 시나리오 e2e | MVP-3, P2-5, P3-3, P4-2 | — | 대기 |
+| MVP-0 | 목록 API 넷과 SDK 함수(**신설** — plan 0006 1절) | P1-5b, P3-2b, P4-1 | — | 대기 |
+| MVP-1 | CLI (**Python**, `apps/cli`) | MVP-0, P1-6 | 🔒 AR-14(사람, 앞) | 대기 |
+| MVP-3 | Local LLM 을 compose 에 | P1-3, P0-5 | Q6 닫힘 · 🔒 `e2e` 단계(사람, 앞) | 대기 |
+| MVP-2a | 목록 화면 둘(`/agents`·`/runs`) | MVP-0 | — | 대기 |
+| MVP-2b | Run 상세(이벤트 타임라인 + trace) | MVP-2a | — | 대기 |
+| MVP-2c | `/knowledge`·`/workflows` 목록과 Agent 대화 | MVP-2b | — | 대기 |
+| MVP-4 | 오프라인 시나리오 e2e | MVP-3, MVP-2c, P2-5, P3-3, P4-2a | — | 대기 |
 | MVP-5 | Time to First Successful Agent 측정 | MVP-1, MVP-4 | — | 대기 |
+
+### MVP-0 목록 API 넷과 SDK 함수
+
+| 항목 | 내용 |
+| --- | --- |
+| 범위 | `GET /runs`·`/workflows`·`/workflow-runs`·`/knowledge-sets`·`/knowledge-sets/{id}/ingestions` 와 `packages/sdk` 의 해당 함수·타입. 페이지 규칙은 **`GET /agents` 를 그대로** 베끼고 필터는 상태 하나 |
+| 범위 밖 | 검색·정렬·커서 규약의 일반화, 노드 실행 목록(투영이 필요하고 Phase 5 입니다 — spec 0006 D-4) |
+| 완료 판정 | 다섯 경로가 200 과 페이지 모양이고 빈 목록도 200. 인증 없으면 401. `openapi.json` 은 **추가만**(기존 경로·스키마 변경 0건) |
+| 걸리는 규칙 | spec 0006 **D-3·D-11**. 포트에 메서드를 더하면 fake 가 깨지므로 **먼저 몇 곳인지 셉니다**(`2026-09-28-001`) |
 
 ### MVP-1 CLI
 
