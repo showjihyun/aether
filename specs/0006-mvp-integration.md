@@ -1,0 +1,171 @@
+# Spec 0006 — MVP 통합
+
+| 키 | 값 |
+| --- | --- |
+| 번호 | 0006 |
+| 작성일 | 2026-10-17 |
+| 선행 intent | [../intents/0006-mvp-integration.md](../intents/0006-mvp-integration.md) (초안 2026-10-17, 승인 대기) |
+| 상태 | **초안** — 사람 승인 전입니다 |
+| 승인 | (대기) |
+| 대상 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 MVP-1 ~ MVP-5 |
+| 후속 plan | (승인 뒤 `plans/0006-mvp-integration.md`) |
+
+이 문서는 intent 0006 의 열린 질문 여섯을 결정(D-1 ~ D-11)으로 고정하고, 다섯 단위의 완료 판정을 **검증 가능한 명제**(R-1 ~ R-12)로 옮깁니다. 단위의 범위는 backlog 가 소유합니다.
+
+**사람이 답한 셋**(2026-10-17): OQ1 → **CLI 는 Python**, OQ2 → **화면 넷을 이번에 만든다**, OQ5 → **e2e 를 `harness.config` 단계로 넣는다**. 나머지 셋(OQ3·OQ4·OQ6)은 그 셋의 결과로 좁혀져 아래 D-4·D-5·D-7 이 됩니다.
+
+Phase 0~4 의 결정은 그대로 유효합니다. 이 spec 이 그중 **하나를 개정합니다** — `docs/architecture.md` 의 **AR-1 의 CLI 판**(D-2). 그 외에는 기존 계약을 바꾸지 않고 옆에 더합니다.
+
+## 1. 요구사항
+
+| # | 요구사항 | 근거 | 어떻게 판정하는가 |
+| --- | --- | --- | --- |
+| R-1 | **CLI 만으로** Agent 생성 → Run → 스트림 출력 → 상태 조회가 된다 | Outcome 1 (MVP-1) | `smoke` 와 같은 격리 compose 에서 CLI 서브프로세스로 네 명령을 돌려 마지막 상태가 `succeeded`. 출력에 이벤트가 **스트림으로** 나타남 |
+| R-2 | CLI 는 **api·runtime 코드를 import 하지 않는다** | AR-1 의 CLI 판(D-2) | `api-arch`: `.importlinter` 의 **AR-14** 가 `aether_cli` → 제품 패키지를 금지하고, 위반을 주입하면 실패한다 |
+| R-3 | CLI 는 **HTTP 클라이언트 라이브러리를 쓰지 않는다**(표준 라이브러리만) | D-1, AR-5 | `api-arch`: AR-5 의 금지(`httpx`)에 `aether_cli` 가 source 로 들어가고, `requests`·`aiohttp` 도 의존성에 없다(`pyproject.toml` 확인 테스트) |
+| R-4 | **네 목록 경로**가 생기고 기존 경로는 바뀌지 않는다 | D-3 | `api-integration`: `GET /runs`·`/workflows`·`/workflow-runs`·`/knowledge-sets` 각각 200 과 페이지 모양. `web-typecheck`: 드리프트 0, 기존 경로·스키마 **변경 0건** |
+| R-5 | **네 화면이 실제 데이터로 뜬다** — Agent 대화(스트림), Run 목록, Run 상세, Knowledge·Workflow 목록 | Outcome 2 (MVP-2) | `web-unit`: 각 화면이 SDK 응답 고정값으로 렌더됨. `e2e`: 오프라인 compose 에서 네 경로가 **404 가 아니고** 실제 행을 보여줌 |
+| R-6 | 사이드바의 링크에 **404 가 없다** | Outcome 2 | `web-unit`: `NAV_ITEMS` 의 모든 `href` 에 대응하는 라우트가 존재한다(목록을 하드코딩하지 않고 nav 에서 수집) |
+| R-7 | Workflow 화면은 **Run 수준까지**만 보여준다 | D-4 | `web-unit` + 구조 테스트: 화면 코드가 노드 실행을 요구하는 호출을 하지 않는다 |
+| R-8 | **네트워크를 끊은 compose 에서 Run 이 로컬 모델로 `succeeded`** 가 된다 | Outcome 3 (MVP-3) | `e2e`: 외부와 끊긴 네트워크에서 Run 하나가 `succeeded`. 어댑터는 `openai_compatible`, base URL 은 compose 내부 |
+| R-9 | **부팅 경로에 모델 다운로드가 없다** | D-5, DP-4 | `e2e`: 모델 볼륨이 비어 있으면 **명확한 오류로 멈춘다**(조용히 받지 않는다). 채워져 있으면 up 이 네트워크 없이 성공 |
+| R-10 | **로드맵 10장 시나리오가 테스트 하나로 성립한다** — 차단 → up → Knowledge 적재 → Agent(MCP 바인딩) → **Workflow 실행** → 성공 | Outcome 4 (MVP-4) | `e2e` 단계가 통과하고 로그가 `.harness/logs/e2e.log` 에 남는다 |
+| R-11 | **`e2e` 가 `harness.config` 의 단계로 존재한다** | D-6 (OQ5 의 답) | `self-check`: 단계 목록에 `e2e` 가 있고 `HARNESS_DEFERRED_STEPS` 에도 있다(로컬은 미룸, CI 는 `--full`) |
+| R-12 | **"clone 부터 첫 Run 성공까지" 가 측정되어 커밋된다** | Outcome 5 (MVP-5) | `docs/measurements/ttfsa-<날짜>.md` 가 측정자·환경·각 단계 시각·막힌 지점·총 시간을 담는다. 10분을 넘겼으면 **막힌 지점이 backlog 단위로 등록**된다 |
+
+위 전부가 **네트워크 없이** 통과합니다(모델은 로컬, 그 외는 fake). 새 경로는 전부 인증 뒤에 있고 인증 없는 요청은 401 입니다 — `apps/api/tests/test_routes_require_auth.py` 가 라우터에서 경로를 수집하므로 새 목록 경로가 자동으로 그 판정에 들어옵니다.
+
+## 2. 설계
+
+### 2.1 CLI 는 Python 이고 표준 라이브러리만 씁니다 (D-1, OQ1 의 답)
+
+사람이 **Python** 을 골랐습니다(2026-10-17). 그 선택이 부딪히는 제약을 먼저 적습니다.
+
+- **`httpx` 는 저장소 전체에서 금지**입니다(AR-5 — 허용된 자리는 `aether_runtime.adapters.outbound.model_gateway` 하나뿐). `requests`·`aiohttp` 도 `domain`·`application` 에서 금지입니다(AR-9).
+- 그래서 CLI 는 **표준 라이브러리 `urllib.request`** 로 HTTP 를 칩니다. 새 의존성이 없고 `.importlinter` 의 ignore 목록을 **늘리지 않습니다**. On-Prem·Air-Gapped 에서 설치할 것이 적다는 것도 같은 방향입니다(DP-4).
+- 자리는 **`apps/cli`**(새 workspace 멤버, `aether` 콘솔 스크립트). `apps/api` 안에 두지 않습니다 — 같은 패키지에 두면 import 경계가 흐려져 R-2 를 계약으로 세울 수 없습니다.
+- 계약의 정본은 **`packages/sdk/openapi.json`** 입니다. 코드를 생성하지는 않습니다(생성기를 하나 더 들이지 않습니다) — 대신 **드리프트 테스트**가 CLI 가 쓰는 경로가 openapi 에 실재하는지 확인합니다.
+
+### 2.2 AR-1 의 CLI 판을 개정합니다 (D-2 — 보호 파일, 사람)
+
+AR-1 은 "`apps/web` 과 CLI 는 `packages/sdk` 만 쓴다" 입니다. 그 SDK 는 TypeScript 이므로 **Python CLI 는 문자 그대로 지킬 수 없습니다.** 규칙의 **뜻**(제품 코드를 import 하지 않고 공개 계약만 쓴다)을 지키는 쪽으로 개정합니다.
+
+> **AR-1(개정)**: `apps/web` 은 `packages/sdk` 만 씁니다. **CLI 는 제품 코드를 import 하지 않고 HTTP 계약(`openapi.json`)만 씁니다.**
+
+강제는 `.importlinter` 의 **AR-14 신설**입니다(AR-1 ~ AR-13 이 쓰였습니다). `source_modules` 는 `aether_cli`, `forbidden_modules` 는 `aether_api`·`aether_runtime`·`aether_workflow`·`aether_worker`·`aether_mcp`·`aether_policy`·`aether_context`·`aether_memory` 입니다. 그리고 AR-5 의 `source_modules` 에 `aether_cli` 를 더합니다(`httpx` 금지가 CLI 에도 걸리도록).
+
+`.importlinter` 는 **보호 파일**이므로 이 변경은 **사람이 커밋**하고, 하네스 변경은 한 번에 하나이며 변경 사이에 평가를 실행합니다(CC-1·CC-5). 적용은 **MVP-1 보다 앞**입니다 — 계약을 먼저 세우면 첫 CLI 코드가 처음부터 위반할 수 없습니다(Phase 4 의 AR-13 과 같은 순서).
+
+### 2.3 목록 API 넷을 더합니다 (D-3 — OQ2 의 답이 요구합니다)
+
+사람이 **화면 넷을 이번에 만든다**고 답했고, 그 결과로 지금 없는 것이 드러났습니다 — **2026-10-17 실측으로 목록 경로는 `GET /agents` 하나뿐입니다.**
+
+| 새 경로 | 어느 화면이 요구하는가 |
+| --- | --- |
+| `GET /runs` | Run 목록 |
+| `GET /workflows` | `/workflows` |
+| `GET /workflow-runs` | `/workflows`(실행 목록) |
+| `GET /knowledge-sets`, `GET /knowledge-sets/{id}/ingestions` | `/knowledge` |
+
+**페이지 규칙은 `GET /agents` 의 모양을 그대로 베낍니다**(새 규약을 만들지 않습니다). 필터는 **상태 하나**까지만 — 검색·정렬은 범위 밖입니다. 추가는 **전부 additive** 이고 기존 경로·스키마는 바뀌지 않습니다(R-4·D-11).
+
+`packages/sdk/src/client.ts` 에 Knowledge·Workflow·목록 함수를 더합니다 — 화면은 SDK 만 쓰므로(AR-1) 그 자리가 비어 있으면 화면을 만들 수 없습니다.
+
+### 2.4 Workflow 화면의 깊이 (D-4 — OQ3 의 답)
+
+**Run 수준까지만** 보여줍니다 — 상태(여덟 값), 현재 노드, 기다리는 대상, 승인 기록, 시각. **노드 실행 목록은 보여주지 않습니다**: 그 데이터는 `data` 평면에 있고 api 역할은 그 평면에 권한이 없어 **투영이 먼저 필요하며**, 그것은 Phase 5 입니다(spec 0005 개정 4).
+
+화면에 "노드 단위는 준비 중" 같은 자리표시를 두지 않습니다 — 없는 것을 있을 것처럼 적지 않습니다.
+
+### 2.5 모델 파일을 미리 받아 두는 경로 (D-5 — OQ4 의 답)
+
+- **이미지에 넣지 않습니다**(크기). **볼륨에 미리 받아 둡니다.**
+- 받는 것은 **별도 스크립트 1회**(`scripts/fetch-model.sh`)이고 **네트워크가 있는 환경에서 사람이 실행**합니다. compose up 경로에는 다운로드가 **없습니다**(R-9, DP-4).
+- 볼륨이 비어 있으면 **명확한 오류로 멈춥니다** — 조용히 받거나 fake 로 떨어지지 않습니다. 메시지에 받는 방법(스크립트 한 줄)을 적습니다.
+- Q6 은 2026-09-12 에 닫혔습니다(Qwen3.8 27B 양자화, compose 의 `llm` 프로파일 = ollama 다이제스트 핀). 이 spec 은 모델을 다시 고르지 않습니다.
+
+### 2.6 `e2e` 를 단계로 넣습니다 (D-6 — OQ5 의 답, 보호 파일·사람)
+
+사람이 **`harness.config` 단계로 넣는다**고 답했습니다. 예산이 경계이므로 **같은 PR 에 숫자가 함께 갑니다.**
+
+- 단계 이름 `e2e`, 계층 `behavior`, `required=true`.
+- **`HARNESS_DEFERRED_STEPS` 에 넣습니다** — 로컬 기본 실행은 미루고(지금 `api-integration`·`smoke`·`bench` 와 같은 자리), **CI 는 `--full` 로 돌아 required 그대로**입니다. 로컬 완료 근거가 약해지는 것을 의도로 적습니다(`harness.config` 가 이미 그 선택을 설명합니다).
+- **예산 결정이 같이 옵니다**: 2026-10-17 실측으로 전량이 458,000~606,000 ms 이고 예산은 600,000 ms 입니다. `e2e` 가 더해지면 **CI 의 `--full` 이 예산을 넘깁니다** — 예산 상향 또는 `harness-scripts`(합계의 20%, 제품 아님)의 자리 조정이 **그 PR 의 사람 결정**입니다(`improvement-log/2026-10-06-002`). 에이전트가 임계를 올리지 않습니다(EI-2).
+
+### 2.7 TTFSA 측정 (D-7 — OQ6 의 답)
+
+- **사람 한 명이 필요합니다.** 에이전트는 저장소를 이미 알고 있어 "처음 보는 사람" 이 될 수 없습니다.
+- 에이전트가 만드는 것은 **Quickstart 한 장**과 **측정 양식**(`docs/measurements/ttfsa-<날짜>.md`: 측정자·환경·각 단계 시각·막힌 지점·총 시간)뿐입니다.
+- 10분을 넘기면 **막힌 지점을 backlog 의 단위로 등록**합니다. 측정 조건을 바꾸지 않습니다(EI-3).
+
+### 2.8 비밀값과 CLI (D-8)
+
+- CLI 는 키를 **`AETHER_API_KEY` 환경변수로만** 받습니다. 파일에 쓰지 않고 로그·오류 메시지에 싣지 않습니다.
+- `aether up` 이 compose 를 띄울 때 쓰는 비밀값은 `smoke.sh` 와 같은 방식(임시 `.env`, 실행 뒤 삭제)입니다.
+- 키 원문이 stdout 에 나가는 자리는 **발급 한 번**뿐입니다(기존 `aether-api keys create` 의 규칙).
+
+### 2.9 설정 (추가되는 환경변수)
+
+| 변수 | 기본 | 뜻 |
+| --- | --- | --- |
+| `AETHER_API_URL` | `http://localhost:8000` | CLI·web 이 칠 api 주소(web 이 이미 같은 이름을 씁니다) |
+| `AETHER_MODEL_VOLUME_PATH` | (compose 내부) | 미리 받아 둔 모델 파일의 볼륨 경로. 비어 있으면 명확한 오류 |
+
+### 2.10 검증 단계
+
+`e2e` **하나만** 늘립니다(D-6). 그 밖의 단계는 바뀌지 않습니다. `smoke` 는 **그대로 둡니다** — Workflow 를 `smoke` 에 넣지 않는다는 spec 0005 D-16 을 유지하고, Workflow 가 들어가는 전체 시나리오는 `e2e` 가 봅니다.
+
+## 3. 우려 지점
+
+| # | 우려 | 지금의 답 |
+| --- | --- | --- |
+| C-1 | **CLI 가 SDK 를 못 쓰므로 계약이 두 번 구현됩니다**(TS 클라이언트와 Python CLI) | 받아들입니다. 대신 **드리프트 테스트**로 CLI 가 쓰는 경로가 `openapi.json` 에 실재하는지 확인합니다. Phase 4 의 상태 스트림이 같은 모양이었고(worker·api 각자 구현) 사슬 테스트가 그것을 잡았습니다 — 여기서는 `e2e` 가 그 역할입니다 |
+| C-2 | `urllib` 로 SSE 스트림을 읽는 것이 번거롭습니다 | 번거롭지만 가능합니다(청크 단위 읽기). 의존성 하나를 들이는 대가보다 작고, 오프라인 설치 표면을 늘리지 않습니다 |
+| C-3 | **화면 넷을 한 Phase 에 만드는 것이 큽니다** | 그래서 MVP-2 를 plan 에서 쪼갭니다(목록 둘 → 상세 → 대화). 각 화면의 완료 판정은 "실제 데이터로 뜬다" 이고 디자인은 최소입니다 |
+| C-4 | **`e2e` 가 예산을 넘깁니다** | 넘깁니다. 그래서 그 변경과 **예산 결정이 한 PR** 입니다(2.6). 숨기지 않고 선택 실패로 집계하거나 사람이 임계를 조정합니다 |
+| C-5 | 오프라인 판정이 "네트워크를 끊었다" 를 어떻게 증명하는가 | compose 네트워크를 내부 전용으로 두고 **외부 주소 호출이 실패하는 것을 테스트 안에서** 확인합니다. 모델 호출이 그 안에서 성공하는 것이 R-8 입니다 |
+| C-6 | TTFSA 가 사람에 의존해 재현되지 않습니다 | 그렇습니다. 그래서 **측정 기록이 산출물**이고 숫자 자체를 게이트로 걸지 않습니다. 10분은 목표이고 넘으면 막힌 지점이 단위가 됩니다 |
+| C-7 | 목록 경로가 늘면 **인증·권한 표면도 늘어납니다** | 새 경로는 기존 `principal_dep` 뒤에 있고 `test_routes_require_auth.py` 가 라우터에서 경로를 수집하므로 자동으로 판정됩니다. 권한 모델은 건드리지 않습니다(Phase 8) |
+
+## 4. 결정 요청
+
+| # | 결정 | 근거 | 어디 |
+| --- | --- | --- | --- |
+| D-1 | CLI 는 **Python**, 자리는 `apps/cli`, HTTP 는 **표준 라이브러리 `urllib`**. 계약의 정본은 `openapi.json` | OQ1(사람) + AR-5 | 2.1, R-1·R-3 |
+| D-2 | **AR-1 의 CLI 판을 개정**하고 `.importlinter` 에 **AR-14 신설**(+ AR-5 에 `aether_cli` 추가). 보호 파일이므로 **사람이 커밋**하고 **MVP-1 보다 앞** | D-1, CC-1 | 2.2, R-2 |
+| D-3 | **목록 경로 넷을 더합니다**. 페이지 규칙은 `GET /agents` 를 베끼고 필터는 상태 하나. SDK 에 그 함수를 더합니다 | OQ2(사람) + 실측 | 2.3, R-4·R-5 |
+| D-4 | Workflow 화면은 **Run 수준까지**. 노드 실행 목록은 투영이 필요하므로 Phase 5. 자리표시를 두지 않습니다 | OQ3 | 2.4, R-7 |
+| D-5 | 모델 파일은 **볼륨 + 별도 스크립트 1회**. 부팅 경로에 다운로드 없음, 비어 있으면 **명확한 오류** | OQ4 | 2.5, R-9 |
+| D-6 | **`e2e` 를 `harness.config` 단계로** 넣고 `HARNESS_DEFERRED_STEPS` 에도 넣습니다. **예산 결정이 같은 PR** | OQ5(사람), EI-2 | 2.6, R-10·R-11 |
+| D-7 | TTFSA 는 **사람 한 명**. 에이전트는 Quickstart 와 측정 양식만 | OQ6 | 2.7, R-12 |
+| D-8 | CLI 는 키를 **환경변수로만** 받고 파일·로그에 남기지 않습니다 | Trust | 2.8 |
+| D-9 | 화면은 **SDK 만** 씁니다(AR-1 유지). Knowledge·Workflow 함수를 SDK 에 더합니다 | AR-1 | 2.3, R-5 |
+| D-10 | `smoke` 는 **바꾸지 않습니다** — Workflow 는 `e2e` 가 봅니다(spec 0005 D-16 유지) | D-16 | 2.10 |
+| D-11 | 새 목록 경로는 **전부 additive**. 기존 경로·스키마 변경 0건 | 계약 안정성 | 2.3, R-4 |
+
+## 5. 검증 매핑
+
+| 요구 | 단위 | 어디서 판정 |
+| --- | --- | --- |
+| R-1, R-3 | MVP-1 | `e2e`(CLI 서브프로세스), `api-arch`(의존성) |
+| R-2 | D-2(사람) | `api-arch` + `tests/arch` 주입 1건 |
+| R-4 | MVP-2 앞의 API 작업 | `api-integration`, `web-typecheck`(드리프트) |
+| R-5, R-6, R-7 | MVP-2 | `web-unit`, `e2e` |
+| R-8, R-9 | MVP-3 | `e2e` |
+| R-10, R-11 | MVP-4 | `e2e`(+ `harness.config`, 사람) |
+| R-12 | MVP-5 | 측정 기록 파일(사람) |
+
+## 6. 이 spec 이 답하지 않는 것
+
+- **노드 실행 조회 API 와 그 투영** — Phase 5. D-4 가 그 경계를 적었습니다.
+- Agent Builder·Workflow 편집 화면, Admin·Analytics — Phase 5 이후.
+- 검색·정렬·커서 기반 페이지네이션의 일반화 — 목록은 `GET /agents` 의 모양을 베끼는 선에서 멈춥니다.
+- 멀티테넌시·권한 모델 확장 — Phase 8.
+- CLI 의 플러그인·대화형 TUI — backlog 의 MVP-1 범위 밖.
+- **예산의 새 값** — D-6 이 "같은 PR 에서 사람이 정한다" 까지만 적습니다.
+
+## 개정 이력
+
+| 개정 | 내용 |
+| --- | --- |
+| 초안 | 2026-10-17. intent 0006 의 열린 질문 여섯을 D-1 ~ D-11 로 닫았습니다. 사람이 답한 셋(Python CLI·화면 넷·`e2e` 단계)과, 그 답이 드러낸 것 둘 — **`httpx` 가 저장소 전체에서 금지라 CLI 는 표준 라이브러리를 쓴다**(AR-5 실측)와 **목록 경로가 `GET /agents` 하나뿐이라 화면 넷에 목록 API 넷이 먼저 필요하다**(2026-10-17 실측). 가장 확신이 낮은 결정은 **D-6**(예산을 넘기는 단계 추가)이고 그 숫자는 같은 PR 에서 사람이 봅니다 |
