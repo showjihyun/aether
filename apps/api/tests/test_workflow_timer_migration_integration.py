@@ -302,12 +302,14 @@ def test_0009_changes_no_grant(alembic_config: Config, admin_connection_factory:
         before = _privilege_matrix(conn)
     finally:
         conn.close()
-    command.upgrade(alembic_config, "head")
+    # head 가 아니라 0009 까지 -- 0011 이 승인 표의 GRANT 를 의도적으로 좁혔으므로 head 와는 다르다.
+    command.upgrade(alembic_config, "0009")
     conn = admin_connection_factory()
     try:
         after = _privilege_matrix(conn)
     finally:
         conn.close()
+    command.upgrade(alembic_config, "head")
 
     assert before == after
     assert before[("aether_data", "data.workflow_run_executions", "UPDATE")] is True
