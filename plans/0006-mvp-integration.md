@@ -27,7 +27,8 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | 0 | **H-1** `.importlinter` 의 **AR-14** 신설 + AR-5 에 `aether_cli` | 문제 2. 계약이 먼저 | **H** |
 | 1 | **MVP-0** 목록 API 넷 + SDK 함수(신설 단위) | 문제 1. 화면이 가리킬 데이터 | — |
 | 2 | **MVP-1** Python CLI (`apps/cli`) | AR-14 가 선 뒤 첫 CLI 코드. `e2e` 없이도 통합으로 판정 가능 | — |
-| 3 | **H-2** `harness.config` 에 `e2e` 단계 + **예산 결정** | 문제 3. MVP-3·MVP-4 의 판정 수단 | **H** |
+| 3 | **H-2a** `harness.config` 의 **예산 결정**(600,000 → 900,000) | 문제 3. MVP-1 이 `e2e` 없이 이미 넘겼습니다 | **H** |
+| 3' | **H-2b** `harness.config` 에 `e2e` 단계 | 같은 파일의 그 규칙(10~14행) 때문에 **시나리오가 생길 때** 등록합니다 — MVP-3 의 PR 과 함께 | **H** |
 | 4 | **MVP-3** 로컬 LLM 과 모델 볼륨 | 문제 4. `e2e` 가 있어야 "네트워크 없이" 를 판정 | **H-3** 모델 1회 적재 |
 | 5 | **MVP-2a** 목록 화면 둘(`/runs`·`/agents`) | 데이터가 있고 계약이 선 뒤 | — |
 | 6 | **MVP-2b** 상세 화면(`/runs/{id}`: 이벤트 타임라인 + trace) | 2a 의 목록에서 들어갑니다 | — |
@@ -72,13 +73,21 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | 판정 | `api-unit`: 각 명령이 fake HTTP 계층으로 요청을 만들고 응답을 포맷(컨테이너 없이). `api-arch`: AR-14 가 발화하고 `httpx`·`requests`·`aiohttp` 가 의존성에 없음(R-3). **격리 compose 통합 1건**: CLI 서브프로세스로 네 명령을 돌려 `succeeded` 와 스트림 출력(R-1) |
 | 주의 | 키는 `AETHER_API_KEY` 환경변수로만 받고 파일·로그에 남기지 않습니다(D-8). `up` 이 만드는 임시 `.env` 는 `smoke.sh` 와 같은 방식이고 실행 뒤 지웁니다 |
 
-### H-2 `harness.config` — `e2e` 단계와 예산 (H)
+### H-2a `harness.config` — 예산 (H)
 
 | 항목 | 내용 |
 | --- | --- |
-| 바뀌는 것 | `HARNESS_STEPS` 에 `e2e`(계층 `behavior`, `required=true`), `HARNESS_DEFERRED_STEPS` 에 `e2e` 추가. 스크립트는 `scripts/e2e.sh`(에이전트가 MVP-4 에서 채웁니다 — 이 PR 에서는 **단계 정의와 빈 진입점**까지) |
-| 사람이 정하는 것 | **예산.** 2026-10-17 실측 전량 452,980~605,631 ms / 예산 600,000 ms 이고 `e2e` 는 `smoke`(약 110초)와 비슷하거나 더 깁니다. 선택지는 (a) 예산 상향 (b) `harness-scripts`(합계의 20%, 제품 아님)를 CI 전용으로 (c) `api-integration` 의 컨테이너 재사용(측정은 `2026-10-06-002` 에) |
-| 에이전트가 넘기는 것 | 단계 정의 diff, 그 세 선택지와 각각의 대가, 그리고 **지금까지의 합계 추이**. 숫자를 고르지 않습니다(EI-2) |
+| 바뀌는 것 | `HARNESS_VERIFY_BUDGET_MS=900000` 을 `harness.config` 에 **선언**합니다. 지금 그 값은 `verify.sh` 의 기본값(600,000)에만 있어서, 사람이 소유하는 숫자가 보호 파일 **밖**에 살고 있습니다 |
+| 사람이 정한 것 | **900,000 ms**(showjihyun, 2026-10-17). 600초는 제품 단계가 10개였던 Phase 0 의 값이고(spec 0001 D-12) 지금은 20개·컨테이너 셋입니다. 실측 626,073 ms(MVP-1) + `e2e` 약 110초 ≈ 736,000 에 약 20% 여유. 대안 둘(`harness-scripts` CI 전용 / compose 스택 재사용)은 **버리지 않고** `2026-10-06-002` 에 남깁니다 — 그 후보가 닫히면 이 값을 다시 내립니다 |
+| 에이전트가 넘기는 것 | 패치 하나와 `tests/scripts/test_verify_budget.py`. 그 테스트는 **값**(900,000)과 **배선**(설정의 키가 실제로 판정을 바꾸는가)을 함께 고정합니다 — `verify.sh` 가 기본값과 함께 읽으므로 키 이름을 한 글자 틀리면 설정이 **조용히 무시**됩니다. 숫자를 고치지 않습니다(EI-2) |
+
+### H-2b `harness.config` — `e2e` 단계 (H, **MVP-3 과 같은 PR**)
+
+| 항목 | 내용 |
+| --- | --- |
+| 왜 뒤로 갔는가 | `harness.config` 10~14행이 **"없는 코드를 검사하는 단계를 미리 적지 않습니다 — verify 가 항상 실패하거나 required 를 내리게 되어 게이트가 죽습니다"** 라고 적고 있습니다. 빈 진입점을 `required=true` 로 등록하면 CI 가 전 PR 에서 빨개지고, exit 0 인 껍데기로 두면 **아무것도 판정하지 않는 초록**이 생깁니다(AGENTS.md Verification 4). 두 길 다 그 규칙이 막는 것입니다 |
+| 그래서 언제 | **`scripts/e2e.sh` 가 처음으로 무언가를 단언하는 PR**(MVP-3: 네트워크 끊은 compose 에서 Run 하나가 로컬 모델로 `succeeded`)에서 단계를 등록합니다. 그 PR 은 spec 0006 5절이 이미 "MVP-4 → `e2e`(+ `harness.config`, 사람)" 로 두 번째 사람 손을 예고하고 있습니다 |
+| 그동안의 판정 | MVP-3 는 `e2e` 단계 **이전에** 자기 통합 테스트(격리 compose)로 red·green 을 보입니다 — MVP-1 이 같은 방식이었습니다. 단계 등록은 그 테스트를 **게이트에 꽂는** 일이고, 꽂을 것이 있을 때 꽂습니다 |
 
 ### MVP-3 로컬 LLM 과 모델 볼륨 (A, 적재는 H-3)
 
@@ -134,15 +143,18 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | 순간 | 언제 | 사람이 하는 일 |
 | --- | --- | --- |
 | **H-1** | MVP-1 **앞** | `.importlinter` 에 AR-14 신설 + AR-5 에 `aether_cli`. `harness-change` 라벨 |
-| **H-2** | MVP-3 **앞** | `harness.config` 에 `e2e` 단계. **같은 PR 에서 예산을 정합니다** — 선택지 셋과 숫자는 에이전트가 올립니다 |
+| **H-2a** | MVP-3 **앞** | `harness.config` 에 **예산**(900,000 ms). 선택지 셋과 숫자는 에이전트가 올렸고 사람이 2026-10-17 에 골랐습니다 |
+| **H-2b** | MVP-3 **과 같은 PR** | `harness.config` 에 `e2e` 단계. 시나리오가 생길 때 꽂습니다(그 파일 10~14행) |
 | **H-3** | MVP-3 중 | 네트워크 있는 환경에서 모델 1회 적재(`scripts/fetch-model.sh`) |
 | **H-4** | MVP-5 | **처음 보는 사람 1명의 시간**. 에이전트가 대신할 수 없는 유일한 단위 |
 
-보호 파일 변경은 **둘**입니다(H-1·H-2). 하네스 변경은 한 번에 하나이고 변경 사이에 평가를 실행합니다(CC-1·CC-5) — 그래서 두 PR 사이에 단위 하나(MVP-1)가 들어갑니다.
+보호 파일 변경은 **셋**입니다(H-1·H-2a·H-2b). 하네스 변경은 한 번에 하나이고 변경 사이에 평가를 실행합니다(CC-1·CC-5) — 그래서 PR 사이에 단위가 들어갑니다(H-1 → MVP-1 → H-2a → MVP-3+H-2b).
+
+**개정 1 (2026-10-17): H-2 를 H-2a·H-2b 로 쪼갰습니다.** 원래 한 PR 에서 `e2e` 단계와 예산을 같이 정하기로 했는데, `harness.config` 자신이 10~14행에서 "없는 코드를 검사하는 단계를 미리 적지 않습니다 — verify 가 항상 실패하거나 required 를 내리게 되어 게이트가 죽습니다" 라고 금지하고 있었습니다. 예산 결정은 **지금** 급하고(MVP-1 이 `e2e` 없이 626,073 ms 로 이미 넘겼습니다), 단계 등록은 **판정할 것이 생길 때**(MVP-3) 입니다. 2.6 의 D-6 자체는 바뀌지 않습니다 — 순서만 바뀝니다.
 
 ## 4. 판정 절차
 
-`TESTCONTAINERS_RYUK_DISABLED=true ./harness/scripts/verify.sh` 하나가 판정입니다. **H-2 뒤에는 `e2e` 가 `HARNESS_DEFERRED_STEPS` 에 있으므로 로컬 기본 실행이 그 단계를 미룹니다** — 그 단계에 걸린 단위(MVP-3·MVP-4)는 **`--full` 을 최소 1회** 돌립니다.
+`TESTCONTAINERS_RYUK_DISABLED=true ./harness/scripts/verify.sh` 하나가 판정입니다. **H-2b 뒤에는 `e2e` 가 `HARNESS_DEFERRED_STEPS` 에 있으므로 로컬 기본 실행이 그 단계를 미룹니다** — 그 단계에 걸린 단위(MVP-3·MVP-4)는 **`--full` 을 최소 1회** 돌립니다.
 
 **단위마다 보고에 적습니다**: `.harness/verify.json` 의 합계 ms, `api-integration`·(있으면) `e2e` 의 ms. 예산을 넘기면 선택 실패로 집계하고 **사람이 봅니다** — 에이전트가 임계를 올리지 않습니다(EI-2).
 
@@ -176,7 +188,7 @@ backlog 의 MVP 완료 판정 + spec 0006 의 R-1 ~ R-12 전부가 통과하고 
 | R-2 | **H-1**(사람) |
 | R-4 | MVP-0 |
 | R-1, R-3 | MVP-1 |
-| R-11 | **H-2**(사람) |
+| R-11 | **H-2b**(사람, MVP-3 과 같은 PR) |
 | R-8, R-9 | MVP-3 (적재는 H-3) |
 | R-5(절반), R-6 | MVP-2a ~ 2c |
 | R-7 | MVP-2c |
@@ -190,6 +202,6 @@ backlog 의 MVP 완료 판정 + spec 0006 의 R-1 ~ R-12 전부가 통과하고 
 - [../specs/0006-mvp-integration.md](../specs/0006-mvp-integration.md) — 요구사항·결정
 - [../intents/mvp-backlog.md](../intents/mvp-backlog.md) — 단위의 범위(MVP-0 행은 plan 승인과 함께 M 이 더합니다)
 - [../docs/architecture.md](../docs/architecture.md) — **AR-1(개정 대상)**, AR-5, AR-14(신설)
-- [../improvement-log/2026-10-06-002.yaml](../improvement-log/2026-10-06-002.yaml) — verify 예산. H-2 가 이것과 한 묶음입니다
+- [../improvement-log/2026-10-06-002.yaml](../improvement-log/2026-10-06-002.yaml) — verify 예산. H-2a 가 이것과 한 묶음입니다(사람 결정 2026-10-17: 900,000 ms)
 - [../improvement-log/2026-10-17-001.yaml](../improvement-log/2026-10-17-001.yaml) — 같은 트리 동시 편집. 5절의 "위임은 한 번에 하나" 가 이 교훈입니다
 - [../AGENTS.md](../AGENTS.md) — Loop, Trust, 반복 예산
