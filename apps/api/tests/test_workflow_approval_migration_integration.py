@@ -90,6 +90,16 @@ def _has_privilege(conn: psycopg.Connection, role: str, table: str, privilege: s
     return bool(row[0])
 
 
+def _has_column_privilege(
+    conn: psycopg.Connection, role: str, table: str, column: str, privilege: str
+) -> bool:
+    with conn.cursor() as cur:
+        cur.execute("SELECT has_column_privilege(%s, %s, %s, %s)", (role, table, column, privilege))
+        row = cur.fetchone()
+    assert row is not None
+    return bool(row[0])
+
+
 def _seed_run(conn: psycopg.Connection) -> uuid.UUID:
     with conn.cursor() as cur:
         cur.execute(
@@ -160,7 +170,10 @@ def test_0008_downgrade_then_upgrade_round_trip(
             "YES",
         )
         assert _UNIQUE_NAME in _unique_constraints(conn, "control", "workflow_approvals")
-        assert _has_privilege(conn, "aether_data", "control.workflow_approvals", "SELECT")
+        # 0011 이 표 단위 SELECT 를 열 단위로 좁혔다 -- head 에서는 실행기가 읽는 열만 SELECT 된다.
+        assert _has_column_privilege(
+            conn, "aether_data", "control.workflow_approvals", "node_execution_id", "SELECT"
+        )
         assert _labels(conn, "data", "workflow_node_execution_status") == _NODE_STATUSES
     finally:
         conn.close()
@@ -259,11 +272,11 @@ def test_data_role_can_read_approvals_and_can_not_write_them(
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "SELECT node_execution_id, approved_by FROM control.workflow_approvals "
+                "SELECT node_execution_id, workflow_run_id FROM control.workflow_approvals "
                 "WHERE node_execution_id = %s",
                 (node_execution_id,),
             )
-            assert cur.fetchone() == (node_execution_id, "tester")
+            assert cur.fetchone() == (node_execution_id, run_id)
         conn.commit()
 
         writes = (
@@ -309,7 +322,11 @@ def test_the_new_grant_is_select_and_nothing_else(admin_connection_factory: _Fac
             )
             if _has_privilege(conn, "aether_data", "control.workflow_approvals", privilege)
         }
-        assert granted == {"SELECT"}
+        # 0011: 표 단위 권한은 없고 열 단위 SELECT 만 있다(상세는 grant_narrowing 테스트).
+        assert granted == set()
+        assert _has_column_privilege(
+            conn, "aether_data", "control.workflow_approvals", "node_execution_id", "SELECT"
+        )
         for privilege in ("SELECT", "INSERT", "UPDATE", "DELETE"):
             assert not _has_privilege(conn, "aether_data", "control.workflows", privilege)
     finally:
