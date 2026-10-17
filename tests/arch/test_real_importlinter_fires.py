@@ -156,6 +156,50 @@ def test_policy_import_of_mcp_domain_is_rejected_ar4(tmp_path: Path) -> None:
     assert "AR-4" in output, output
 
 
+def test_cli_import_of_product_package_is_rejected_ar14(tmp_path: Path) -> None:
+    """spec 0006 D-2, R-2 (MVP-1 앞, plan 0006 Wave 0): `aether_cli` 는 제품 코드를
+    import 하지 않습니다.
+
+    **이 주입이 AR-14 의 유일한 증거입니다** — `aether_cli` 에는 지금 import 가 한 줄도
+    없어서 계약이 실제로는 아무것도 막지 않습니다(AR-6·AR-13 도 그 상태를 지났고, 코드가
+    생기면서 비로소 발화했습니다). CLI 가 `urllib` 로 HTTP 를 치는 것은 AR-5 가 함께
+    보고(이 PR 에서 `aether_cli` 가 그 계약의 source 에 들어갔습니다), 제품 코드를 보지
+    않는 것은 여기가 봅니다.
+    """
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "apps" / "cli" / "src" / "aether_cli" / "_bad.py"
+    bad_module.write_text("import aether_api\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "AR-14" in output, output
+
+
+def test_cli_import_of_httpx_is_rejected_ar5(tmp_path: Path) -> None:
+    """spec 0006 D-1, R-3: CLI 는 HTTP 클라이언트 라이브러리를 쓰지 않습니다.
+
+    `httpx` 는 AR-5 가 저장소 전체에서 금지하고 허용된 자리는 model_gateway 하나입니다 —
+    이 PR 이 `aether_cli` 를 그 계약의 source 에 넣었으므로, CLI 에서도 발화하는지 봅니다.
+    """
+    src_paths = _copy_src_tree(tmp_path)
+    env = _pythonpath_env(src_paths)
+    _assert_copy_is_actually_checked(env, tmp_path)
+
+    bad_module = tmp_path / "apps" / "cli" / "src" / "aether_cli" / "_bad_httpx.py"
+    bad_module.write_text("import httpx\n", encoding="utf-8")
+
+    result = _run_lint_imports(tmp_path / ".importlinter", env)
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0, output
+    assert "AR-5" in output, output
+
+
 def test_runtime_import_of_mcp_sdk_is_rejected_ar6(tmp_path: Path) -> None:
     """spec 0003 R-2 (P2-3): `ar6-mcp-client-only-in-mcp` 는 `aether_runtime` 을
     포함한 여덟 패키지에서 `mcp` SDK 를 이미 금지합니다(개정 2) — 이 단위가 그
