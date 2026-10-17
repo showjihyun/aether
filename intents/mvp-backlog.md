@@ -535,7 +535,7 @@ Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17). Spec: [../specs/
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
 | MVP-0 | 목록 API 넷과 SDK 함수(**신설** — plan 0006 1절) | P1-5b, P3-2b, P4-1 | — | 완료 (PR #163) |
-| MVP-1 | CLI (**Python**, `apps/cli`) | MVP-0, P1-6 | 🔒 AR-14(사람, 앞) | 대기 |
+| MVP-1 | CLI (**Python**, `apps/cli`) | MVP-0, P1-6 | 🔒 AR-14 — **완료**(PR #164) | 완료 (PR #166) |
 | MVP-3 | Local LLM 을 compose 에 | P1-3, P0-5 | Q6 닫힘 · 🔒 `e2e` 단계(사람, 앞) | 대기 |
 | MVP-2a | 목록 화면 둘(`/agents`·`/runs`) | MVP-0 | — | 대기 |
 | MVP-2b | Run 상세(이벤트 타임라인 + trace) | MVP-2a | — | 대기 — **`GET /runs/{id}` 가 `requested_by` 가 빈 행에서 500 입니다**(MVP-0 이 목록만 nullable 로 피했습니다). 이 단위가 상세 응답을 고칩니다 |
