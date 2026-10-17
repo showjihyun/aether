@@ -60,7 +60,7 @@ from aether_runtime.adapters.outbound.system_clock import SystemClock
 from aether_runtime.adapters.outbound.telemetry.otel_tracer import OtelTracer
 from aether_runtime.adapters.outbound.threaded_lease_keeper import ThreadedLeaseKeeper
 from aether_runtime.adapters.outbound.tool_gateway.mcp import McpToolGateway
-from aether_runtime.application.ports.outbound.model_gateway import ModelGateway
+from aether_runtime.application.ports.outbound.model_gateway import ModelError, ModelGateway
 from aether_runtime.application.ports.outbound.tool_gateway import ToolGateway
 from aether_runtime.application.usecases.execute_run import ExecuteRunUseCase
 from aether_workflow.adapters.outbound.db.agent_run_reader import PostgresAgentRunReader
@@ -187,6 +187,39 @@ def connect_with_backoff[T](
     raise WorkerStartupError(
         f"Redis 연결 실패: {policy.max_attempts}번 시도 후 포기 (마지막 원인: {last_error})"
     ) from last_error
+
+
+def check_model_available(
+    settings: Settings, *, list_models: Callable[[], list[str]] | None = None
+) -> None:
+    """spec 0006 R-9, D-5, DP-4 (MVP-3): `openai_compatible` 로 돌 때 모델이 서버(볼륨)에
+    있는지 **시작 지점**에서 묻습니다. 없으면 받는 방법을 적은 `WorkerStartupError` - Run 이
+    나중에 애매한 404/타임아웃으로 죽는 대신 여기서 멈춥니다. 이 함수는 모델을 받지 않습니다.
+    `fake` 는 볼륨과 무관하므로 묻지 않습니다. 메시지에 API 키를 싣지 않습니다."""
+    if settings.model_adapter == "fake":
+        return
+    base_url = settings.model_base_url or ""
+    lister = list_models
+    if lister is None:
+        lister = OpenAICompatibleGateway(
+            base_url, settings.model_id, settings.model_api_key, timeout_seconds=10.0
+        ).list_models
+    try:
+        available = lister()
+    except ModelError as exc:
+        raise WorkerStartupError(
+            f"모델 서버({base_url})에 물어보지 못했습니다: {exc}. "
+            "llm 서비스가 떠 있는지 확인하십시오(compose.llm.yaml)."
+        ) from exc
+    wanted = settings.model_id
+    candidates = {wanted, wanted if ":" in wanted else f"{wanted}:latest"}
+    if not candidates & set(available):
+        present = sorted(available) or "없음"
+        raise WorkerStartupError(
+            f"모델 {wanted!r} 이 모델 볼륨에 없습니다(서버에 있는 모델: {present}). "
+            "worker 는 시작할 때 모델을 받지 않습니다. 네트워크가 있는 환경에서 한 번 "
+            f"받아 두십시오: scripts/fetch-model.sh --model {wanted}"
+        )
 
 
 def _build_model_gateway(settings: Settings) -> ModelGateway:
@@ -530,6 +563,7 @@ def serve(
     ingestion_handler: HandleIngestionRequested | None = None,
     workflow_handler: HandleWorkflowRequested | None = None,
     resume: ResumeParkedWorkflows | None = None,
+    list_models: Callable[[], list[str]] | None = None,
 ) -> int:
     """연결(백오프) → consumer group → heartbeat 스레드 → 소비 대기.
 
@@ -560,6 +594,13 @@ def serve(
     있게 하기 위해서입니다. 기본값 `None` 이면 아무 일도 하지 않습니다.
     """
     init_telemetry("worker")
+
+    try:
+        check_model_available(settings, list_models=list_models)
+    except WorkerStartupError as exc:
+        logger.error("worker.startup.failed", extra={"error": str(exc)})
+        print(f"aether-worker: {exc}", file=sys.stderr)
+        return 1
 
     policy = BackoffPolicy(
         max_attempts=settings.worker_connect_max_attempts,

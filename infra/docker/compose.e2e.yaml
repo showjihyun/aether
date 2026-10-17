@@ -1,0 +1,7 @@
+# spec 0006 D-6 (MVP-3): `scripts/e2e.sh` 전용 오버라이드 - `-p aether-e2e*` 격리 프로젝트와
+# 함께만 얹습니다. 내부 전용 네트워크(compose.offline.yaml)에서는 호스트 포트 공개가 플랫폼마다
+# 다르게 동작하므로(그 파일 머리말) api 의 호스트 포트를 비우고, e2e 의 HTTP 호출은 smoke 처럼
+# `docker compose exec` 로 api 컨테이너 안에서 합니다. 개발 스택의 8000 과도 겹치지 않습니다.
+services:
+  api:
+    ports: !reset []
