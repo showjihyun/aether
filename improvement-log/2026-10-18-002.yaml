@@ -1,0 +1,31 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-18-002
+date: 2026-10-18
+status: candidate
+symptom: Windows 에서 만든 셸 스크립트는 git 모드가 100644 로 들어가고, 그 결함은 **리눅스에서만** 드러난다. 로컬 전량 20/20 통과 뒤 CI 가 Permission denied 로 실패했다
+evidence: |
+  2026-10-18, MVP-3(PR #168). `scripts/e2e.sh` 와 `scripts/fetch-model.sh` 가 `100644` 로
+  커밋됐고, Windows 로컬 `verify.sh --full` 은 **20/20 통과**(651,419 ms)였습니다. CI(리눅스)는
+  `harness-scripts` 에서 5건 실패:
+    /home/runner/work/aether/aether/scripts/e2e.sh: line 106:
+      .../scripts/fetch-model.sh: Permission denied
+  한 스크립트가 다른 스크립트를 **직접** 부르는 순간만 드러납니다 — 테스트가 `bash <경로>` 로
+  부르는 경로는 Windows 에서도 통과하므로 로컬에서는 신호가 없습니다.
+  같은 부류의 앞선 기록: MVP-1 보고의 "Linux·macOS 에서 돌려 보지 않았습니다"(그때는 문제가
+  드러나지 않았습니다). 즉 **Windows 로컬 통과 → 리눅스 CI 실패**는 이 저장소의 반복 가능한
+  실패 축이고, 실행 비트는 그중 **가장 조용한** 형태입니다(에러가 런타임까지 미뤄집니다).
+  `scripts/guard-docker-volumes.sh` 도 `100644` 였습니다 — 지금은 `bash <경로>` 로만 불려서
+  터지지 않았을 뿐입니다(그 파일의 사용법 주석은 직접 호출을 적고 있습니다).
+root_cause: Windows 의 파일 시스템에 실행 비트가 없어 git 이 새 파일을 100644 로 기록한다. 그리고 로컬 판정은 Windows 에서만 돌므로 전량 통과가 리눅스 실행 가능성을 보장하지 않는다
+fix: "`tests/scripts/test_script_exec_bits.py` 를 세웠다 — `git ls-files -s -- 'scripts/*.sh'` 의 모드가 전부 100755 인지 본다(작업 트리 권한이 아니라 **인덱스의 모드**를 본다). 예외를 두지 않는다. 비트가 빠진 세 파일은 `git update-index --chmod=+x` 로 고쳤다. 변이(한 파일을 100644 로 되돌림)에서 발화 확인"
+recurrence_risk: medium
+harness_element: HE-3
+proposed_harness_change: "없음(지금은). 이 사건의 교정은 제품 쪽 테스트 하나로 끝났습니다. 다만 **Windows 로컬 통과 → 리눅스 CI 실패** 축 전체는 테스트 하나로 닫히지 않습니다 — 줄바꿈(CRLF), 경로 구분자, 대소문자 구분 파일명이 같은 축입니다. 그 축에서 사건이 하나 더 나오면 `verify.sh` 에 리눅스 전용 단계(컨테이너 안에서 스크립트 진입점만 실행)를 두는 것을 후보로 올립니다. 그것은 `harness.config`·`harness/**` 이므로 사람 결정입니다"
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  대상: 새 셸 스크립트를 더하는 다음 단위(MVP-4 가 `scripts/e2e.sh` 를 늘립니다).
+  기준: 로컬에서 `tests/scripts/test_script_exec_bits.py` 가 통과하고, CI 의 같은 단계가
+  권한 오류 없이 지나간다. CI 가 또 권한으로 실패하면 이 교정은 불충분하다.
+owner: unassigned
+expires: 2027-01-18

@@ -74,25 +74,37 @@ curl -s "localhost:8000/runs/$RUN_ID" -H "Authorization: Bearer $KEY"   # status
 
 ## 실제 모델로 돌리기
 
-기본은 `AETHER_MODEL_ADAPTER=fake` — 판정(verify·smoke)은 언제나 이 어댑터로, 네트워크
-없이 갑니다(spec 0002 R-6, C-7). 로컬 LLM 서버로 직접 돌려 보려면:
+기본은 `AETHER_MODEL_ADAPTER=fake` - 판정(verify·smoke)은 언제나 이 어댑터로, 네트워크
+없이 갑니다(spec 0002 R-6, C-7). 로컬 LLM 으로 돌리는 길은 **모델을 미리 받아 두고**
+(네트워크 있는 환경에서 한 번), override 를 얹어 띄우는 것입니다. 기동 경로는 모델을 받지
+않습니다.
 
 ```bash
-docker compose -f infra/docker/compose.yaml --profile llm up -d llm
-docker compose -f infra/docker/compose.yaml exec llm ollama pull qwen3.8:27b
+scripts/fetch-model.sh                     # 제품 기본 모델 qwen3.8:27b 를 모델 볼륨에 적재(1회)
+docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml up -d --wait
 ```
 
-그다음 `infra/docker/.env` 에서 `AETHER_MODEL_ADAPTER=openai_compatible` 로 바꾸고
-worker 를 재기동합니다. 기본 테스트 모델(Qwen3.8 27B 양자화, 태그 `qwen3.8:27b`)은
-**17.7 GB**(2026-10-12 레지스트리 매니페스트 실측, 레이어 4개)이므로 VRAM 18 GB 이상이
-필요합니다 — 없는 머신은 fake 어댑터만 씁니다. `llm` 서비스에는 GPU 예약이 없어
-CPU 로 돕니다(모델을 올릴 RAM 이 필요합니다).
+**`-p` 를 빼면 모델을 못 찾습니다.** compose 는 `-p` 가 없으면 프로젝트 이름을 compose 파일의
+디렉터리(`docker`)에서 가져오고, 볼륨 이름은 거기 붙습니다(`docker_ollama_models`). 반면
+`fetch-model.sh` 와 `aether up` 은 `aether-dev` 를 씁니다 - 두 이름이 다르면 **다른 볼륨**이고,
+받아 둔 모델이 스택에 보이지 않아 worker 가 "볼륨에 없다" 로 멈춥니다. 적재와 기동은 **같은
+프로젝트 이름**이어야 합니다(`--project` 로 바꿀 수 있고, 둘을 같이 바꿔야 합니다).
 
-판정(verify·smoke)은 fake 어댑터로만 갑니다 — 실제 모델은 사람의 수동 확인입니다.
-`AETHER_MODEL_ID` 의 Ollama 태그는 **실재합니다**(2026-10-12 확인). 실제 모델로 돌린
-수동 확인의 기록은 [docs/step_results/phase-3.md](docs/step_results/phase-3.md) 의
-"D-13 수동 확인"(임베딩)과 "P3-3 수동 확인"(응답)입니다 — 더 작은 모델로 돌릴 때
-무엇이 확인되고 무엇이 안 되는지도 그 두 절이 적고 있습니다.
+`compose.llm.yaml` 이 worker 를 `openai_compatible`·`http://llm:11434/v1` 로 돌리고 `llm`
+서비스에 의존하게 합니다(`.env` 에 `AETHER_MODEL_ID` 를 모델 태그와 맞춥니다). 모델 볼륨이
+비어 있으면 worker 는 **시작할 때** 받는 방법(`scripts/fetch-model.sh`)을 적고 멈춥니다 -
+Run 이 나중에 애매하게 실패하지 않습니다. `fetch-model.sh` 는 멱등이고(이미 있으면 받지
+않고 그렇다고 출력), 받지 못하면 0 이 아닌 코드로 끝납니다. 기본 모델은 **17.7 GB**
+(2026-10-12 레지스트리 매니페스트 실측)이라 VRAM 18 GB 이상이 필요합니다 - 없는 머신은 fake
+어댑터만 씁니다. `llm` 서비스에는 GPU 예약이 없어 CPU 로 돕니다.
+
+**소형 모델은 판정 전용입니다**(spec 0006 D-12). `scripts/fetch-model.sh --test-model` 이
+`qwen2.5:0.5b`(약 400 MB)를 받고, `scripts/e2e.sh` 가 그것으로 "네트워크를 끊은 compose 에서
+Run 이 `succeeded`" 와 "빈 볼륨이면 명확한 오류로 멈춤" 을 단언합니다(모델 품질은 보지
+않습니다). 제품 기본값은 그대로 `qwen3.8:27b` 입니다. `e2e` 의 처음 실행은 이미지와 소형
+모델을 받으므로 온라인이어야 합니다. 실제 모델로 돌린 수동 확인의 기록은
+[docs/step_results/phase-3.md](docs/step_results/phase-3.md) 의 "D-13 수동 확인"(임베딩)과
+"P3-3 수동 확인"(응답)입니다.
 
 ## 검증
 

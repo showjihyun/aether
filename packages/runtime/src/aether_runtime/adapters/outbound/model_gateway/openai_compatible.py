@@ -235,6 +235,27 @@ class OpenAICompatibleGateway:
             if function.get("arguments"):
                 buffer.arguments += function["arguments"]
 
+    def list_models(self) -> list[str]:
+        """spec 0006 R-9, D-5 (MVP-3): 서버에 **이미 있는** 모델 id 목록(`GET /models`).
+        워커가 시작 지점에서 볼륨에 모델이 있는지 판정하는 재료입니다 - 받지는 않습니다
+        (부팅 경로에 다운로드 없음, DP-4). 빈 서버는 빈 목록이고 판정은 호출자의 몫입니다."""
+        try:
+            response = self._client.get("/models")
+        except httpx.TimeoutException as exc:
+            raise ModelError(kind="timeout", message=str(exc)) from exc
+        except httpx.HTTPError as exc:
+            raise ModelError(kind="protocol", message=str(exc)) from exc
+        if response.status_code >= 400:
+            raise ModelError(kind="http", status=response.status_code, message=response.text)
+        try:
+            payload: Any = response.json()
+        except ValueError as exc:
+            raise ModelError(kind="protocol", message=f"invalid JSON response: {exc}") from exc
+        entries = payload.get("data") if isinstance(payload, dict) else None
+        if not isinstance(entries, list):
+            return []
+        return [str(entry["id"]) for entry in entries if isinstance(entry, dict) and "id" in entry]
+
     def embed(self, texts: list[str]) -> list[list[float]]:
         data = self._post_json("/embeddings", {"model": self._embed_model_id, "input": texts})
         entries = data.get("data") or []
