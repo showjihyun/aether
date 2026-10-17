@@ -12,6 +12,10 @@
  * P1-6: `streamRunEvents` — `GET /runs/{id}/events` 를 `fetch` 로 열고 `./sse.ts` 의
  * `parseSse` 로 SSE 를 직접 파싱합니다(spec 0002 2.7, 2.17, D-4, C-4). 브라우저
  * `EventSource` 는 `Authorization` 헤더를 붙일 수 없어 쓰지 않습니다.
+ *
+ * MVP-0: 목록 5경로(`listRuns`·`listWorkflows`·`listWorkflowRuns`·`listKnowledgeSets`·
+ * `listIngestions`)를 더합니다(spec 0006 2.3, D-9). 페이지 규칙은 `listAgents` 와 같습니다 —
+ * `limit`·`cursor` 와 `{ items, next_cursor }`. 기존 함수는 바뀌지 않았습니다(D-11).
  */
 
 import type { paths } from "./generated/openapi";
@@ -43,6 +47,45 @@ export type RunDetailResponse =
   paths["/runs/{run_id}"]["get"]["responses"]["200"]["content"]["application/json"];
 export type CancelAccepted =
   paths["/runs/{run_id}/cancel"]["post"]["responses"]["202"]["content"]["application/json"];
+
+export type ListRunsResponse =
+  paths["/runs"]["get"]["responses"]["200"]["content"]["application/json"];
+export type ListWorkflowsResponse =
+  paths["/workflows"]["get"]["responses"]["200"]["content"]["application/json"];
+export type ListWorkflowRunsResponse =
+  paths["/workflow-runs"]["get"]["responses"]["200"]["content"]["application/json"];
+export type ListKnowledgeSetsResponse =
+  paths["/knowledge-sets"]["get"]["responses"]["200"]["content"]["application/json"];
+export type ListIngestionsResponse =
+  paths["/knowledge-sets/{knowledge_set_id}/ingestions"]["get"]["responses"]["200"]["content"]["application/json"];
+
+/** 상태 필터의 값 — 생성된 쿼리 파라미터 타입에서 유도합니다. */
+export type RunStatus = NonNullable<NonNullable<paths["/runs"]["get"]["parameters"]["query"]>["status"]>;
+export type WorkflowRunStatus = NonNullable<
+  NonNullable<paths["/workflow-runs"]["get"]["parameters"]["query"]>["status"]
+>;
+export type IngestionStatus = NonNullable<
+  NonNullable<
+    paths["/knowledge-sets/{knowledge_set_id}/ingestions"]["get"]["parameters"]["query"]
+  >["status"]
+>;
+
+/** 모든 목록 경로의 공통 페이지 파라미터(`GET /agents` 와 같은 규칙). */
+export interface PageParams {
+  /** 1~200, 기본 50. */
+  limit?: number;
+  /** 이전 응답의 `next_cursor`. 불투명 문자열입니다. */
+  cursor?: string | null;
+}
+export interface ListRunsParams extends PageParams {
+  status?: RunStatus | null;
+}
+export interface ListWorkflowRunsParams extends PageParams {
+  status?: WorkflowRunStatus | null;
+}
+export interface ListIngestionsParams extends PageParams {
+  status?: IngestionStatus | null;
+}
 
 export interface ListAgentsParams {
   limit?: number;
@@ -78,6 +121,14 @@ export interface AetherClient {
   getRun(runId: string): Promise<RunDetailResponse>;
   cancelRun(runId: string): Promise<CancelAccepted>;
   streamRunEvents(runId: string, options?: StreamRunEventsOptions): AsyncIterable<RunEvent>;
+  listRuns(params?: ListRunsParams): Promise<ListRunsResponse>;
+  listWorkflows(params?: PageParams): Promise<ListWorkflowsResponse>;
+  listWorkflowRuns(params?: ListWorkflowRunsParams): Promise<ListWorkflowRunsResponse>;
+  listKnowledgeSets(params?: PageParams): Promise<ListKnowledgeSetsResponse>;
+  listIngestions(
+    knowledgeSetId: string,
+    params?: ListIngestionsParams,
+  ): Promise<ListIngestionsResponse>;
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -126,6 +177,25 @@ function buildListAgentsPath(params: ListAgentsParams | undefined): string {
   }
   const queryString = query.toString();
   return queryString ? `/agents?${queryString}` : "/agents";
+}
+
+/** 목록 경로의 쿼리 문자열 — 비어 있으면 경로만 돌려줍니다. 빈 `cursor`·`status` 는 보내지 않습니다. */
+function buildListPath(
+  path: string,
+  params: (PageParams & { status?: string | null }) | undefined,
+): string {
+  const query = new URLSearchParams();
+  if (params?.limit !== undefined) {
+    query.set("limit", String(params.limit));
+  }
+  if (params?.cursor) {
+    query.set("cursor", params.cursor);
+  }
+  if (params?.status) {
+    query.set("status", params.status);
+  }
+  const queryString = query.toString();
+  return queryString ? `${path}?${queryString}` : path;
 }
 
 /** `createClient({ baseUrl, apiKey?, fetch? })` — spec 0001 2.4 · spec 0002 2.2 의 계약. */
@@ -221,6 +291,59 @@ export function createClient(options: CreateClientOptions): AetherClient {
         headers,
         "POST",
         `/runs/${runId}/cancel`,
+      );
+    },
+
+    async listRuns(params?: ListRunsParams): Promise<ListRunsResponse> {
+      return requestJson<ListRunsResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        buildListPath("/runs", params),
+      );
+    },
+
+    async listWorkflows(params?: PageParams): Promise<ListWorkflowsResponse> {
+      return requestJson<ListWorkflowsResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        buildListPath("/workflows", params),
+      );
+    },
+
+    async listWorkflowRuns(params?: ListWorkflowRunsParams): Promise<ListWorkflowRunsResponse> {
+      return requestJson<ListWorkflowRunsResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        buildListPath("/workflow-runs", params),
+      );
+    },
+
+    async listKnowledgeSets(params?: PageParams): Promise<ListKnowledgeSetsResponse> {
+      return requestJson<ListKnowledgeSetsResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        buildListPath("/knowledge-sets", params),
+      );
+    },
+
+    async listIngestions(
+      knowledgeSetId: string,
+      params?: ListIngestionsParams,
+    ): Promise<ListIngestionsResponse> {
+      return requestJson<ListIngestionsResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        buildListPath(`/knowledge-sets/${knowledgeSetId}/ingestions`, params),
       );
     },
 

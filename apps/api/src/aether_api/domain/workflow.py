@@ -8,6 +8,7 @@ api 는 `aether_workflow.domain` 만 import 하고(`application`·`adapters` 는
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from aether_workflow.domain.workflow_version import WorkflowVersion
@@ -37,3 +38,22 @@ class WorkflowVersionNotFound(Exception):
         super().__init__(f"{workflow_id} v{version}")
         self.workflow_id = workflow_id
         self.version = version
+
+
+@dataclass(frozen=True)
+class WorkflowSummary:
+    """`GET /workflows` 의 `items[]` 한 원소 - 노드·간선 없이 이름과 현재 Version 번호만."""
+
+    id: UUID
+    name: str
+    current_version: int
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class WorkflowPage:
+    """`GET /workflows` 의 커서 페이지 - `next_cursor` 는 불투명 문자열입니다."""
+
+    items: list[WorkflowSummary]
+    next_cursor: str | None

@@ -45,11 +45,13 @@ from aether_api.domain.agent import (
     AgentVersionSummary,
 )
 from aether_api.domain.api_key import ApiKey
-from aether_api.domain.run import RunNotFound, RunView
+from aether_api.domain.run import RunNotFound, RunPage, RunSummary, RunView
 from aether_runtime.domain.agent import AgentDefinition
 from aether_runtime.domain.events import RunEvent
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunStatus
+
+from apps.api.tests.fake_cursor import offset_of
 
 
 def _default_clock() -> datetime:
@@ -141,7 +143,7 @@ class FakeAgentRepository:
         if name is not None:
             needle = name.lower()
             ordered = [a for a in ordered if needle in a.name.lower()]
-        start = int(cursor) if cursor is not None else 0
+        start = offset_of(cursor)
         page_items = ordered[start : start + limit]
         end = start + len(page_items)
         next_cursor = str(end) if end < len(ordered) else None
@@ -246,6 +248,36 @@ class FakeRunDeclarationStore:
 
     def get(self, run_id: UUID) -> RunView | None:
         return self._runs.get(run_id)
+
+    def list(self, limit: int, cursor: str | None, status: RunStatus | None = None) -> RunPage:
+        """정렬된 목록의 정수 오프셋을 감싼 불투명 커서(`FakeAgentRepository.list` 와 같다)."""
+        ordered = sorted(
+            self._runs.values(), key=lambda r: (r.requested_at, str(r.run_id)), reverse=True
+        )
+        if status is not None:
+            ordered = [r for r in ordered if r.status is status]
+        start = offset_of(cursor)
+        page = ordered[start : start + limit]
+        end = start + len(page)
+        return RunPage(
+            items=[
+                RunSummary(
+                    run_id=r.run_id,
+                    agent_id=r.agent_id,
+                    agent_version=r.agent_version,
+                    status=r.status,
+                    requested_at=r.requested_at,
+                    requested_by=r.requested_by,
+                    started_at=r.started_at,
+                    finished_at=r.finished_at,
+                    failure_reason=r.failure_reason,
+                    trace_id=r.trace_id,
+                    cancel_requested_at=r.cancel_requested_at,
+                )
+                for r in page
+            ],
+            next_cursor=str(end) if end < len(ordered) else None,
+        )
 
     def status(self, run_id: UUID) -> RunStatus | None:
         """좁은 문(포트 docstring 참조) — `RunView` 를 조립하지 않습니다."""

@@ -149,7 +149,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Knowledge Sets Route */
+        get: operations["list_knowledge_sets_route_knowledge_sets_get"];
         put?: never;
         /** Create Knowledge Set Route */
         post: operations["create_knowledge_set_route_knowledge_sets_post"];
@@ -166,7 +167,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Ingestions Route */
+        get: operations["list_ingestions_route_knowledge_sets__knowledge_set_id__ingestions_get"];
         put?: never;
         /** Request Ingestion Route */
         post: operations["request_ingestion_route_knowledge_sets__knowledge_set_id__ingestions_post"];
@@ -200,7 +202,8 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** List Workflows Route */
+        get: operations["list_workflows_route_workflows_get"];
         put?: never;
         /** Define Workflow Route */
         post: operations["define_workflow_route_workflows_post"];
@@ -291,6 +294,40 @@ export interface paths {
         put?: never;
         /** Approve Route */
         post: operations["approve_route_workflow_runs__workflow_run_id__approvals_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs Route */
+        get: operations["list_runs_route_runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/workflow-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Runs Route */
+        get: operations["list_workflow_runs_route_workflow_runs_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -635,6 +672,40 @@ export interface components {
             failure_reason: string | null;
         };
         /**
+         * IngestionSummary
+         * @description `GET /knowledge-sets/{id}/ingestions` 의 `items[]` 원소(상세 응답과 같은 열).
+         */
+        IngestionSummary: {
+            /**
+             * Ingestion Id
+             * Format: uuid
+             */
+            ingestion_id: string;
+            /**
+             * Knowledge Set Id
+             * Format: uuid
+             */
+            knowledge_set_id: string;
+            /** Source */
+            source: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "succeeded" | "failed";
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+        };
+        /**
          * InvalidWorkflowGraphResponse
          * @description 400 본문: `detail` 은 항상 `invalid_workflow_graph`.
          */
@@ -663,12 +734,80 @@ export interface components {
             created_at: string;
         };
         /**
+         * KnowledgeSetSummary
+         * @description `GET /knowledge-sets` 의 `items[]` 원소.
+         */
+        KnowledgeSetSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /**
          * ListAgentsResponse
          * @description `GET /agents` 의 성공 응답.
          */
         ListAgentsResponse: {
             /** Items */
             items: components["schemas"]["AgentSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ListIngestionsResponse
+         * @description `GET /knowledge-sets/{id}/ingestions` 의 성공 응답.
+         */
+        ListIngestionsResponse: {
+            /** Items */
+            items: components["schemas"]["IngestionSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ListKnowledgeSetsResponse
+         * @description `GET /knowledge-sets` 의 성공 응답.
+         */
+        ListKnowledgeSetsResponse: {
+            /** Items */
+            items: components["schemas"]["KnowledgeSetSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ListRunsResponse
+         * @description `GET /runs` 의 성공 응답.
+         */
+        ListRunsResponse: {
+            /** Items */
+            items: components["schemas"]["RunSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ListWorkflowRunsResponse
+         * @description `GET /workflow-runs` 의 성공 응답.
+         */
+        ListWorkflowRunsResponse: {
+            /** Items */
+            items: components["schemas"]["WorkflowRunSummary"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
+         * ListWorkflowsResponse
+         * @description `GET /workflows` 의 성공 응답.
+         */
+        ListWorkflowsResponse: {
+            /** Items */
+            items: components["schemas"]["WorkflowSummary"][];
             /** Next Cursor */
             next_cursor?: string | null;
         };
@@ -860,6 +999,42 @@ export interface components {
          */
         RunStatus: "queued" | "running" | "waiting" | "succeeded" | "failed" | "cancelled" | "timed_out";
         /**
+         * RunSummary
+         * @description `GET /runs` 의 `items[]` 원소 - `RunDetailResponse` 와 같은 열. 요청 주체가 없는 행
+         *     (Workflow 가 선언한 자식 Run)은 `requested_by` 가 null 입니다.
+         */
+        RunSummary: {
+            /**
+             * Run Id
+             * Format: uuid
+             */
+            run_id: string;
+            /**
+             * Agent Id
+             * Format: uuid
+             */
+            agent_id: string;
+            /** Agent Version */
+            agent_version: number;
+            status: components["schemas"]["RunStatus"];
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Requested By */
+            requested_by: string | null;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            failure_reason: components["schemas"]["FailureReason"] | null;
+            /** Trace Id */
+            trace_id: string | null;
+            /** Cancel Requested At */
+            cancel_requested_at: string | null;
+        };
+        /**
          * UpdateAgentRequest
          * @description `PUT /agents/{id}` 의 요청 본문 — `definition` 만. `name` 은 Phase 1 불변(D-9).
          */
@@ -1004,6 +1179,74 @@ export interface components {
          * @enum {string}
          */
         WorkflowRunStatus: "queued" | "running" | "waiting_run" | "waiting_approval" | "waiting_timer" | "succeeded" | "failed" | "cancelled";
+        /**
+         * WorkflowRunSummary
+         * @description `GET /workflow-runs` 의 `items[]` 원소 - `WorkflowRunDetailResponse` 와 같은 열.
+         */
+        WorkflowRunSummary: {
+            /**
+             * Workflow Run Id
+             * Format: uuid
+             */
+            workflow_run_id: string;
+            /**
+             * Workflow Id
+             * Format: uuid
+             */
+            workflow_id: string;
+            /** Workflow Version */
+            workflow_version: number;
+            /**
+             * Workflow Version Id
+             * Format: uuid
+             */
+            workflow_version_id: string;
+            status: components["schemas"]["WorkflowRunStatus"];
+            /** Current Node Id */
+            current_node_id: string | null;
+            /** Waiting Run Id */
+            waiting_run_id: string | null;
+            /** Waiting Node Execution Id */
+            waiting_node_execution_id: string | null;
+            /** Wake At */
+            wake_at: string | null;
+            /**
+             * Requested At
+             * Format: date-time
+             */
+            requested_at: string;
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
+        };
+        /**
+         * WorkflowSummary
+         * @description `GET /workflows` 의 `items[]` 원소 - 노드·간선 없이 이름과 현재 Version 번호.
+         */
+        WorkflowSummary: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Name */
+            name: string;
+            /** Current Version */
+            current_version: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /**
          * WorkflowVersionResponse
          * @description `GET /workflows/{id}/versions/{version}` 의 성공 응답.
@@ -1471,6 +1714,45 @@ export interface operations {
             };
         };
     };
+    list_knowledge_sets_route_knowledge_sets_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListKnowledgeSetsResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     create_knowledge_set_route_knowledge_sets_post: {
         parameters: {
             query?: never;
@@ -1495,6 +1777,56 @@ export interface operations {
             };
             /** @description unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_ingestions_route_knowledge_sets__knowledge_set_id__ingestions_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                /** @description 이 상태의 적재만 */
+                status?: ("queued" | "running" | "succeeded" | "failed") | null;
+            };
+            header?: never;
+            path: {
+                knowledge_set_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListIngestionsResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description knowledge_set_not_found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1589,6 +1921,45 @@ export interface operations {
             };
             /** @description knowledge_ingestion_not_found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflows_route_workflows_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListWorkflowsResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -1982,6 +2353,88 @@ export interface operations {
             };
             /** @description workflow_run_not_found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_runs_route_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                /** @description 이 상태의 Run 만 */
+                status?: components["schemas"]["RunStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListRunsResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_runs_route_workflow_runs_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+                /** @description 이 상태의 Workflow Run 만 */
+                status?: components["schemas"]["WorkflowRunStatus"] | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListWorkflowRunsResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
                 headers: {
                     [name: string]: unknown;
                 };

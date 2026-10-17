@@ -517,3 +517,95 @@ describe("createClient().streamRunEvents()", () => {
     expect(init.signal).toBe(controller.signal);
   });
 });
+
+describe("createClient() list functions (spec 0006 2.3, D-9)", () => {
+  const empty = { items: [], next_cursor: null };
+
+  it("listRuns GETs /runs with limit, cursor and status", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: empty });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listRuns();
+    await client.listRuns({ limit: 10, cursor: "c", status: "running" });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "http://localhost:8000/runs",
+      "http://localhost:8000/runs?limit=10&cursor=c&status=running",
+    ]);
+  });
+
+  it("listWorkflows GETs /workflows with limit and cursor", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: empty });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listWorkflows();
+    await client.listWorkflows({ limit: 5, cursor: "c" });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "http://localhost:8000/workflows",
+      "http://localhost:8000/workflows?limit=5&cursor=c",
+    ]);
+  });
+
+  it("listWorkflowRuns GETs /workflow-runs with limit, cursor and status", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: empty });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listWorkflowRuns();
+    await client.listWorkflowRuns({ limit: 3, status: "waiting_approval" });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "http://localhost:8000/workflow-runs",
+      "http://localhost:8000/workflow-runs?limit=3&status=waiting_approval",
+    ]);
+  });
+
+  it("listKnowledgeSets GETs /knowledge-sets with limit and cursor", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: empty });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listKnowledgeSets();
+    await client.listKnowledgeSets({ cursor: "c" });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "http://localhost:8000/knowledge-sets",
+      "http://localhost:8000/knowledge-sets?cursor=c",
+    ]);
+  });
+
+  it("listIngestions GETs /knowledge-sets/{id}/ingestions with limit, cursor and status", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: empty });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listIngestions("set-1");
+    await client.listIngestions("set-1", { limit: 2, cursor: "c", status: "failed" });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "http://localhost:8000/knowledge-sets/set-1/ingestions",
+      "http://localhost:8000/knowledge-sets/set-1/ingestions?limit=2&cursor=c&status=failed",
+    ]);
+  });
+
+  it("sends the Bearer key and returns the parsed page", async () => {
+    const page = { items: [{ id: "x", name: "n", created_at: "t" }], next_cursor: "c2" };
+    const fetchMock = fakeFetch({ ok: true, json: page });
+    const client = createClient({
+      baseUrl: "http://localhost:8000",
+      apiKey: "aeth_secret",
+      fetch: fetchMock,
+    });
+
+    const result = await client.listKnowledgeSets();
+
+    expect(result).toEqual(page);
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer aeth_secret");
+  });
+
+  it("throws with the status code on a non-2xx response (e.g. 404 unknown set)", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.listIngestions("missing")).rejects.toThrow(/404/);
+  });
+});

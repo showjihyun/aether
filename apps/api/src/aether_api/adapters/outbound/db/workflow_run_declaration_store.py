@@ -40,8 +40,9 @@ import psycopg
 from aether_workflow.domain.run_status import WorkflowRunStatus
 from psycopg.types.json import Jsonb
 
+from aether_api.adapters.outbound.db.cursor import decode_cursor, encode_cursor
 from aether_api.domain.workflow import WorkflowVersionNotFound
-from aether_api.domain.workflow_run import WorkflowRunView
+from aether_api.domain.workflow_run import WorkflowRunPage, WorkflowRunView
 
 _SelectRow = tuple[
     UUID,  # workflow_run_id
@@ -218,3 +219,38 @@ class PostgresWorkflowRunDeclarationStore:
             )
             updated = cur.fetchone()
         return updated is not None
+
+    def list(
+        self, limit: int, cursor: str | None, status: WorkflowRunStatus | None = None
+    ) -> WorkflowRunPage:
+        """`(requested_at, id)` 내림차순(최신 먼저) 페이지(D-3). `control.workflow_runs`
+        투영과 `control.workflow_versions`(번호) JOIN 만 읽습니다 - `data` 평면은 읽지 않습니다."""
+        conditions: list[str] = []
+        params: dict[str, object] = {"limit": limit + 1}
+        if cursor is not None:
+            after_at, after_id = decode_cursor(cursor)
+            conditions.append("(r.requested_at, r.id) < (%(after_at)s, %(after_id)s)")
+            params["after_at"] = after_at
+            params["after_id"] = after_id
+        if status is not None:
+            conditions.append("r.status::text = %(status)s")
+            params["status"] = status.value
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {_SELECT_COLUMNS}
+                {_FROM_JOIN}
+                {where}
+                ORDER BY r.requested_at DESC, r.id DESC
+                LIMIT %(limit)s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        has_more = len(rows) > limit
+        items = [_row_to_view(row) for row in rows[:limit]]
+        next_cursor = (
+            encode_cursor(items[-1].requested_at, items[-1].workflow_run_id) if has_more else None
+        )
+        return WorkflowRunPage(items=items, next_cursor=next_cursor)

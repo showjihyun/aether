@@ -47,3 +47,11 @@ class WorkflowRunNotFound(Exception):
     def __init__(self, workflow_run_id: UUID) -> None:
         super().__init__(str(workflow_run_id))
         self.workflow_run_id = workflow_run_id
+
+
+@dataclass(frozen=True)
+class WorkflowRunPage:
+    """`GET /workflow-runs` 의 커서 페이지(투영) - `next_cursor` 는 불투명."""
+
+    items: list[WorkflowRunView]
+    next_cursor: str | None

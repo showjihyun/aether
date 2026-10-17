@@ -109,6 +109,31 @@
 | `run.finished` | `status` | 종결 시 **항상 마지막**. 재개 시 재발행되어도 같은 `seq` |
 | `model.delta` | `text` | **예약** — Phase 1 은 발생시키지 않음 |
 
+## 5.1 목록 경로 (MVP-0)
+
+모든 목록은 **`GET /agents` 와 같은 규칙**입니다(spec 0006 D-3 — 새 규약을 만들지 않았습니다). 전부 인증 뒤이고 인증 없으면 401 입니다.
+
+- 쿼리: `limit`(기본 **50**, 1~200, 범위 밖은 **422**), `cursor`(이전 응답의 `next_cursor`, **불투명**한 값)
+- 응답: `{ "items": [...], "next_cursor": string | null }` — 마지막 쪽은 `null`, **빈 목록도 200** + `items: []`
+- **정렬은 경로별로 고정**이고 바꿀 수 없습니다(`order` 파라미터 없음)
+- 깨진 `cursor`(빈 문자열·base64 아님·형식 틀림)는 **여섯 경로 전부**(`GET /agents` 포함) **422 `{"detail": "invalid_cursor"}`** 입니다
+
+| 경로 | 정렬 | 필터 |
+| --- | --- | --- |
+| `GET /runs` | **최신 것부터**(`requested_at`·id 내림차순) | `status` |
+| `GET /workflow-runs` | **최신 것부터** | `status` |
+| `GET /knowledge-sets/{id}/ingestions` | **최신 것부터**. 없는 세트는 `404 knowledge_set_not_found` | `status` |
+| `GET /workflows` | 오래된 것부터(`GET /agents` 와 같음) | 없음 |
+| `GET /knowledge-sets` | 오래된 것부터 | 없음 |
+
+**Run·Workflow Run·적재가 최신 것부터인 이유**: 목록 화면의 첫 쪽에 **방금 돌린 것**이 있어야 합니다. 오래된 것부터면 사용자가 마지막 쪽까지 가야 합니다. `/workflows`·`/knowledge-sets` 는 정의 목록이라 생성 순이 자연스럽고 `GET /agents` 와 같습니다.
+
+**`GET /runs` 의 `requested_by` 는 비어 있을 수 있습니다** — Workflow 가 띄운 자식 Run 은 0007 이전에 만들어졌으면 요청자가 없습니다. 그래서 목록 전용 항목(`RunSummary`)은 그 값을 **nullable** 로 둡니다. **상세(`GET /runs/{id}`)는 아직 그 행에서 500** 이고, 그 자리는 Run 상세 화면을 만드는 단위(MVP-2b)가 고칩니다.
+
+**`GET /workflow-runs` 는 `control.workflow_runs`(투영)만 봅니다** — 노드 실행은 `data` 평면이고 api 역할은 그 평면에 권한이 없습니다(spec 0006 D-4). 그래서 **이 경로가 api 역할로 통과하는 것 자체가** 평면을 지켰다는 증거입니다.
+
+SDK: `listRuns`·`listWorkflows`·`listWorkflowRuns`·`listKnowledgeSets`·`listIngestions`(`packages/sdk`).
+
 ## 6. Plane 사이의 스트림 계약
 
 Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이고 서로의 코드를 import 하지 않습니다(AR-7). 메시지는 선언이 아니라 통지입니다 — 내구적 선언은 `control.runs` 행이고 Redis 가 메시지를 잃어도 Run 은 남습니다(spec 0002 2.18, C-2).
