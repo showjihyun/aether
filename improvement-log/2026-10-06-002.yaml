@@ -39,6 +39,31 @@ evidence: |
   (3) `api-integration` 의 testcontainers 재사용을 늘린다(Phase 4 의 통합이 Run 마다
       컨테이너를 다시 쓰는지 먼저 측정해야 합니다).
   어느 쪽도 에이전트가 고르지 않습니다.
+  --- 2026-10-17, **어디가 느린지 측정했습니다**(선택지 (3) 의 근거) ---
+  `pytest -m integration --durations=12`(단독 실행, 352건 **141.18초**):
+    5.93  worker  test_workflow_llm_tool_integration::three_nodes_reach_end
+    5.87  worker  test_workflow_llm_tool_integration::tool_calls_land_in_audit
+    5.82  api     test_workflow_chain_integration::full_approval_workflow
+    5.60  api     test_workflow_chain_integration::different_paths_for_different_inputs
+    5.42  api     test_workflow_chain_integration::lost_requeue_recovered_by_sweeper
+    5.22  api     test_workflow_chain_integration::approval_kind_parks_and_resumes
+    3.78  worker  test_workflow_parking_integration::r7_parked_hold_no_lease
+    3.61  api     chain::reply_over_the_limit_is_stored_truncated (둘)
+    3.31  api     chain::duplicate_requests_create_one_child_run
+    3.11  api     chain::agent_node_parks_then_succeeds
+    2.89  worker  test_build_tool_gateway_integration::builtin_server
+  **상위 12건이 약 50초**로 이 단계의 **35%** 이고, 그중 **열한 건이 Phase 4 의 사슬·파킹
+  테스트**입니다. 공통점은 테스트마다 **프로덕션 worker 를 `serve()` 로 띄우고** 폴링으로
+  기다리는 것입니다 — 고정 비용(worker 기동 + 첫 소비 주기 `block_ms=1000` + 스위퍼 1회)이
+  테스트 수에 그대로 곱해집니다.
+  그래서 선택지 (3) 이 구체화됩니다: **사슬 테스트들이 `serve()` 를 공유**하면(모듈 단위
+  fixture) 고정 비용을 한 번만 냅니다. 대가는 교차 간섭 — P4-4 에서 스위퍼가 다른 테스트의
+  승인된 대기를 주워 가는 일이 이미 있었고(그때 `_Env` 의 잔여 정리를 넓혀 막았습니다),
+  공유하면 그 표면이 커집니다. **에이전트가 고르지 않습니다.**
+  **측정 오염 하나를 함께 적습니다**: 같은 명령의 첫 실행은 합계 **25,455초**(7시간)로
+  찍혔고 한 테스트가 25,300초 "통과" 했습니다 — 호스트가 중간에 잠든 것으로 보입니다.
+  벽시계 측정은 그런 실행을 **구별하지 못하므로**, 떠돌이 durations 출력 하나를 근거로
+  삼지 않습니다(두 번째 실행이 141초였습니다).
 root_cause: 단계가 10개에서 18개로 늘고 컨테이너가 추가되는 동안 예산 값은 그대로였다. 그리고 api-unit 한 단계가 합계의 절반을 차지하는데 그 안에서 무엇이 느린지는 집계되지 않는다
 fix: 이번에는 숫자를 기록하고 사람 판단에 올린다. 임계값을 에이전트가 올리지 않는다(EI-2). 2026-10-07 에 사람이 **(2) 쪼개기**를 골랐고 적용했다 — api-unit 한 단계를 api-unit(제품: packages·apps)·harness-arch(tests/arch)·harness-scripts(tests/scripts) 셋으로 나눴다. 합집합은 쪼개기 전과 같다(524건 = 413 + 25 + 86). 예산은 올리지 않았다
 recurrence_risk: high

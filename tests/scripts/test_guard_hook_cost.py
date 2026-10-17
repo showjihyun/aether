@@ -301,6 +301,22 @@ def test_pattern_merge_path_has_no_command_substitution() -> None:
     )
 
 
+_MERGE_REPEATS = 5
+"""벽시계를 **몇 번 재서 가장 빠른 값**을 쓰는가.
+
+2026-10-15·10-17 에 이 상한이 **부하에 따라** 흔들렸습니다 — 같은 코드로 40ms 와
+270~675ms 가 번갈아 나왔고, 전량 verify 에서 필수 단계를 한 번 실패시켰습니다
+(`improvement-log/2026-10-11-002`). 재려던 것은 **이 코드가 fork 를 하는가** 이고
+기계가 그 순간 얼마나 바쁜가가 아닙니다. 한 번 재면 측정값이 "코드 비용 + 그 순간의
+방해" 이고 방해는 **위로만** 작용하므로, 여러 번 중 **최소값**이 코드 비용에 가장
+가까운 추정입니다. **임계(250ms)는 올리지 않았습니다** — 분자를 깨끗하게 만들었습니다.
+
+최소값이 검출력을 낮추지 않는 이유: 회귀(fork 를 다시 쓰는 변경)는 **모든** 반복에서
+비싸므로 최소값도 상한을 넘습니다. 근거는 이 저장소의 기록된 실측입니다 — 고치기 전
+구현은 Windows 에서 **631ms** 였고 그것은 부하와 무관한 구조적 비용이었습니다
+(`2026-10-11-002`). 그 재측정은 이번에 하지 못했습니다(같은 후보에 이유를 적었습니다).
+"""
+
 _MERGE_CEILING_MS = 250
 """병합 한 벌(protected + warn)의 벽시계 상한.
 
@@ -315,33 +331,46 @@ _MERGE_CEILING_MS = 250
 
 
 def test_pattern_merge_stays_under_the_wall_clock_ceiling() -> None:
-    """병합이 상한 안에 들고, 그 전에 병합이 실제로 일어났는지부터 확인한다."""
+    """병합이 상한 안에 들고, 그 전에 병합이 실제로 일어났는지부터 확인한다.
+
+    `_MERGE_REPEATS` 번 재서 **가장 빠른 값**으로 판정합니다(그 상수의 docstring 에 근거).
+    """
     script = f"""
 set -euo pipefail
 source "{DETECT_STACK.as_posix()}" 2>/dev/null || true
 harness_lang_load_packs || true
 now() {{ date +%s%N; }}
 
-t0=$(now)
-_n=0
-while IFS= read -r _p; do _n=$((_n + 1)); done < <(lang_all_protected_patterns)
-while IFS= read -r _p; do _n=$((_n + 1)); done < <(lang_all_warn_patterns)
-t1=$(now)
-
-printf 'merge_ns=%s\\npatterns=%s\\n' $(( t1 - t0 )) "$_n"
+for _i in $(seq 1 {_MERGE_REPEATS}); do
+  t0=$(now)
+  _n=0
+  while IFS= read -r _p; do _n=$((_n + 1)); done < <(lang_all_protected_patterns)
+  while IFS= read -r _p; do _n=$((_n + 1)); done < <(lang_all_warn_patterns)
+  t1=$(now)
+  printf 'merge_ns=%s\npatterns=%s\n' $(( t1 - t0 )) "$_n"
+done
 """
     out = _bash(script, cwd=REPO_ROOT)
-    values = dict(line.split("=", 1) for line in out.strip().splitlines())
-    merge_ns = int(values["merge_ns"])
-    patterns = int(values["patterns"])
+    samples: list[int] = []
+    counts: set[int] = set()
+    for line in out.strip().splitlines():
+        key, _, value = line.partition("=")
+        if key == "merge_ns":
+            samples.append(int(value))
+        elif key == "patterns":
+            counts.add(int(value))
 
+    assert len(samples) == _MERGE_REPEATS, f"측정이 {len(samples)}회뿐입니다: {out!r}"
     expected = len(BLOCKED_PATTERNS) - _CORE_BLOCKED + len(WARN_PATTERNS) - _CORE_WARN
-    assert patterns == expected, (
-        f"팩 패턴 수가 달라졌습니다: {patterns} (기대 {expected}). "
+    assert counts == {expected}, (
+        f"팩 패턴 수가 달라졌습니다: {sorted(counts)} (기대 {expected}). "
         "비용을 재기 전에 병합이 실제로 일어났는지부터 확인합니다"
     )
+    merge_ns = min(samples)
     assert merge_ns <= _MERGE_CEILING_MS * 1_000_000, (
-        f"패턴 병합이 {merge_ns / 1e6:.0f}ms 를 썼습니다 (상한 {_MERGE_CEILING_MS}ms)"
+        f"패턴 병합의 최소값이 {merge_ns / 1e6:.0f}ms 입니다 (상한 {_MERGE_CEILING_MS}ms, "
+        f"{_MERGE_REPEATS}회 측정: {[round(s / 1e6) for s in samples]}ms). "
+        "최소값이 넘었다면 부하가 아니라 구조입니다"
     )
 
 
