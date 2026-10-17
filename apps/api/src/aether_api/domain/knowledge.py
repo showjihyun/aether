@@ -42,3 +42,19 @@ class KnowledgeIngestionView:
 
 class KnowledgeIngestionNotFound(Exception):
     """주어진 `ingestion_id` 가 없습니다(404 `knowledge_ingestion_not_found`)."""
+
+
+@dataclass(frozen=True)
+class KnowledgeSetPage:
+    """`GET /knowledge-sets` 의 커서 페이지 - `next_cursor` 는 불투명 문자열입니다."""
+
+    items: list[KnowledgeSetView]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
+class KnowledgeIngestionPage:
+    """`GET /knowledge-sets/{id}/ingestions` 의 커서 페이지(`next_cursor` 는 불투명)."""
+
+    items: list[KnowledgeIngestionView]
+    next_cursor: str | None

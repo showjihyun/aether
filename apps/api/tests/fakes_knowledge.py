@@ -6,14 +6,18 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from aether_api.domain.knowledge import (
     IngestionStatus,
+    KnowledgeIngestionPage,
     KnowledgeIngestionView,
+    KnowledgeSetPage,
     KnowledgeSetView,
 )
+
+from apps.api.tests.fake_cursor import offset_of
 
 
 def _default_clock() -> datetime:
@@ -27,15 +31,51 @@ class FakeKnowledgeDeclarationStore:
         del clock
         self._sets: dict[UUID, KnowledgeSetView] = {}
         self._ingestions: dict[UUID, KnowledgeIngestionView] = {}
+        self._ticks = 0
+
+    def _tick(self) -> datetime:
+        """만든 순서대로 1초씩 늘어나는 시각 - 정렬 방향 테스트가 결정적이도록."""
+        self._ticks += 1
+        return datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=self._ticks)
 
     def create_set(self, name: str) -> KnowledgeSetView:
         set_id = uuid4()
-        view = KnowledgeSetView(id=set_id, name=name, created_at=_default_clock())
+        view = KnowledgeSetView(id=set_id, name=name, created_at=self._tick())
         self._sets[set_id] = view
         return view
 
     def get_set(self, knowledge_set_id: UUID) -> KnowledgeSetView | None:
         return self._sets.get(knowledge_set_id)
+
+    def list_sets(self, limit: int, cursor: str | None) -> KnowledgeSetPage:
+        """정렬된 목록의 정수 오프셋을 감싼 불투명 커서."""
+        ordered = sorted(self._sets.values(), key=lambda s: (s.created_at, str(s.id)))
+        start = offset_of(cursor)
+        page = ordered[start : start + limit]
+        end = start + len(page)
+        return KnowledgeSetPage(items=page, next_cursor=str(end) if end < len(ordered) else None)
+
+    def list_ingestions(
+        self,
+        knowledge_set_id: UUID,
+        limit: int,
+        cursor: str | None,
+        status: IngestionStatus | None = None,
+    ) -> KnowledgeIngestionPage:
+        """그 집합의 적재만, 정렬된 목록의 정수 오프셋을 감싼 불투명 커서."""
+        ordered = sorted(
+            (i for i in self._ingestions.values() if i.knowledge_set_id == knowledge_set_id),
+            key=lambda i: (i.requested_at, str(i.id)),
+            reverse=True,
+        )
+        if status is not None:
+            ordered = [i for i in ordered if i.status == status]
+        start = offset_of(cursor)
+        page = ordered[start : start + limit]
+        end = start + len(page)
+        return KnowledgeIngestionPage(
+            items=page, next_cursor=str(end) if end < len(ordered) else None
+        )
 
     def create_ingestion(self, knowledge_set_id: UUID, source: str) -> KnowledgeIngestionView:
         ingestion_id = uuid4()
@@ -44,7 +84,7 @@ class FakeKnowledgeDeclarationStore:
             knowledge_set_id=knowledge_set_id,
             source=source,
             status="queued",
-            requested_at=_default_clock(),
+            requested_at=self._tick(),
             started_at=None,
             finished_at=None,
             failure_reason=None,

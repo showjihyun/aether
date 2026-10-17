@@ -13,7 +13,7 @@ from uuid import UUID
 from aether_workflow.domain.node import Edge, Node
 from aether_workflow.domain.workflow_version import WorkflowVersion
 
-from aether_api.domain.workflow import WorkflowView
+from aether_api.domain.workflow import WorkflowPage, WorkflowView
 
 
 class WorkflowRepository(Protocol):
@@ -32,3 +32,10 @@ class WorkflowRepository(Protocol):
     def get(self, workflow_id: UUID) -> WorkflowView | None: ...
 
     def get_version(self, workflow_id: UUID, number: int) -> WorkflowVersion | None: ...
+
+    def list(self, limit: int, cursor: str | None) -> WorkflowPage:
+        """`cursor` 이후 최대 `limit` 개를 `(created_at, id)` 오름차순으로(spec 0006 D-3).
+
+        노드·간선은 읽지 않습니다 - 이름과 현재 Version 번호만. `next_cursor` 는 불투명 문자열.
+        """
+        ...

@@ -34,6 +34,7 @@ from aether_api.adapters.inbound.http.auth import require_principal
 from aether_api.adapters.inbound.http.events import build_events_router
 from aether_api.adapters.inbound.http.healthz import build_router
 from aether_api.adapters.inbound.http.knowledge import build_knowledge_router
+from aether_api.adapters.inbound.http.listings import build_listings_router
 from aether_api.adapters.inbound.http.runs import build_runs_router
 from aether_api.adapters.inbound.http.workflow_approvals import (
     build_workflow_approvals_router,
@@ -100,9 +101,14 @@ from aether_api.application.usecases.get_workflow_run import GetWorkflowRunUseCa
 from aether_api.application.usecases.get_workflow_version import GetWorkflowVersionUseCase
 from aether_api.application.usecases.issue_api_key import IssueApiKeyUseCase
 from aether_api.application.usecases.list_agents import ListAgentsUseCase
+from aether_api.application.usecases.list_ingestions import ListIngestionsUseCase
+from aether_api.application.usecases.list_knowledge_sets import ListKnowledgeSetsUseCase
+from aether_api.application.usecases.list_runs import ListRunsUseCase
 from aether_api.application.usecases.list_workflow_approvals import (
     ListWorkflowApprovalsUseCase,
 )
+from aether_api.application.usecases.list_workflow_runs import ListWorkflowRunsUseCase
+from aether_api.application.usecases.list_workflows import ListWorkflowsUseCase
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
 from aether_api.application.usecases.request_ingestion import RequestIngestionUseCase
 from aether_api.application.usecases.request_run import RequestRunUseCase
@@ -499,6 +505,19 @@ def create_app(
                 workflow_run_declaration_store, workflow_approval_store, workflow_run_notifier
             ),
             ListWorkflowApprovalsUseCase(workflow_run_declaration_store, workflow_approval_store),
+        )
+    )
+
+    # MVP-0(spec 0006 2.3): 목록 경로 다섯. 기존 저장소 객체를 그대로 쓰고 기존 라우터는 건드리지
+    # 않는다(D-11).
+    app.include_router(
+        build_listings_router(
+            require_principal(authenticate),
+            ListRunsUseCase(run_declaration_store),
+            ListWorkflowsUseCase(workflow_repository),
+            ListWorkflowRunsUseCase(workflow_run_declaration_store),
+            ListKnowledgeSetsUseCase(knowledge_declaration_store),
+            ListIngestionsUseCase(knowledge_declaration_store),
         )
     )
     return app

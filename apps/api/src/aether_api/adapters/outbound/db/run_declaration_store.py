@@ -23,7 +23,8 @@ import psycopg
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunStatus
 
-from aether_api.domain.run import RunNotFound, RunView
+from aether_api.adapters.outbound.db.cursor import decode_cursor, encode_cursor
+from aether_api.domain.run import RunNotFound, RunPage, RunSummary, RunView
 
 _SelectRow = tuple[
     UUID,  # run_id
@@ -67,6 +68,36 @@ def _row_to_view(row: _SelectRow) -> RunView:
     if requested_by is None:  # pragma: no cover - api 는 항상 인증된 principal 로 만듭니다
         raise RuntimeError(f"control.runs {run_id} has no requested_by")
     return RunView(
+        run_id=run_id,
+        agent_id=agent_id,
+        agent_version=agent_version,
+        status=RunStatus(status),
+        requested_at=requested_at,
+        requested_by=requested_by,
+        started_at=started_at,
+        finished_at=finished_at,
+        failure_reason=FailureReason(failure_reason) if failure_reason is not None else None,
+        trace_id=trace_id,
+        cancel_requested_at=cancel_requested_at,
+    )
+
+
+def _row_to_summary(row: _SelectRow) -> RunSummary:
+    """목록용 - `requested_by` 가 NULL 인 행(Workflow 의 자식 Run)도 허용합니다."""
+    (
+        run_id,
+        agent_id,
+        agent_version,
+        status,
+        requested_at,
+        requested_by,
+        started_at,
+        finished_at,
+        failure_reason,
+        trace_id,
+        cancel_requested_at,
+    ) = row
+    return RunSummary(
         run_id=run_id,
         agent_id=agent_id,
         agent_version=agent_version,
@@ -211,3 +242,34 @@ class PostgresRunDeclarationStore:
             )
             updated = cur.fetchone()
         return updated is not None
+
+    def list(self, limit: int, cursor: str | None, status: RunStatus | None = None) -> RunPage:
+        """`(requested_at, id)` 내림차순(최신 먼저) 페이지. `limit + 1` 개를 읽어 다음
+        쪽이 있는지만 판정하고, 있으면 마지막 항목의 키로 `next_cursor` 를 만듭니다."""
+        conditions: list[str] = []
+        params: dict[str, object] = {"limit": limit + 1}
+        if cursor is not None:
+            after_at, after_id = decode_cursor(cursor)
+            conditions.append("(r.requested_at, r.id) < (%(after_at)s, %(after_id)s)")
+            params["after_at"] = after_at
+            params["after_id"] = after_id
+        if status is not None:
+            conditions.append("r.status::text = %(status)s")
+            params["status"] = status.value
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {_SELECT_COLUMNS}
+                {_FROM_JOIN}
+                {where}
+                ORDER BY r.requested_at DESC, r.id DESC
+                LIMIT %(limit)s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        has_more = len(rows) > limit
+        items = [_row_to_summary(row) for row in rows[:limit]]
+        next_cursor = encode_cursor(items[-1].requested_at, items[-1].run_id) if has_more else None
+        return RunPage(items=items, next_cursor=next_cursor)

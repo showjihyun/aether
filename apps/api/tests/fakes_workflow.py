@@ -6,16 +6,27 @@
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
-from aether_api.domain.workflow import WorkflowNotFound, WorkflowVersionNotFound, WorkflowView
+from aether_api.domain.workflow import (
+    WorkflowNotFound,
+    WorkflowPage,
+    WorkflowSummary,
+    WorkflowVersionNotFound,
+    WorkflowView,
+)
 from aether_api.domain.workflow_approval import AlreadyApproved, WorkflowApprovalView
-from aether_api.domain.workflow_run import WorkflowRunView
+from aether_api.domain.workflow_run import WorkflowRunPage, WorkflowRunView
 from aether_workflow.domain.node import Edge, Node
 from aether_workflow.domain.run_status import WorkflowRunStatus
 from aether_workflow.domain.workflow_version import WorkflowVersion
+
+from apps.api.tests.fake_cursor import offset_of
+
+_BASE = datetime(2026, 1, 1, tzinfo=UTC)
+"""fake 가 만드는 행의 시각은 만든 순서대로 1초씩 늘어납니다 - 정렬 방향 테스트가 결정적이도록."""
 
 
 class FakeWorkflowRepository:
@@ -23,12 +34,14 @@ class FakeWorkflowRepository:
 
     def __init__(self) -> None:
         self._names: dict[UUID, str] = {}
+        self._created: dict[UUID, datetime] = {}
         self._versions: dict[UUID, list[WorkflowVersion]] = {}
 
     def create(self, name: str, nodes: tuple[Node, ...], edges: tuple[Edge, ...]) -> WorkflowView:
         workflow_id = uuid4()
         version = WorkflowVersion(number=1, nodes=nodes, edges=edges)
         self._names[workflow_id] = name
+        self._created[workflow_id] = _BASE + timedelta(seconds=len(self._created))
         self._versions[workflow_id] = [version]
         return WorkflowView(id=workflow_id, name=name, latest_version=version)
 
@@ -49,6 +62,26 @@ class FakeWorkflowRepository:
             return None
         return WorkflowView(
             id=workflow_id, name=self._names[workflow_id], latest_version=versions[-1]
+        )
+
+    def list(self, limit: int, cursor: str | None) -> WorkflowPage:
+        """정렬된 목록의 정수 오프셋을 감싼 불투명 커서."""
+        ordered = sorted(self._names, key=lambda i: (self._created[i], str(i)))
+        start = offset_of(cursor)
+        page = ordered[start : start + limit]
+        end = start + len(page)
+        return WorkflowPage(
+            items=[
+                WorkflowSummary(
+                    id=i,
+                    name=self._names[i],
+                    current_version=len(self._versions[i]),
+                    created_at=self._created[i],
+                    updated_at=self._created[i],
+                )
+                for i in page
+            ],
+            next_cursor=str(end) if end < len(ordered) else None,
         )
 
     def get_version(self, workflow_id: UUID, number: int) -> WorkflowVersion | None:
@@ -95,7 +128,7 @@ class FakeWorkflowRunDeclarationStore:
             current_node_id=None,
             waiting_run_id=None,
             waiting_node_execution_id=None,
-            requested_at=datetime(2026, 1, 1, tzinfo=UTC),
+            requested_at=_BASE + timedelta(seconds=len(self._runs)),
             started_at=None,
             finished_at=None,
             failure_reason=None,
@@ -108,6 +141,22 @@ class FakeWorkflowRunDeclarationStore:
 
     def get(self, workflow_run_id: UUID) -> WorkflowRunView | None:
         return self._runs.get(workflow_run_id)
+
+    def list(
+        self, limit: int, cursor: str | None, status: WorkflowRunStatus | None = None
+    ) -> WorkflowRunPage:
+        """정렬된 목록의 정수 오프셋을 감싼 불투명 커서."""
+        ordered = sorted(
+            self._runs.values(),
+            key=lambda r: (r.requested_at, str(r.workflow_run_id)),
+            reverse=True,
+        )
+        if status is not None:
+            ordered = [r for r in ordered if r.status is status]
+        start = offset_of(cursor)
+        page = ordered[start : start + limit]
+        end = start + len(page)
+        return WorkflowRunPage(items=page, next_cursor=str(end) if end < len(ordered) else None)
 
     def apply_status(
         self,

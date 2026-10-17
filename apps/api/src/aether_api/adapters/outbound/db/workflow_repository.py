@@ -23,7 +23,13 @@ from aether_workflow.domain.condition import ConditionOperator
 from aether_workflow.domain.node import Edge, Node, NodeKind
 from aether_workflow.domain.workflow_version import WorkflowVersion
 
-from aether_api.domain.workflow import WorkflowNotFound, WorkflowView
+from aether_api.adapters.outbound.db.cursor import decode_cursor, encode_cursor
+from aether_api.domain.workflow import (
+    WorkflowNotFound,
+    WorkflowPage,
+    WorkflowSummary,
+    WorkflowView,
+)
 
 
 def _nodes_to_json(nodes: tuple[Node, ...]) -> str:
@@ -185,3 +191,38 @@ class PostgresWorkflowRepository:
         if row is None:
             return None
         return _version_from_row(*row)
+
+    def list(self, limit: int, cursor: str | None) -> WorkflowPage:
+        """`(created_at, id)` 오름차순 커서 페이지(spec 0006 D-3). 노드·간선은 읽지 않습니다."""
+        conditions = ""
+        params: dict[str, object] = {"limit": limit + 1}
+        if cursor is not None:
+            after_at, after_id = decode_cursor(cursor)
+            conditions = "WHERE (created_at, id) > (%(after_at)s, %(after_id)s)"
+            params["after_at"] = after_at
+            params["after_id"] = after_id
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT id, name, current_version, created_at, updated_at
+                FROM control.workflows
+                {conditions}
+                ORDER BY created_at, id
+                LIMIT %(limit)s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        has_more = len(rows) > limit
+        items = [
+            WorkflowSummary(
+                id=row[0],
+                name=row[1],
+                current_version=row[2],
+                created_at=row[3],
+                updated_at=row[4],
+            )
+            for row in rows[:limit]
+        ]
+        next_cursor = encode_cursor(items[-1].created_at, items[-1].id) if has_more else None
+        return WorkflowPage(items=items, next_cursor=next_cursor)

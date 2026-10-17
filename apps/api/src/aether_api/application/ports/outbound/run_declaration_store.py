@@ -17,7 +17,7 @@ from uuid import UUID
 from aether_runtime.domain.failure import FailureReason
 from aether_runtime.domain.run import RunStatus
 
-from aether_api.domain.run import RunView
+from aether_api.domain.run import RunPage, RunView
 
 
 class RunDeclarationStore(Protocol):
@@ -50,6 +50,15 @@ class RunDeclarationStore(Protocol):
 
     def get(self, run_id: UUID) -> RunView | None:
         """없으면 `None` — 유스케이스가 `RunNotFound` 로 바꿉니다(spec 0001 D-11)."""
+        ...
+
+    def list(self, limit: int, cursor: str | None, status: RunStatus | None = None) -> RunPage:
+        """`cursor` 이후 최대 `limit` 개를 `(requested_at, id)` 내림차순 - 최신 먼저(spec 0006 D-3).
+
+        `status` 가 주어지면 그 상태의 Run 만 돌려줍니다. `next_cursor` 는 불투명 문자열이며
+        필터가 걸린 페이지에도 같은 규칙으로 이어집니다(`AgentRepository.list` 와 같은 규약).
+        선언·투영 열만 읽습니다 - 요청 주체가 없는 행(Workflow 의 자식 Run)도 돌려줍니다.
+        """
         ...
 
     def status(self, run_id: UUID) -> RunStatus | None:

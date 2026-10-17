@@ -534,11 +534,11 @@ Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17). Spec: [../specs/
 
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
-| MVP-0 | 목록 API 넷과 SDK 함수(**신설** — plan 0006 1절) | P1-5b, P3-2b, P4-1 | — | 대기 |
+| MVP-0 | 목록 API 넷과 SDK 함수(**신설** — plan 0006 1절) | P1-5b, P3-2b, P4-1 | — | 완료 (PR #163) |
 | MVP-1 | CLI (**Python**, `apps/cli`) | MVP-0, P1-6 | 🔒 AR-14(사람, 앞) | 대기 |
 | MVP-3 | Local LLM 을 compose 에 | P1-3, P0-5 | Q6 닫힘 · 🔒 `e2e` 단계(사람, 앞) | 대기 |
 | MVP-2a | 목록 화면 둘(`/agents`·`/runs`) | MVP-0 | — | 대기 |
-| MVP-2b | Run 상세(이벤트 타임라인 + trace) | MVP-2a | — | 대기 |
+| MVP-2b | Run 상세(이벤트 타임라인 + trace) | MVP-2a | — | 대기 — **`GET /runs/{id}` 가 `requested_by` 가 빈 행에서 500 입니다**(MVP-0 이 목록만 nullable 로 피했습니다). 이 단위가 상세 응답을 고칩니다 |
 | MVP-2c | `/knowledge`·`/workflows` 목록과 Agent 대화 | MVP-2b | — | 대기 |
 | MVP-4 | 오프라인 시나리오 e2e | MVP-3, MVP-2c, P2-5, P3-3, P4-2a | — | 대기 |
 | MVP-5 | Time to First Successful Agent 측정 | MVP-1, MVP-4 | — | 대기 |

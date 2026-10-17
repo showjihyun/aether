@@ -47,6 +47,7 @@ from aether_api.domain.agent import (
     AgentVersionNotFound,
 )
 from aether_api.domain.api_key import Principal
+from aether_api.domain.cursor import InvalidCursor
 
 # --- 요청·응답 모델 (spec 2.2 표의 필드 그대로) --------------------------------
 
@@ -206,7 +207,11 @@ def build_agents_router(
         cursor: str | None = Query(default=None),
         name: str | None = Query(default=None, description="이름 부분 일치(대소문자 구분 없음)"),
     ) -> ListAgentsResponse:
-        page = list_agents(limit, cursor, name)
+        try:
+            page = list_agents(limit, cursor, name)
+        except InvalidCursor:
+            # 이전엔 500 이었습니다. 깨진 커서는 요청 오류라 422(spec 0006 2.3).
+            raise HTTPException(status_code=422, detail="invalid_cursor") from None
         return ListAgentsResponse(
             items=[
                 AgentSummary(

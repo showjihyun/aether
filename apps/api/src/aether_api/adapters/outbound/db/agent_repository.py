@@ -38,6 +38,7 @@ from aether_api.domain.agent import (
     AgentVersionNotFound,
     AgentVersionSummary,
 )
+from aether_api.domain.cursor import InvalidCursor
 
 _AgentRow = tuple[UUID, str, int, datetime, datetime]
 _AgentVersionRow = tuple[UUID, UUID, int, dict[str, object], datetime]
@@ -71,9 +72,12 @@ def _encode_cursor(created_at: datetime, agent_id: UUID) -> str:
 
 
 def _decode_cursor(cursor: str) -> tuple[datetime, UUID]:
-    raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
-    created_at_str, id_str = raw.split("|", 1)
-    return datetime.fromisoformat(created_at_str), UUID(id_str)
+    try:
+        raw = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+        created_at_str, id_str = raw.split("|", 1)
+        return datetime.fromisoformat(created_at_str), UUID(id_str)
+    except ValueError:  # 해독 실패는 서버 오류가 아니라 요청 오류(422, spec 0006 2.3)
+        raise InvalidCursor(cursor) from None
 
 
 class PostgresAgentRepository:

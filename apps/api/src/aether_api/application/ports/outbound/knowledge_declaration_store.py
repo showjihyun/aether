@@ -11,7 +11,13 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from aether_api.domain.knowledge import IngestionStatus, KnowledgeIngestionView, KnowledgeSetView
+from aether_api.domain.knowledge import (
+    IngestionStatus,
+    KnowledgeIngestionPage,
+    KnowledgeIngestionView,
+    KnowledgeSetPage,
+    KnowledgeSetView,
+)
 
 
 class KnowledgeDeclarationStore(Protocol):
@@ -23,12 +29,27 @@ class KnowledgeDeclarationStore(Protocol):
         """없으면 `None` — 유스케이스가 `KnowledgeSetNotFound` 로 바꿉니다."""
         ...
 
+    def list_sets(self, limit: int, cursor: str | None) -> KnowledgeSetPage:
+        """`cursor` 이후 최대 `limit` 개를 `(created_at, id)` 오름차순으로(spec 0006 D-3)."""
+        ...
+
     def create_ingestion(self, knowledge_set_id: UUID, source: str) -> KnowledgeIngestionView:
         """`status = queued` 로 새 `control.knowledge_ingestions` 행을 만듭니다."""
         ...
 
     def get_ingestion(self, ingestion_id: UUID) -> KnowledgeIngestionView | None:
         """없으면 `None` — 유스케이스가 `KnowledgeIngestionNotFound` 로 바꿉니다."""
+        ...
+
+    def list_ingestions(
+        self,
+        knowledge_set_id: UUID,
+        limit: int,
+        cursor: str | None,
+        status: IngestionStatus | None = None,
+    ) -> KnowledgeIngestionPage:
+        """그 집합의 적재를 `(requested_at, id)` 내림차순 - 최신 먼저(D-3). 집합이 있는지는
+        모릅니다(없으면 빈 페이지) - 유스케이스가 `get_set` 으로 먼저 판정합니다."""
         ...
 
     def apply_ingestion_status(

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from aether_workflow.domain.run_status import WorkflowRunStatus
 
-from aether_api.domain.workflow_run import WorkflowRunView
+from aether_api.domain.workflow_run import WorkflowRunPage, WorkflowRunView
 
 
 class WorkflowRunDeclarationStore(Protocol):
@@ -34,6 +34,16 @@ class WorkflowRunDeclarationStore(Protocol):
 
     def get(self, workflow_run_id: UUID) -> WorkflowRunView | None:
         """없으면 `None` — 유스케이스가 `WorkflowRunNotFound` 로 바꿉니다."""
+        ...
+
+    def list(
+        self, limit: int, cursor: str | None, status: WorkflowRunStatus | None = None
+    ) -> WorkflowRunPage:
+        """`cursor` 이후 최대 `limit` 개를 `(requested_at, id)` 내림차순 - 최신 먼저(spec 0006 D-3).
+
+        `control.workflow_runs` 투영만 읽습니다(`data` 평면은 모릅니다, spec 0006 D-4).
+        `status` 가 주어지면 그 상태만. `next_cursor` 는 불투명 문자열.
+        """
         ...
 
     def apply_status(

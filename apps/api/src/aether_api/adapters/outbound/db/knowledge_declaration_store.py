@@ -13,9 +13,12 @@ from uuid import UUID
 
 import psycopg
 
+from aether_api.adapters.outbound.db.cursor import decode_cursor, encode_cursor
 from aether_api.domain.knowledge import (
     IngestionStatus,
+    KnowledgeIngestionPage,
     KnowledgeIngestionView,
+    KnowledgeSetPage,
     KnowledgeSetView,
 )
 
@@ -145,3 +148,64 @@ class PostgresKnowledgeDeclarationStore:
             )
             updated = cur.fetchone()
         return updated is not None
+
+    def list_sets(self, limit: int, cursor: str | None) -> KnowledgeSetPage:
+        """`(created_at, id)` 오름차순 커서 페이지(spec 0006 D-3)."""
+        conditions = ""
+        params: dict[str, object] = {"limit": limit + 1}
+        if cursor is not None:
+            after_at, after_id = decode_cursor(cursor)
+            conditions = "WHERE (created_at, id) > (%(after_at)s, %(after_id)s)"
+            params["after_at"] = after_at
+            params["after_id"] = after_id
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT id, name, created_at
+                FROM control.knowledge_sets
+                {conditions}
+                ORDER BY created_at, id
+                LIMIT %(limit)s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        has_more = len(rows) > limit
+        items = [KnowledgeSetView(id=r[0], name=r[1], created_at=r[2]) for r in rows[:limit]]
+        next_cursor = encode_cursor(items[-1].created_at, items[-1].id) if has_more else None
+        return KnowledgeSetPage(items=items, next_cursor=next_cursor)
+
+    def list_ingestions(
+        self,
+        knowledge_set_id: UUID,
+        limit: int,
+        cursor: str | None,
+        status: IngestionStatus | None = None,
+    ) -> KnowledgeIngestionPage:
+        """그 집합의 `(requested_at, id)` 내림차순(최신 먼저) 커서 페이지(spec 0006 D-3)."""
+        conditions = ["knowledge_set_id = %(knowledge_set_id)s"]
+        params: dict[str, object] = {"knowledge_set_id": knowledge_set_id, "limit": limit + 1}
+        if cursor is not None:
+            after_at, after_id = decode_cursor(cursor)
+            conditions.append("(requested_at, id) < (%(after_at)s, %(after_id)s)")
+            params["after_at"] = after_at
+            params["after_id"] = after_id
+        if status is not None:
+            conditions.append("status = %(status)s")
+            params["status"] = status
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT {_INGESTION_COLUMNS}
+                FROM control.knowledge_ingestions
+                WHERE {" AND ".join(conditions)}
+                ORDER BY requested_at DESC, id DESC
+                LIMIT %(limit)s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        has_more = len(rows) > limit
+        items = [_ingestion_row_to_view(row) for row in rows[:limit]]
+        next_cursor = encode_cursor(items[-1].requested_at, items[-1].id) if has_more else None
+        return KnowledgeIngestionPage(items=items, next_cursor=next_cursor)
