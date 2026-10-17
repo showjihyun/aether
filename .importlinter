@@ -1,6 +1,7 @@
 [importlinter]
 root_packages =
     aether_api
+    aether_cli
     aether_worker
     aether_runtime
     aether_workflow
@@ -55,6 +56,38 @@ source_modules =
 forbidden_modules =
     aether_workflow
 
+# spec 0006 D-2 (MVP 통합): CLI 는 **제품 코드를 import 하지 않습니다.** AR-1 의 CLI 판은
+# "packages/sdk 만 쓴다" 였는데 그 SDK 는 TypeScript 이고 사람이 CLI 를 **Python** 으로
+# 고르면서(2026-10-17) 문자 그대로 지킬 수 없게 됐습니다. 규칙의 뜻 — 공개 계약
+# (packages/sdk/openapi.json)만 쓰고 제품 코드를 보지 않는다 — 을 이 계약이 강제합니다.
+# AR-1 ~ AR-13 이 쓰였으므로 번호는 14 입니다.
+#
+# 이 계약을 MVP-1(CLI 구현)보다 **앞에** 세우는 이유: 계약이 먼저 있으면 첫 CLI 코드가
+# 처음부터 위반할 수 없습니다(AR-13 을 P4-1 앞에 둔 것과 같은 순서, plan 0006 Wave 0).
+# 지금 `aether_cli` 에는 import 가 한 줄도 없어 이 계약은 **무엇도 막지 않습니다** —
+# 그래서 유일한 증거는 tests/arch 의 주입 케이스입니다(AR-6·AR-13 도 같은 상태를 지났습니다).
+#
+# 이 금지 목록은 **손으로 유지되는 denylist** 입니다 — 새 제품 패키지가 생기면 여기에
+# 더해야 하고, 빠지면 CLI 가 그것을 import 해도 이 계약이 침묵합니다(2026-10-17 에
+# `aether_evaluation` 이 실제로 빠져 있었습니다). 그래서 완전성을 사람의 기억에 맡기지
+# 않고 `tests/arch/test_ar14_denylist_is_complete.py` 가 워크스페이스 멤버와 비교해
+# 고정합니다 — 새 패키지를 추가하면 그 테스트가 먼저 실패합니다.
+[importlinter:contract:ar14-cli-does-not-import-product]
+name = AR-14 cli must not import product packages
+type = forbidden
+source_modules =
+    aether_cli
+forbidden_modules =
+    aether_api
+    aether_runtime
+    aether_workflow
+    aether_worker
+    aether_mcp
+    aether_policy
+    aether_context
+    aether_memory
+    aether_evaluation
+
 [importlinter:contract:ar4-policy-judges-only]
 name = AR-4 policy must not import runtime, mcp, context
 type = forbidden
@@ -80,6 +113,7 @@ name = AR-5 LLM SDKs and LLM HTTP only inside aether_runtime.adapters.outbound.m
 type = forbidden
 source_modules =
     aether_api
+    aether_cli
     aether_worker
     aether_runtime
     aether_workflow
