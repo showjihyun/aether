@@ -1,10 +1,11 @@
-"""`aether` CLI (spec 0006 D-1·D-2, plan 0006 Wave 0~2) — 지금은 **빈 패키지**입니다.
+"""`aether` CLI (spec 0006 D-1·D-2·D-8, plan 0006 MVP-1).
 
-왜 빈 채로 먼저 있는가: `.importlinter` 의 **AR-14**(CLI 는 제품 패키지를 import 하지
-않는다)가 가리킬 모듈이 있어야 그 계약을 세울 수 있습니다. 계약을 먼저 세우면 첫 CLI
-코드가 **처음부터** 위반할 수 없습니다 — Phase 4 가 AR-13 을 P4-1 앞에 둔 것과 같은
-순서입니다(plan 0006 1절 문제 2).
+이 패키지는 **제품 코드를 import 하지 않습니다**(`.importlinter` AR-14). 공유하고 싶은 타입이
+있어도 다시 적습니다 - HTTP 계약(`packages/sdk/openapi.json`)만 공유하는 것이 이 계약의 뜻이고,
+`tests/test_aether_cli_contract_drift.py` 가 `contract.py` 의 경로가 그 파일에 실재하는지 봅니다.
+HTTP 는 표준 라이브러리 `urllib` 만 씁니다(AR-5, spec D-1) - `pyproject.toml` 의 `dependencies`
+는 비어 있어야 합니다.
 
-명령과 HTTP 호출은 **MVP-1** 이 채웁니다. 그때도 이 패키지는 제품 코드를 import 하지
-않고 `packages/sdk/openapi.json` 이 정한 계약만 씁니다.
+모듈: `contract`(경로), `transport`(HTTP·SSE 바이트), `sse`(파싱), `output`(UTF-8 쓰기),
+`commands`(명령 본문), `compose`(`aether up`), `main`(argparse·종료 코드).
 """

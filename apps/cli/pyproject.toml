@@ -10,6 +10,9 @@ requires-python = ">=3.12"
 # 오프라인 설치 표면을 늘리지 않는 것도 같은 방향입니다(DP-4).
 dependencies = []
 
+[project.scripts]
+aether = "aether_cli.main:cli"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
