@@ -7,7 +7,9 @@ export interface AllowedRoute {
   segments: readonly string[];
 }
 
-// 화면이 실제로 쓰는 것만. MVP-2c 가 대화(POST /agents/{id}/run)를 더할 때 여기서 명시적으로 넓힙니다.
+// 화면이 실제로 쓰는 것만, 그리고 **GET 만**입니다. 대화(MVP-2e)의 실행 시작은 이 목록을
+// 넓히지 않고 Next **서버 액션**이 받습니다(D-18, 사람 2026-10-18) - 중계가 본문을 통과시키는
+// 구멍을 만들지 않고 요청 모양을 web 이 소유합니다. 넓히려면 그 자리에서 명시적으로 합니다.
 export const ALLOWED_ROUTES: readonly AllowedRoute[] = [
   { method: "GET", segments: ["agents"] },
   { method: "GET", segments: ["runs"] },

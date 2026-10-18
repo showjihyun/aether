@@ -50,11 +50,14 @@ describe("/agents", () => {
     expect(document.querySelector("time")?.getAttribute("title")).toBe("2026-10-18T11:00:00Z");
   });
 
-  it("DESIGN 9절: 목적지가 없는 동안 행은 링크가 아니다", async () => {
+  it("MVP-2e: 이름 칸은 /agents/{id}/chat 을 가리키는 링크다 (목적지가 생겼다)", async () => {
     listAgents.mockResolvedValue({ items: [ROW], next_cursor: null });
     await renderPage();
 
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    const link = screen.getByRole("link", { name: "billing-helper" });
+    expect(link.getAttribute("href")).toBe(`/agents/${ROW.id}/chat`);
+    // 이름 칸만 링크다 - 다음 쪽 링크는 next_cursor 가 있을 때만 생긴다.
+    expect(screen.getAllByRole("link")).toHaveLength(1);
   });
 
   it("DESIGN 7.1: next_cursor 가 있으면 다음 쪽", async () => {
