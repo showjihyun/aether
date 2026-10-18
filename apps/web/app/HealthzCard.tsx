@@ -10,9 +10,20 @@ export interface HealthzCardProps {
   service?: string;
   version?: string;
   message?: string;
+  /** card 제목. 기본은 홈 화면의 "aether". */
+  title?: string;
+  /** 브라우저가 쓰는 api 주소(읽기 전용). 주면 성공·실패 양쪽에서 보입니다. */
+  apiAddress?: string;
 }
 
-export function HealthzCard({ status, service, version, message }: HealthzCardProps) {
+export function HealthzCard({
+  status,
+  service,
+  version,
+  message,
+  title = "aether",
+  apiAddress,
+}: HealthzCardProps) {
   if (status === "error") {
     // DESIGN.md 7절: 오류 메시지는 사용자가 할 수 있는 일을 말합니다.
     return (
@@ -22,6 +33,11 @@ export function HealthzCard({ status, service, version, message }: HealthzCardPr
         <AlertDescription>
           <p>{message}</p>
           <p>api 가 떠 있는지 확인한 뒤 새로고침 하세요.</p>
+          {apiAddress ? (
+            <p>
+              브라우저 api 주소 <code className="font-mono text-xs">{apiAddress}</code>
+            </p>
+          ) : null}
         </AlertDescription>
       </Alert>
     );
@@ -30,7 +46,7 @@ export function HealthzCard({ status, service, version, message }: HealthzCardPr
   return (
     <Card>
       <CardHeader>
-        <CardTitle>aether</CardTitle>
+        <CardTitle>{title}</CardTitle>
       </CardHeader>
       <CardContent>
         <dl className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-2 text-sm">
@@ -42,6 +58,12 @@ export function HealthzCard({ status, service, version, message }: HealthzCardPr
           <dd>{service}</dd>
           <dt className="text-muted-foreground">version</dt>
           <dd>{version}</dd>
+          {apiAddress ? (
+            <>
+              <dt className="text-muted-foreground">브라우저 api 주소</dt>
+              <dd className="font-mono text-xs">{apiAddress}</dd>
+            </>
+          ) : null}
         </dl>
       </CardContent>
     </Card>

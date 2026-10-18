@@ -89,14 +89,23 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 | `/agents` 목록 | **MVP-2a** | `table` — 이름, 현재 Version, 수정 시각. 행 클릭 → 대화는 **MVP-2c** 가 목적지를 만들 때 겁니다 |
 | `/runs` 목록 | **MVP-2a** | `table` — 상태 `badge`, Agent(**짧은 ID** — `RunSummary` 에 이름이 없습니다. 이름을 보이려면 N+1 호출이나 목록 응답 변경이 필요하고 둘 다 이 단위 밖입니다), 시작(`started_at`, 없으면 `—`)·소요. 행 클릭 → 상세는 **MVP-2b** 가 목적지를 만들 때 겁니다 |
 | `/runs/{id}` 상세 | **MVP-2b** | `card` 머리(상태·trace id·요청자·시각), `tabs`(**이벤트 타임라인 / 트레이스** — 둘입니다). **"입력" 탭은 두지 않습니다**: 입력 본문은 어떤 API 응답에도 없습니다(`GET /runs/{id}` 는 `control.runs` 투영 열만 읽습니다, spec 0001 D-11). 내용이 "API 가 돌려주지 않습니다" 한 줄인 탭은 9절이 금지하는 자리표시입니다. 보이려면 API 가 그 열을 돌려줘야 합니다(이 단위 밖) |
-| `/knowledge` 목록 | **MVP-2c** | `table` — 세트 이름, 생성 시각. 적재는 상태 `badge` 와 청크 수 |
-| `/workflows` 목록 | **MVP-2c** | `table` 둘 — 정의(이름·현재 Version)와 실행(상태 `badge`·현재 노드·기다리는 대상). **노드 단위는 보여주지 않습니다**(아래) |
-| Agent 대화 | **MVP-2c** | 좌: 대화(`scroll-area`), 하: `textarea` + `button`. 스트리밍 텍스트는 그대로 append |
+| `/knowledge` 목록 | **MVP-2c** | `table` — 세트 이름(클릭 → 적재), 생성 시각. **적재는 하위 경로 `/knowledge/{id}`** 입니다 — 적재 API 가 세트별 경로여서 목록에 끌어오면 N+1 이고, `/runs` 가 Agent 이름을 뺀 것과 같은 이유입니다. **청크 수는 보이지 않습니다** — `IngestionSummary` 에 그 값이 없습니다(아래) |
+| `/workflows` 목록 | **MVP-2c** | `table` 둘 — 정의(이름·현재 Version·수정)와 실행(상태 `badge`·현재 노드·기다리는 대상·요청). 표가 둘이라 **커서도 둘**이고(`cursor`·`runsCursor`) 한 표의 "다음 쪽"·"처음부터 보기" 는 상대편 커서를 **지킵니다**. 기다리는 대상에는 **라벨**을 붙입니다(자식 Run / 노드 실행 / 깨어남) — id 둘이 같은 mono 조각으로 그려져 라벨이 없으면 무엇을 기다리는지 구별되지 않습니다(MVP-2c 리뷰). **노드 단위는 보여주지 않습니다**(아래) |
+| Agent 대화 | **별 단위**(2c 에서 빠졌습니다) | 좌: 대화(`scroll-area`), 하: `textarea` + `button`. 스트리밍 텍스트는 그대로 append. **지금은 만들 수 없습니다** — 모델의 답변 텍스트가 어떤 API 응답에도 없습니다(아래) |
 | `/settings` | **MVP-2c** | `card` 셋 — 테마 선택, 연결(API base URL 읽기 전용 · `/healthz` 의 버전과 상태), API 키 안내. **키를 만들거나 보여주지 않습니다**(아래) |
 
 **MVP-2 는 2a·2b·2c 로 쪼개졌습니다**(plan 0006 1절) — 목록 → 상세 → 대화. 사이드바의 **다섯 항목 전부**를 2a·2c 가 채웁니다(지금은 404 입니다). `/settings` 를 포함하는 것은 사람 결정입니다(2026-10-18, spec 0006 **D-13**) — 앱 셸에 Settings 가 없는 것이 더 낯설고, 사이드바에 두면서 404 로 보내는 것은 9절이 금지하는 바로 그것이기 때문입니다.
 
 **`/settings` 는 키를 만들거나 보여주지 않습니다.** 키 원문은 발급 때 **한 번만** stdout 에 나가는 계약이고(spec 0001 2.9), 인증·비밀값에 닿는 변경은 사람 검토로 올립니다(AGENTS.md Loop). 그래서 그 화면이 담는 것은 **이미 존재하는 것들**뿐입니다 — 테마, API base URL(읽기 전용), `/healthz` 의 버전과 상태, 그리고 "키는 CLI 로 발급합니다" 라는 안내와 그 명령. 담을 것이 더 생기기 전까지 **자리표시를 두지 않습니다**(9절).
+
+**`/knowledge` 는 청크 수를 보이지 않고, 대화 화면은 2c 에서 빠졌습니다 — 둘 다 이 문서가 없는 값을 요구했기 때문입니다.**
+`IngestionSummary` 는 `{ingestion_id, knowledge_set_id, source, status, requested_at, started_at, finished_at, failure_reason}`
+이고 청크 수가 없습니다. 대화는 더 큰 쪽입니다 — `model.completed` 의 payload 는 `finish_reason`·`usage` 뿐이고,
+텍스트를 담는 `model.delta` 는 **예약**이라 런타임이 발생시키지 않으며(`packages/runtime/.../domain/events.py`,
+spec 0002 2.7), `GET /runs/{id}` 에도 출력 열이 없습니다. 그러니 "스트리밍 텍스트를 append" 할 원본이 없습니다.
+답변 없는 대화창은 9절이 금지하는 자리표시이므로(MVP-2b 의 "입력" 탭을 지운 것과 같은 판단) 그 화면은 **런타임이
+답변을 이벤트로 흘리게 하는 단위**(spec 0006 **D-16**) 뒤로 갔습니다. 이 문서가 API 에 없는 값을 요구한 것이 이번이
+**세 번째**입니다(입력 탭 → 청크 수 → 대화 텍스트) — `improvement-log/2026-10-18-005`.
 
 **Workflow 화면은 Run 수준까지만입니다**(spec 0006 D-4). 노드 실행 목록은 `data` 평면에 있고 api 역할은 그 평면에 권한이 없어 **투영이 먼저 필요하며**, 그것은 Phase 5 입니다. **"노드 단위는 준비 중" 같은 자리표시를 두지 않습니다** — 없는 것을 있을 것처럼 그리지 않습니다(9절의 정신).
 
@@ -118,6 +127,24 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 
 색으로만 뜻을 전달하지 않습니다 — 아이콘과 텍스트가 항상 같이 갑니다(8절 접근성).
 
+**Workflow Run 상태** — `WorkflowRunStatus` enum(여덟)과 1:1 입니다. Run 과 **다른 enum** 이므로 badge 도 다릅니다(`WorkflowRunStatusBadge`). 기다림이 셋이고 전부 `outline` 이라 **아이콘이 구별합니다**.
+
+| status | `badge` variant | 아이콘(lucide) |
+| --- | --- | --- |
+| `queued` | `secondary` | `Clock` |
+| `running` | `default` | `Loader2`(회전) |
+| `waiting_run` | `outline` | `CornerDownRight` — 자식 Run 을 기다림 |
+| `waiting_approval` | `outline` | `Hand` — 사람을 기다림(Run 의 `waiting` 과 같은 뜻) |
+| `waiting_timer` | `outline` | `Timer` — 시각을 기다림 |
+| `succeeded` | `secondary` | `CircleCheck` |
+| `failed` | `destructive` | `CircleX` |
+| `cancelled` | `outline` | `Ban` |
+
+**적재 상태** — `IngestionStatus` enum(넷). `IngestionStatusBadge` 가 소유하고 위 표의 같은 이름 행과 같은 모양입니다(`queued`·`running`·`succeeded`·`failed`).
+
+세 badge 의 키 집합은 SDK 의 타입과 `Record<Status, …>` 로 묶여 있습니다 — api 에 상태가 하나 생기면 **컴파일이 깨집니다**(MVP-2c).
+
+
 | 대상 | 규약 |
 | --- | --- |
 | 시간 | 상대 시간(`3분 전`)을 보이고 `title` 에 절대 시간(ISO). 소요 시간은 `1m 12s` |
@@ -135,6 +162,7 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 | 빈 결과 | 가운데 정렬, `text-muted-foreground` 한 줄 + 다음 행동 `button` 하나("첫 Agent 만들기"). **갈 곳이 없으면 그 버튼을 두지 않습니다** — 생성 화면이 MVP 범위에 없는 동안 첫 쪽의 빈 결과는 한 줄만입니다(404 로 가는 버튼은 9절 위반). **커서 쪽이 비어 있으면** 막다른 길이므로 "처음부터 보기" 를 붙입니다(MVP-2a, 2026-10-18) |
 | 오류 | `alert` `destructive`. **첫 문장은 사용자가 할 수 있는 일**이고, SDK·HTTP 원문은 `details`("기술 정보", 기본 닫힘) 안에 `<pre>` 로 둡니다 — `aether-sdk: GET /runs?cursor=… failed with status …` 를 그대로 보이면 할 수 있는 일이 아무것도 적혀 있지 않습니다. 분기는 **상태 코드 필드**(`AetherHttpError.status`)로 하고 메시지 문구를 파싱하지 않습니다(MVP-2a 리뷰, 2026-10-18) |
 | API 도달 불가 | 페이지가 깨지지 않고 오류 상태를 표시합니다. `/` healthz 가 첫 실례(spec F-4) |
+| **없는 id**(404) | 목록의 오류 문구와 **다릅니다**. "api 가 떠 있는지 확인" 은 떠 있는 api 에 대해 틀린 지시이므로, 404 는 "…을 찾을 수 없습니다" + **목록으로 돌아가는 링크**입니다. 하나를 여는 화면들이 `DetailError` 하나를 씁니다(`/runs/{id}`·`/knowledge/{id}`). 분기는 `AetherHttpError.status` 필드입니다 — MVP-2c 리뷰 2026-10-18 |
 
 ### 7.1 목록의 정렬과 더 보기 (MVP-0 이 정한 계약)
 

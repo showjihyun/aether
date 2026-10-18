@@ -540,8 +540,9 @@ Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17). Spec: [../specs/
 | MVP-2a | 목록 화면 둘(`/agents`·`/runs`) | MVP-0 | — | 완료 (PR #170) · R-6 테스트를 세웠고 **참이 되는 것은 2c** |
 | MVP-2b | Run 상세(이벤트 타임라인 + trace) | MVP-2a | — | 완료 (PR #171) · 500 을 고쳤습니다(**D-14**) · 🔒 **화면이 실제 스택에서 401 입니다** — C-4(브라우저 인증)가 미결이고 사람 결정입니다(`2026-10-18-004`) |
 | MVP-2p | `apps/web` 서버가 api 를 중계(브라우저 인증) | MVP-2b | **D-15**(사람 2026-10-18, spec 0002 C-4 가 닫혔습니다) · 🔒 키 주입은 사람 | 완료 (PR #172) · 허용 목록은 **GET 넷**뿐입니다 · 🔒 키 발급은 사람(`--label web`) · 사용자 세션은 Phase 8 |
-| MVP-2c | `/knowledge`·`/workflows` 목록과 Agent 대화 | MVP-2b | — | 대기 |
-| MVP-4 | 오프라인 시나리오 e2e | MVP-3, MVP-2c, P2-5, P3-3, P4-2a | — | 대기 |
+| MVP-2c | `/knowledge`(+`/knowledge/{id}`)·`/workflows`·`/settings` 화면 | MVP-2p | **D-13** | 완료 (PR #173) · **R-6 이 참이 됐습니다**(사이드바 다섯 항목에 404 가 없습니다) · 대화는 **D-16** 으로 MVP-2d 로 갔습니다 |
+| MVP-2d | Agent 대화 — 런타임이 답변을 이벤트로 흘리게 한 뒤 화면 | MVP-2c | **D-16**(사람 2026-10-18) | 대기 · 답변 텍스트가 **어떤 API 응답에도 없습니다**(`model.delta` 가 예약) · 중계 허용 목록의 `POST /agents/{id}/run` 도 이 단위 |
+| MVP-4 | 오프라인 시나리오 e2e | MVP-3, MVP-2c, P2-5, P3-3, P4-2a | — | 대기 · 화면 **다섯** 경로가 실제 스택에서 뜨는지를 **처음 판정**합니다(R-5, `2026-10-18-004`) |
 | MVP-5 | Time to First Successful Agent 측정 | MVP-1, MVP-4 | — | 대기 |
 
 ### MVP-0 목록 API 넷과 SDK 함수
@@ -565,9 +566,9 @@ Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17). Spec: [../specs/
 
 | 항목 | 내용 |
 | --- | --- |
-| 범위 | 세 화면: Agent 와 대화(스트림), Run 목록, Run 상세(이벤트 타임라인 + trace id). 디자인은 최소 |
+| 범위 | 화면들: Agent 와 대화(스트림), Run 목록, Run 상세(이벤트 타임라인 + trace id), 그리고 사이드바가 가리키는 나머지(`/knowledge`·`/workflows`·`/settings`, **D-13**). 디자인은 최소. **2a·2b·2p·2c·2d** 로 쪼개져 실행됩니다(plan 0006 1절) |
 | 범위 밖 | Agent Builder(Phase 5), Workflow 편집, Admin, Analytics |
-| 완료 판정 | 오프라인 compose 에서 세 화면이 실제 데이터로 뜸. `apps/web` 이 sdk 외 `packages/*` 를 import 하지 않음 |
+| 완료 판정 | 오프라인 compose 에서 화면들이 실제 데이터로 뜸(**MVP-4 의 `e2e` 가 처음 판정합니다** — 화면 단위의 `web-unit` 은 SDK 를 가짜로 바꾸므로 이것을 못 봅니다, `2026-10-18-004`). `apps/web` 이 sdk 외 `packages/*` 를 import 하지 않음 |
 | 걸리는 규칙 | AR-1 |
 | 열리는 것 | 프런트엔드 팩 단계(e2e)를 켤 근거 |
 

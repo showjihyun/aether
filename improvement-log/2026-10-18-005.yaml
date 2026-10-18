@@ -1,0 +1,46 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-18-005
+date: 2026-10-18
+status: candidate
+symptom: DESIGN.md 가 화면에 "API 에 없는 값" 을 요구한다. 그 사실이 **그 화면을 만드는 순간**에만 드러나고, 매번 단위 범위가 흔들린다
+evidence: |
+  DESIGN.md 5절이 적은 화면 내용 중 API 가 돌려주지 않는 것이 **세 번** 나왔다. 셋 다
+  구현을 시작한 뒤에 드러났다.
+    1) 2026-10-18, MVP-2b — `/runs/{id}` 의 **"입력" 탭**. 입력 본문은 어떤 응답에도 없다
+       (`GET /runs/{id}` 는 `control.runs` 투영 열만 읽는다, spec 0001 D-11). 탭을 지우고
+       DESIGN 을 고쳤다.
+    2) 2026-10-18, MVP-2c — `/knowledge` 의 **청크 수**. `IngestionSummary` 는
+       `{ingestion_id, knowledge_set_id, source, status, requested_at, started_at,
+       finished_at, failure_reason}` 이고 청크 수가 없다. 열을 만들지 않고 DESIGN 을 고쳤다.
+    3) 2026-10-18, MVP-2c — **Agent 대화의 답변 텍스트**. 가장 큰 쪽이다. 화면의 본문
+       전체가 없는 값에 걸려 있었다:
+         packages/runtime/src/aether_runtime/domain/events.py:55  ModelCompletedPayload
+           = {finish_reason, usage}            # 답변 텍스트가 없다
+         packages/runtime/src/aether_runtime/domain/events.py:82  ModelDeltaPayload
+           = {text}  그러나 9~11행이 "**예약**이며 Phase 1 루프는 발생시키지 않는다"
+         execute_run.py:626 이 발생시키는 것은 `model.completed` 하나다
+         RunDetailResponse 에도 출력 열이 없다
+       그래서 "스트리밍 텍스트를 그대로 append" 할 원본이 없다. 사람이 **대화를 별 단위로
+       빼는 쪽**을 골랐다(spec 0006 D-16).
+  공통점: DESIGN 은 `apps/web` 의 문서인데 **api 의 응답 모양과 묶인 구속이 없다**. 어떤
+  단계도 "5절이 말한 값이 openapi.json·events.schema.json 에 있는가" 를 묻지 않는다.
+  반대 방향(SDK ↔ api)은 이미 장치가 있다 — `scripts/check-sdk-drift.sh` 가 `web-typecheck`
+  안에서 돌고 드리프트 0 을 요구한다. 문서 쪽에는 그에 대응하는 것이 없다.
+root_cause: DESIGN.md 는 화면이 보여줄 **필드 이름**을 적으면서 그 이름이 실재하는지 검사받지 않는다. 그래서 문서가 틀린 비용을 "구현 중 발견 → 범위 재협상" 으로 매번 지불한다. 2b 는 탭 하나였고 2c 는 화면 하나였다 — 다음은 더 클 수 있다
+fix: |
+  이번에는 **문서를 고치고 화면을 줄였다.** 없는 값을 추정하거나 "준비 중" 자리표시로
+  채우지 않았다(DESIGN 9절). 대화는 사람 결정으로 별 단위가 됐고(D-16), 그 단위가
+  `model.delta` 를 실제로 흘리게 하는 런타임 변경을 먼저 한다.
+recurrence_risk: high
+harness_element: HE-3
+proposed_harness_change: "(제안, 사람 결정) DESIGN.md 5·6절이 이름으로 부르는 응답 필드를 **기계가 읽을 수 있게** 적고(행마다 `source:` 주석이나 표의 한 열), `packages/sdk/openapi.json` 과 `packages/sdk/events.schema.json` 에 그 이름이 실재하는지 보는 단계를 `verify` 의 quality 층에 더한다 — `check-sdk-drift.sh` 가 SDK 에 대해 하는 일의 문서 판이다. 없으면 **문서가 틀렸다고** 실패해야 한다(화면이 아니라). 대안: 단위 시작 때 주 세션이 5절의 그 행을 openapi 와 대조하는 절차를 plan 0006 4절에 적는다(장치가 아니라 서술이므로 약하다). 둘 다 harness.config·harness/** 라 사람이 커밋한다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  다음 화면 단위(대화 = D-16 의 단위, 그리고 Phase 5 의 Workflow 편집·Run 상세)를 시작할 때
+  이 후보를 다시 본다. 그 단위가 **구현 전에** DESIGN 과 응답 모양의 불일치를 찾아내면 그
+  방법이 효과가 있다는 증거이고, 또 구현 중에 찾아내면 네 번째 사례로 여기에 더한다.
+  장치가 생기면 `2026-10-18-004`(화면 판정이 SDK 를 가짜로 바꾸므로 실제 경로를 못 본다)와
+  겹치는 부분을 함께 본다 — 그쪽은 **값이 실제로 오는가**, 이쪽은 **그 값이 계약에 있는가** 다.
+owner: showjihyun
+expires: none
