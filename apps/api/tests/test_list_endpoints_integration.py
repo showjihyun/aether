@@ -330,3 +330,26 @@ def test_malformed_cursor_is_422_on_all_six_paths(
     for path in paths:
         response = client.get(path, params={"cursor": bad}, headers=headers)
         assert response.status_code == 422, (path, response.status_code, response.text)
+
+
+def test_get_run_detail_survives_child_run_without_requester(
+    client: TestClient, key: tuple[dict[str, str], UUID], control_connection_factory: Connect
+) -> None:
+    """MVP-2b (A), spec 0006 2.3: Workflow 가 선언한 자식 Run 은 `requested_by` 가 NULL 이다 -
+    상세는 500 이 아니라 200 이고 그 필드가 `null` 이다."""
+    headers, key_id = key
+    parent = _seed_runs(control_connection_factory, key_id, 1)[0]
+    with control_connection_factory() as conn, conn.cursor() as cur:
+        cur.execute("SELECT agent_version_id FROM control.runs WHERE id = %s", (parent,))
+        row = cur.fetchone()
+    assert row is not None
+    child = uuid4()
+    assert PostgresRunDeclarationStore(control_connection_factory).create_with_id(
+        child, row[0], "in", None
+    )
+
+    response = client.get(f"/runs/{child}", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json()["requested_by"] is None
+    assert client.get(f"/runs/{parent}", headers=headers).json()["requested_by"] == str(key_id)

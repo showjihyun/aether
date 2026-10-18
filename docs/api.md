@@ -128,7 +128,7 @@
 
 **Run·Workflow Run·적재가 최신 것부터인 이유**: 목록 화면의 첫 쪽에 **방금 돌린 것**이 있어야 합니다. 오래된 것부터면 사용자가 마지막 쪽까지 가야 합니다. `/workflows`·`/knowledge-sets` 는 정의 목록이라 생성 순이 자연스럽고 `GET /agents` 와 같습니다.
 
-**`GET /runs` 의 `requested_by` 는 비어 있을 수 있습니다** — Workflow 가 띄운 자식 Run 은 0007 이전에 만들어졌으면 요청자가 없습니다. 그래서 목록 전용 항목(`RunSummary`)은 그 값을 **nullable** 로 둡니다. **상세(`GET /runs/{id}`)는 아직 그 행에서 500** 이고, 그 자리는 Run 상세 화면을 만드는 단위(MVP-2b)가 고칩니다.
+**`GET /runs` 의 `requested_by` 는 비어 있을 수 있습니다** — Workflow 가 띄운 자식 Run 은 0007 이전에 만들어졌으면 요청자가 없습니다. 그래서 목록 전용 항목(`RunSummary`)은 그 값을 **nullable** 로 둡니다. **상세(`GET /runs/{id}`)도 이제 nullable 입니다**(MVP-2b, 2026-10-18 — 그 전까지 그 행에서 500 이었습니다). `RunView`·`RunDetailResponse` 의 `requested_by` 가 `UUID | None` 입니다. 다만 **`POST /agents/{id}/run` 의 응답(`RunAccepted`)은 nullable 이 아닙니다** — 그 경로는 항상 인증된 principal 이 만들기 때문이고, 거기까지 넓히면 실제로 보장되는 것을 버리는 일입니다.
 
 **`GET /workflow-runs` 는 `control.workflow_runs`(투영)만 봅니다** — 노드 실행은 `data` 평면이고 api 역할은 그 평면에 권한이 없습니다(spec 0006 D-4). 그래서 **이 경로가 api 역할로 통과하는 것 자체가** 평면을 지켰다는 증거입니다.
 

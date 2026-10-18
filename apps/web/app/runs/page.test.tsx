@@ -62,11 +62,14 @@ describe("/runs", () => {
     expect(screen.getAllByText("—").length).toBe(2);
   });
 
-  it("DESIGN 9절: 상세 화면이 생기기 전까지 행은 링크가 아니다", async () => {
+  it("MVP-2b: 행의 상태 칸이 상세 화면으로 가는 링크다", async () => {
     listRuns.mockResolvedValue({ items: [ROW], next_cursor: null });
     await renderPage();
 
-    expect(screen.queryAllByRole("link")).toHaveLength(0);
+    const links = screen.getAllByRole("link");
+    expect(links).toHaveLength(1);
+    expect(links[0]?.getAttribute("href")).toBe(`/runs/${ROW.run_id}`);
+    expect(links[0]?.textContent).toContain("succeeded");
   });
 
   it("DESIGN 7.1: next_cursor 가 있으면 다음 쪽", async () => {

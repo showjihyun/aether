@@ -967,11 +967,8 @@ export interface components {
              * Format: date-time
              */
             requested_at: string;
-            /**
-             * Requested By
-             * Format: uuid
-             */
-            requested_by: string;
+            /** Requested By */
+            requested_by: string | null;
             /** Started At */
             started_at: string | null;
             /** Finished At */

@@ -27,7 +27,7 @@ class RunView:
     agent_version: int
     status: RunStatus
     requested_at: datetime
-    requested_by: UUID
+    requested_by: UUID | None
     started_at: datetime | None
     finished_at: datetime | None
     failure_reason: FailureReason | None
