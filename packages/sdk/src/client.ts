@@ -13,6 +13,9 @@
  * `parseSse` 로 SSE 를 직접 파싱합니다(spec 0002 2.7, 2.17, D-4, C-4). 브라우저
  * `EventSource` 는 `Authorization` 헤더를 붙일 수 없어 쓰지 않습니다.
  *
+ * MVP-2a 리뷰(2026-10-18): 2xx 가 아닌 응답을 `AetherHttpError` 로 던집니다 — 상태
+ * 코드가 필드입니다. 메시지 문구와 기존 `instanceof Error` 동작은 바뀌지 않았습니다.
+ *
  * MVP-0: 목록 5경로(`listRuns`·`listWorkflows`·`listWorkflowRuns`·`listKnowledgeSets`·
  * `listIngestions`)를 더합니다(spec 0006 2.3, D-9). 페이지 규칙은 `listAgents` 와 같습니다 —
  * `limit`·`cursor` 와 `{ items, next_cursor }`. 기존 함수는 바뀌지 않았습니다(D-11).
@@ -110,6 +113,28 @@ export interface StreamRunEventsOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * 2xx 가 아닌 응답. 상태 코드를 **필드로** 들고 있습니다.
+ *
+ * 메시지에만 상태가 있으면 호출자가 사람이 읽는 문구를 정규식으로 파싱해야 하고, SDK 가
+ * 문구를 바꾸는 순간 그 분기가 조용히 깨집니다(MVP-2a 리뷰 2026-10-18). 화면은 상태로
+ * 분기합니다 — DESIGN.md 7.1 은 `422 invalid_cursor` 에만 "처음부터 보기" 를 내보냅니다.
+ *
+ * `Error` 를 상속하므로 `catch (e) { e instanceof Error }` 로 잡던 기존 호출자는 그대로
+ * 동작합니다. 메시지 문구도 바뀌지 않았습니다.
+ */
+export class AetherHttpError extends Error {
+  readonly status: number;
+  readonly statusText: string;
+
+  constructor(message: string, status: number, statusText: string) {
+    super(message);
+    this.name = "AetherHttpError";
+    this.status = status;
+    this.statusText = statusText;
+  }
+}
+
 export interface AetherClient {
   healthz(): Promise<HealthzResponse>;
   createAgent(body: CreateAgentRequest): Promise<AgentResponse>;
@@ -156,8 +181,10 @@ async function requestJson<T>(
   });
 
   if (!response.ok) {
-    throw new Error(
+    throw new AetherHttpError(
       `aether-sdk: ${method} ${path} failed with status ${response.status} ${response.statusText}`,
+      response.status,
+      response.statusText,
     );
   }
 
@@ -216,8 +243,10 @@ export function createClient(options: CreateClientOptions): AetherClient {
       });
 
       if (!response.ok) {
-        throw new Error(
+        throw new AetherHttpError(
           `aether-sdk: GET /healthz failed with status ${response.status} ${response.statusText}`,
+          response.status,
+          response.statusText,
         );
       }
 
@@ -364,8 +393,10 @@ export function createClient(options: CreateClientOptions): AetherClient {
       });
 
       if (!response.ok) {
-        throw new Error(
+        throw new AetherHttpError(
           `aether-sdk: GET ${path} failed with status ${response.status} ${response.statusText}`,
+          response.status,
+          response.statusText,
         );
       }
       if (!response.body) {
