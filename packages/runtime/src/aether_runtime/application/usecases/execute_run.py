@@ -68,6 +68,7 @@ from aether_runtime.application.ports.outbound.event_sink import EventSink
 from aether_runtime.application.ports.outbound.lease_keeper import LeaseKeeper
 from aether_runtime.application.ports.outbound.memory_writer import MemoryWriter
 from aether_runtime.application.ports.outbound.model_gateway import (
+    ModelDelta,
     ModelError,
     ModelGateway,
     ModelRequest,
@@ -93,6 +94,7 @@ from aether_runtime.domain.agent import AgentDefinition, Backoff, Policy
 from aether_runtime.domain.events import (
     EventType,
     ModelCompletedPayload,
+    ModelDeltaPayload,
     RunEvent,
     RunFinishedPayload,
     RunStatusPayload,
@@ -555,11 +557,23 @@ class ExecuteRunUseCase:
                         timeout_seconds=remaining,
                     )
 
-                    def _complete(request: ModelRequest = request) -> ModelResponse:
-                        return self._gateway.complete(request)
+                    # D-17: 모델 호출은 `stream` 입니다. 조각을 받는 대로 `model.delta` 를
+                    # 발행하므로 lease 창(C-13)은 스트림 소비 전체를 덮어야 합니다 --
+                    # 소비를 `_guarded_call` 안에서 합니다. `progress` 는 실패해도 남아
+                    # 늘어난 `seq` 와 "조각을 냈는가" 를 호출 밖으로 전합니다.
+                    progress = _StreamProgress(seq=seq)
+
+                    def _stream(
+                        request: ModelRequest = request,
+                        progress: _StreamProgress = progress,
+                    ) -> ModelResponse:
+                        return self._consume_stream(run_id, request, progress)
 
                     try:
-                        response = self._guarded_call(run_id, _complete)
+                        try:
+                            response = self._guarded_call(run_id, _stream)
+                        finally:
+                            seq = progress.seq
                     except ModelError as error:
                         # `kind == "timeout"` 인데 그 호출 자체로 예산을 다 썼다면
                         # (설계 결정 3) 재시도하지 않고 바로 `timed_out` 입니다.
@@ -579,7 +593,13 @@ class ExecuteRunUseCase:
                                     started_at,
                                 )
                             )
-                        if not is_retryable(error) or attempt == attempts:
+                        # D-17: 조각을 이미 낸 시도는 재시도하지 않습니다 -- 재시도하면 같은 답변이
+                        # 타임라인(저장되는 이벤트)에 두 번 쌓이고 읽힌 글자를 되돌릴 수 없습니다.
+                        if (
+                            progress.published_text
+                            or not is_retryable(error)
+                            or attempt == attempts
+                        ):
                             return _StepOutcome(
                                 finished=self._finalize(
                                     run_id,
@@ -892,6 +912,42 @@ class ExecuteRunUseCase:
         deadline = started_at + timedelta(seconds=timeout_seconds)
         return (deadline - self._clock.now()).total_seconds()
 
+    def _consume_stream(
+        self, run_id: UUID, request: ModelRequest, progress: _StreamProgress
+    ) -> ModelResponse:
+        """D-17: `stream` 을 끝까지 소비해 `complete` 와 같은 `ModelResponse` 로 모읍니다.
+        텍스트 조각은 도착하는 대로 `model.delta` 로 발행합니다(`seq` 1씩 증가). reasoning
+        (D-19)은 모으기만 하고 이벤트로 내지 않습니다. 종결(`done`) 조각 없이 끝난
+        스트림은 잘린 응답이므로 `ModelError(protocol)` 입니다."""
+        texts: list[str] = []
+        reasonings: list[str] = []
+        tool_calls: list[ToolCall] = []
+        terminal: ModelDelta | None = None
+        for delta in self._gateway.stream(request):
+            if delta.reasoning:
+                reasonings.append(delta.reasoning)
+            if delta.text:
+                texts.append(delta.text)
+                progress.seq += 1
+                self._publish(
+                    run_id, progress.seq, "model.delta", ModelDeltaPayload(text=delta.text)
+                )
+                progress.published_text = True
+            if delta.tool_call is not None:
+                tool_calls.append(delta.tool_call)
+            if delta.done:
+                terminal = delta
+                break
+        if terminal is None:
+            raise ModelError(kind="protocol", message="model stream ended without a done delta")
+        return ModelResponse(
+            text="".join(texts),
+            tool_calls=tool_calls,
+            reasoning="".join(reasonings) or None,
+            finish_reason=terminal.finish_reason or "stop",
+            usage=terminal.usage,
+        )
+
     def _guarded_call[T](self, run_id: UUID, fn: Callable[[], T]) -> T:
         """spec 0002 C-13: 모델·도구 호출 하나를 `LeaseKeeper.keep(...)` 로 감쌉니다.
 
@@ -1090,6 +1146,17 @@ class ExecuteRunUseCase:
             payload=payload.model_dump(exclude_none=True),
         )
         self._events.publish(event)
+
+
+class _StreamProgress:
+    """`_consume_stream` 이 호출 밖(예외 경로 포함)으로 전하는 값 -- 발행으로 늘어난
+    `seq` 와, 이 시도에서 `model.delta` 를 한 건이라도 냈는지."""
+
+    __slots__ = ("published_text", "seq")
+
+    def __init__(self, *, seq: int) -> None:
+        self.seq = seq
+        self.published_text = False
 
 
 class _StepOutcome:

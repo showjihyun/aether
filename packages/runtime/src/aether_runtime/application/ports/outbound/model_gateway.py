@@ -57,12 +57,19 @@ class ModelResponse(BaseModel):
 
 
 class ModelDelta(BaseModel):
-    """`stream` 이 내는 조각 하나. `done=True` 는 스트림의 마지막 조각입니다."""
+    """`stream` 이 내는 조각 하나. `done=True` 는 스트림의 마지막 조각입니다.
+
+    `finish_reason`·`usage` 는 **`done=True` 인 조각에서만** 뜻이 있습니다 — `complete`
+    가 `ModelResponse` 로 주던 종결 정보를 스트림도 같게 주기 위한 자리입니다
+    (`model.completed` payload 가 두 경로에서 같아야 합니다). 다른 조각에서는 `None`.
+    `usage` 는 서버가 주지 않으면 `None` 입니다."""
 
     text: str | None = None
     tool_call: ToolCall | None = None
     reasoning: str | None = None
     done: bool = False
+    finish_reason: str | None = None
+    usage: dict[str, int] | None = None
 
 
 class ModelError(Exception):

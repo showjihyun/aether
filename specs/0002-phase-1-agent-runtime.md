@@ -8,6 +8,7 @@
 | 상태 | 승인됨 |
 | 승인 | showjihyun, 2026-09-12 (D-1 ~ D-19 채택. 리뷰 F-1 ~ F-21 반영본 — F-2 는 (a) lease, F-18 은 11번째 단계 유지) |
 | 후속 plan | [../plans/0002-phase-1-agent-runtime.md](../plans/0002-phase-1-agent-runtime.md) (승인됨 2026-09-12) |
+| 개정 12 | [실질] 2026-10-18. **다른 spec 이 이 문서를 개정한 것을 여기 기록합니다**(개정 9 와 같은 이유) — spec 0006 **D-17**(사람 2026-10-18)이 2.6·2.7 의 "`model.delta` 는 예약이고 Phase 1 은 발생시키지 않는다" 를 **끝냈습니다**. 루프가 `complete` 대신 `stream` 을 쓰고 텍스트 조각마다 `model.delta` 를 발행하며, 그 이벤트는 다른 이벤트와 **똑같이 저장**됩니다(재생이 답변을 그대로 재현합니다). 봉투·`seq` 규약·`Last-Event-ID` 재개·종료 계약은 바뀌지 않았고 `model.completed { finish_reason, usage? }` 의 payload 도 **글자 하나 바뀌지 않았습니다** — 그것을 지키려고 `ModelGateway` 의 스트림 종결 조각에 `finish_reason`·`usage` 를 더했습니다(`stream` 은 그 둘을 들고 오지 않았고, 그대로 바꾸면 그 payload 가 조용히 빈 값이 됐습니다). 왜 이 자리였는가: 화면의 대화가 그 텍스트를 필요로 했고, 그것이 **어떤 API 응답에도 없다**는 것이 MVP-2c 에서 드러났습니다(spec 0006 D-16) |
 | 개정 11 | [실질] 2026-09-25. 2.7 의 404 판정 방식을 바꿨습니다 — 첫 이벤트를 미리 당겨 `RunNotFound` 를 잡는 대신 inbound 포트 `RunExists` 로 존재만 확인합니다. 그래서 Run 이 아직 이벤트를 내지 않은 동안에도 200 과 헤더가 즉시 나가고, 첫 바이트 이전 유휴도 keep-alive 가 덮습니다. 이전 방식에서는 그 구간에 응답 헤더조차 나가지 않아 중간 프록시가 연결을 끊을 수 있었고, 그 사실이 REP-4 평가 실행 네 번에서 독립적으로 보고되었습니다(`evaluation/runs/` 의 REP-4 기록 네 건). 존재 확인과 스트리밍 시작 사이에 Run 이 사라지는 경쟁은 이미 200 을 보낸 뒤이므로 스트림을 조용히 끝내고 로그만 남깁니다. 이벤트 봉투·필드·`Last-Event-ID` 재개·종료 계약과 HTTP 계약(`openapi.json`)은 바뀌지 않습니다 |
 | 개정 10 | [실질] 2026-09-24. 2.7 에 **idle keep-alive** 를 더했습니다 — 이벤트가 15초 동안 없으면 SSE 주석 줄을 보내 중간 프록시가 열린 스트림을 끊지 못하게 합니다. 이벤트 봉투·필드·종료 계약은 바뀌지 않습니다. 이 동작은 대표 task REP-4 의 평가 실행에서 일곱 번 구현되고 일곱 번 저장소 밖으로 버려졌던 것을 회수한 것입니다 — 실행자들이 세 번에 걸쳐 '2.7 에 이 동작이 없다' 고 스스로 지적했습니다(근거 improvement log `2026-09-24-001`) |
 | 개정 9 | [실질] 2026-09-24. `GET /agents` 에 이름 부분 일치 필터 `?name=` 를 더했습니다 — 대소문자를 구분하지 않는 부분 일치이고 기존 커서 조건과 함께 동작합니다. 2.3 계약 표의 질의 문자열과 2.10 SDK 서명(`listAgents`)이 함께 바뀝니다. 이 기능은 대표 task REP-1 의 평가 실행에서 두 번 구현되고 두 번 저장소 밖으로 버려졌던 것을 회수한 것입니다(근거 improvement log `2026-09-24-001`). 응답 본문과 다른 경로의 계약은 바뀌지 않습니다 |
@@ -219,7 +220,7 @@ Phase 3 가 그 소비자가 되면서 `embed` 의 모델 선택이 바뀌었습
 
 ### 2.6 Planner/Executor 루프와 도구 (P1-4, 열린 질문 5)
 
-루프는 `ExecuteRun` 유스케이스 하나이고, Phase 1 은 `complete` 만 씁니다(`stream` 은 어댑터에 있으되 루프가 부르지 않습니다 — 2.7 의 `model.delta` 는 Phase 1 에 발생하지 않습니다).
+루프는 `ExecuteRun` 유스케이스 하나이고, Phase 1 은 `complete` 만 씁니다(`stream` 은 어댑터에 있으되 루프가 부르지 않습니다 — 2.7 의 `model.delta` 는 Phase 1 에 발생하지 않습니다). **개정 12(2026-10-18): 그 문장은 더 이상 사실이 아닙니다** — 루프가 `stream` 을 쓰고 `model.delta` 를 발행합니다(spec 0006 **D-17**).
 
 ```text
 RunState 로드(없으면 초기화: system_prompt + user input)
@@ -247,7 +248,7 @@ Phase 1 의 도구 둘 — `clock`(현재 시각, `Clock` 포트를 통해 얻�
 | 전송 | worker 가 Run 마다 Redis Stream `aether:runs:{run_id}:events` 에 `XADD` — **explicit ID `<seq>-0`**(`seq` 는 Run 안에서 1 부터 단조 증가). `MAXLEN ~ 10000`, 종결 뒤 TTL 24시간. api 의 `GET /runs/{id}/events` 는 그 스트림을 **`redis.asyncio` 의 블록 `XREAD`** 로 읽어 SSE 로 내보냅니다(consumer group 없음 — 독자가 여럿). 동기 클라이언트로 스레드풀을 점유하지 않습니다 — 클라이언트 단절 시 읽기를 취소할 수 있어야 R-3 이 성립합니다. **같은 `seq` 의 재발행(2.4 의 재개)은 성공으로 취급**합니다 — Redis 는 top ID 이하의 explicit `XADD` 를 `ERR The ID specified in XADD is equal or smaller` 로 거부하므로 `EventSink` 어댑터가 그 오류를 흡수하고, fake 도 계약대로 성공합니다(개정 2) |
 | SSE 필드 | `id: <seq>`, `event: <type>`, `data: <JSON>` |
 | `data` 봉투 | `{ "v": 1, "run_id", "seq", "at", "type", "payload" }` |
-| 이벤트 종류 | `run.status { status, failure_reason? }` · `task.started { task_id, step }` · `task.finished { task_id }` · `model.completed { finish_reason, usage? }` · `tool.called { task_id, tool_call_id, name, arguments }` · `tool.result { task_id, tool_call_id, name, is_error, content, truncated }` · `run.finished { status }`(항상 마지막) · `model.delta { text }`(**예약**. Phase 1 은 발생시키지 않습니다) |
+| 이벤트 종류 | `run.status { status, failure_reason? }` · `task.started { task_id, step }` · `task.finished { task_id }` · `model.completed { finish_reason, usage? }` · `tool.called { task_id, tool_call_id, name, arguments }` · `tool.result { task_id, tool_call_id, name, is_error, content, truncated }` · `run.finished { status }`(항상 마지막) · `model.delta { text }`(Phase 1 은 발생시키지 않았습니다. **MVP-2d 부터 발생합니다** — spec 0006 D-17, 개정 12) |
 | 순서 | `seq` 순. `run.status` 의 순서가 2.4 의 전이 순서와 같습니다(R-3) |
 | `Last-Event-ID` | 값 `n` 을 받으면 스트림 ID `n-0` 다음부터 읽습니다 — explicit ID 덕에 매핑이 직접입니다. `MAXLEN` 으로 잘려 나간 구간은 건너뛰어집니다(보장 안 함, 6절) |
 | 스트림이 없을 때 | `control.runs` 가 종결이면 `run.finished { status }` 하나를 **합성**해 보내고 닫습니다(TTL 뒤 늦게 온 독자, 또는 발행 전 crash — 2.4 의 재발행이 곧 채우지만 기다리지 않습니다). 종결이 아니면 스트림이 생길 때까지 블록(`XREAD BLOCK` 은 없는 키에도 동작) |
@@ -427,7 +428,7 @@ Control Plane 은 `requested` 에 쓰고 `status` 와 events 를 **읽습니다*
 | D-1 | 로컬 LLM 서버의 기본은 **Ollama**(compose `llm` 프로파일). 기본 테스트 모델은 **Qwen3.8 27B 양자화, 태그 `qwen3.8:27b`**(실재 확인 2026-09-12). 태그가 사라지면 사람이 대체를 고르고 기록. 판정은 전부 fake | **Q6 (intent OQ 1)** | 2.5 |
 | D-2 | `control.runs` 의 투영은 **api 프로세스 안의 `aether:runs:status` 소비자**가 갱신하며, 멱등의 근거는 **Run 단위 `seq`**(`control.runs.status_seq`). DB 커밋 뒤 ack | intent OQ 2 | 2.4, C-1, C-5 |
 | D-3 | `agent_versions.definition` 은 2.3 의 `AgentDefinition`. 도구 이름 검증은 `aether_runtime.domain.tools.BUILTIN_TOOL_NAMES` 로. 어댑터 종류·thinking 은 배포 설정 | intent OQ 3 | 2.3 |
-| D-4 | SSE 이벤트는 2.7 의 봉투와 8종(`model.delta` 는 예약). Run 별 Redis Stream, **explicit ID `<seq>-0`**. 스키마는 `events.schema.json` 으로 커밋, TS 타입 생성 | intent OQ 4 | 2.7, R-12 |
+| D-4 | SSE 이벤트는 2.7 의 봉투와 8종(`model.delta` 는 예약 — **개정 12 에서 실현**). Run 별 Redis Stream, **explicit ID `<seq>-0`**. 스키마는 `events.schema.json` 으로 커밋, TS 타입 생성 | intent OQ 4 | 2.7, R-12 |
 | D-5 | 프로세스 내부 도구도 **MCP tool 모양**(`name`, `description`, `input_schema`, `run → ToolResult`). `Task` 는 모델 호출마다 하나 | intent OQ 5 | 2.6 |
 | D-6 | `Observation` 은 `role: tool` + `tool_call_id` + `trust: untrusted` 표지로만 모델에 들어갑니다 | — | 2.6, R-14 |
 | D-7 | compose 에 `otel-collector` 를 **기본 서비스**로, exporter 는 `debug` + `file`(host bind mount `infra/docker/out/otel/`, 개정 2). 대시보드 없음 | intent OQ 6 | 2.9 |
@@ -481,7 +482,7 @@ intent 의 것을 반복하고, 설계하면서 새로 뺀 것을 더합니다.
 | Model Registry, 벤더 SDK, 프롬프트 캐싱, 비용 집계, vLLM 등 다른 서버 | Phase 6 / 서버 부하가 오는 Phase |
 | `apps/web` 화면, `GET /runs` 목록, `DELETE /agents/{id}`, `name` 변경 | Experience 의 Phase. 소비자가 생길 때 |
 | `POST /agents/{id}/run` 의 멱등키 | 클라이언트 재시도가 문제로 관측될 때 |
-| SSE 재접속 이어보기의 **보장**, `MAXLEN` 너머의 재생, WebSocket, `model.delta` 발생 | 이후. `seq` 와 `Last-Event-ID` 만 남깁니다 |
+| SSE 재접속 이어보기의 **보장**, `MAXLEN` 너머의 재생, WebSocket, `model.delta` 발생(**MVP-2d 에서 실현**, 개정 12) | 이후. `seq` 와 `Last-Event-ID` 만 남깁니다 |
 | 이벤트 이력의 영속(DB), outbox 테이블 | 이후. Phase 1 은 Redis TTL + 재개 재발행 |
 | 고아 Run 재통지(reconciliation), 강제 취소, 다중 worker 의 부하 분산 검증 | 이후. C-2, C-3. lease 는 정확성만 보장합니다 |
 | readiness 엔드포인트 | 이후. Phase 1 의 compose 는 healthcheck 로 충분 |

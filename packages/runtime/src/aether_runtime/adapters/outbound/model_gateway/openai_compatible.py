@@ -103,6 +103,14 @@ class _ToolCallBuffer:
     arguments: str = ""
 
 
+@dataclass
+class _StreamTerminal:
+    """스트림 도중 흩어져 오는 종결 정보(finish_reason, usage)를 모읍니다(D-17)."""
+
+    finish_reason: str | None = None
+    usage: dict[str, int] | None = None
+
+
 class OpenAICompatibleGateway:
     """`ModelGateway` 포트의 OpenAI-호환 HTTP 구현(spec 0002 2.5)."""
 
@@ -142,6 +150,10 @@ class OpenAICompatibleGateway:
             body["tools"] = [_tool_payload(tool) for tool in request.tools]
         if not self._thinking:
             body["think"] = False
+        if stream:
+            # D-17: 스트림에서 usage 는 서버가 보내 줘야 옵니다. 이 옵션을 모르는
+            # 서버는 무시하고, 그때 usage 는 None 입니다. `complete` 요청에는 넣지 않습니다.
+            body["stream_options"] = {"include_usage": True}
         return body
 
     def complete(self, request: ModelRequest) -> ModelResponse:
@@ -163,6 +175,7 @@ class OpenAICompatibleGateway:
     def stream(self, request: ModelRequest) -> Iterator[ModelDelta]:
         body = self._request_body(request, stream=True)
         buffers: dict[int, _ToolCallBuffer] = {}
+        terminal = _StreamTerminal()
         stream_kwargs: dict[str, Any] = {"json": body}
         if request.timeout_seconds is not None:
             stream_kwargs["timeout"] = request.timeout_seconds
@@ -185,7 +198,7 @@ class OpenAICompatibleGateway:
                         raise ModelError(
                             kind="protocol", message=f"invalid SSE chunk: {exc}"
                         ) from exc
-                    yield from self._deltas_from_chunk(chunk, buffers)
+                    yield from self._deltas_from_chunk(chunk, buffers, terminal)
         except httpx.TimeoutException as exc:
             raise ModelError(kind="timeout", message=str(exc)) from exc
         except httpx.HTTPError as exc:
@@ -202,14 +215,25 @@ class OpenAICompatibleGateway:
             tool_call = ToolCall(id=buffer.id, name=buffer.name, arguments=arguments)
             yield ModelDelta(tool_call=tool_call)
 
-        yield ModelDelta(done=True)
+        yield ModelDelta(
+            done=True, finish_reason=terminal.finish_reason or "stop", usage=terminal.usage
+        )
 
     def _deltas_from_chunk(
-        self, chunk: dict[str, Any], buffers: dict[int, _ToolCallBuffer]
+        self,
+        chunk: dict[str, Any],
+        buffers: dict[int, _ToolCallBuffer],
+        terminal: _StreamTerminal,
     ) -> Iterator[ModelDelta]:
+        # usage 청크는 `choices` 가 빈 형태로 옵니다(`include_usage`) -- 버리지 않습니다.
+        usage = _parse_usage(chunk.get("usage"))
+        if usage is not None:
+            terminal.usage = usage
         choices = chunk.get("choices") or []
         if not choices:
             return
+        if choices[0].get("finish_reason"):
+            terminal.finish_reason = choices[0]["finish_reason"]
         delta = choices[0].get("delta") or {}
 
         content = delta.get("content")

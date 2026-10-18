@@ -130,7 +130,8 @@ class FakeModelGateway:
 
     def stream(self, request: ModelRequest) -> Iterator[ModelDelta]:
         """같은 응답을 delta 로 쪼개 냅니다 — reasoning → text(어절 단위) → 도구 호출 →
-        `done=True` 마감 조각 순서입니다."""
+        `done=True` 마감 조각 순서입니다. 마감 조각은 `complete` 와 같은 `finish_reason`·
+        `usage` 를 듭니다(D-17)."""
         response = self._consume(request)
         if response.reasoning:
             yield ModelDelta(reasoning=response.reasoning)
@@ -141,7 +142,7 @@ class FakeModelGateway:
                 yield ModelDelta(text=chunk)
         for tool_call in response.tool_calls:
             yield ModelDelta(tool_call=tool_call)
-        yield ModelDelta(done=True)
+        yield ModelDelta(done=True, finish_reason=response.finish_reason, usage=response.usage)
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return [_hash_vector(text, self._embedding_dimensions) for text in texts]

@@ -29,7 +29,7 @@
       "type": "object"
     },
     "ModelDeltaPayload": {
-      "description": "예약(2.7) — Phase 1 은 발생시키지 않습니다.",
+      "description": "`model.delta { text }` — 모델 답변의 조각 하나. 도착하는 대로 하나씩 발행되고\n다른 이벤트와 똑같이 저장됩니다(D-17). 이으면 그 턴의 답변 전체입니다.",
       "properties": {
         "text": {
           "title": "Text",
