@@ -98,12 +98,23 @@ export function ListError({
  * 링크이므로 뒤로 가기가 **이전 쪽**이 되고 새 규약이 필요하지 않습니다.
  * MVP-2a 리뷰 2026-10-18 — DESIGN 7.1 에 적었습니다.
  */
-export function LoadMore({ basePath, nextCursor }: { basePath: string; nextCursor?: string | null }) {
+export function LoadMore({
+  basePath,
+  nextCursor,
+  param = "cursor",
+}: {
+  /** 이미 쿼리가 붙은 주소(`/workflows?runsCursor=…`)도 받습니다 — 그때는 `&` 로 잇습니다. */
+  basePath: string;
+  nextCursor?: string | null;
+  /** 쿼리 이름. 한 화면에 목록이 둘이면(`/workflows`) 둘째는 다른 이름을 씁니다. */
+  param?: string;
+}) {
   if (!nextCursor) return null;
+  const separator = basePath.includes("?") ? "&" : "?";
   return (
     <div className="mt-4 flex justify-center">
       <Link
-        href={`${basePath}?cursor=${encodeURIComponent(nextCursor)}`}
+        href={`${basePath}${separator}${param}=${encodeURIComponent(nextCursor)}`}
         className={buttonVariants({ variant: "outline" })}
       >
         다음 쪽
@@ -135,4 +146,10 @@ export function TableSkeleton({ columns, rows = 5 }: { columns: number; rows?: n
  */
 export function isBrokenCursor(error: unknown): boolean {
   return error instanceof AetherHttpError && error.status === 422;
+}
+
+/** 404 는 "그 id 가 없다" 입니다 — 다음 행동이 "api 가 떠 있는지 확인" 이 아니라 목록으로
+ * 돌아가기입니다. `isBrokenCursor` 와 같은 이유로 **필드**를 읽습니다(MVP-2c 리뷰 2026-10-18). */
+export function isNotFound(error: unknown): boolean {
+  return error instanceof AetherHttpError && error.status === 404;
 }
