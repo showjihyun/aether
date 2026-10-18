@@ -1,0 +1,45 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-18-003
+date: 2026-10-18
+status: candidate
+symptom: 주 세션이 쓴 문서 편집이 조용히 사라졌다. 위임한 에이전트가 같은 작업 트리에서 돌고 있었다
+evidence: |
+  2026-10-18, MVP-2a. 사람 결정 D-13 을 네 문서(DESIGN.md·specs/0006·plans/0006·
+  intents/mvp-backlog.md)에 적었다. 편집 스크립트는 각 치환을 `assert` 로 확인한 뒤 파일을
+  쓰고 성공을 출력했다("plan, backlog 갱신"). 그 시점에 위임한 implementer 에이전트가 같은
+  트리에서 돌고 있었다(apps/web 작업).
+  커밋 직전 `git status` 에 **plans/0006-mvp-integration.md 가 없었다.** 확인:
+    grep -c "D-13" plans/0006-mvp-integration.md  ->  0
+    git diff HEAD -- plans/...                     ->  빈 출력(디스크 == HEAD)
+    git stash list                                 ->  빈 목록
+    git reflog -6                                  ->  checkout·reset 없음
+  나머지 셋(DESIGN.md·spec·backlog)의 편집은 **남아 있었다**. 즉 전부가 아니라 한 파일만
+  되돌아갔다.
+  더 이상한 점: 되돌아온 내용이 **내가 편집 전에 읽은 내용과도 다르다.** 편집 전 grep 은
+  37행을 "… 목록과 Agent 대화 |" 로 보여줬는데, 되돌아온 파일은 같은 자리가
+  "… 목록과 Agent 대화(스트림) |" 다. 그래서 재적용 스크립트의 `assert` 가 먼저 터져
+  알아차렸다(터지지 않았다면 사라진 사실을 모른 채 PR 을 올렸을 것이다).
+  원인을 **확정하지 못했다.** reflog 에 남지 않는 `git checkout -- <path>` 류이거나,
+  동시에 돌던 에이전트의 쓰기이거나, 편집 직후 같은 명령에서 돌린 `verify.sh --changed`
+  안의 무엇이다. 에이전트는 보고에서 "문서는 건드리지 않았다" 고 했다 — 그것은 데이터이고
+  증거가 아니다(AGENTS.md Trust).
+  이 건이 드러낸 더 큰 것: **쓰기 성공 출력은 쓰기가 남아 있다는 증거가 아니다.** 같은
+  부류를 2026-10-18-001 에서 이미 한 번 겪었다(`gh pr edit --add-label` 이 경고처럼
+  보이는 실패를 내고 라벨이 붙지 않았다). 그때의 교정도 "읽어서 확인" 이었다.
+root_cause: 쓴 뒤에 읽어서 확인하지 않았다. 그리고 주 세션이 위임한 에이전트가 같은 작업 트리에서 도는 동안 같은 트리를 편집했다 — 두 쓰는 주체가 한 디렉터리를 공유한다
+fix: |
+  이번에는 plan 편집을 재적용하고 `grep -c` 로 **읽어서 확인한 뒤** 커밋했다. 재적용
+  스크립트가 편집 전 원문을 `assert` 로 요구하게 쓴 것이 사라짐을 드러냈다 — 그 습관을
+  유지한다. 아직 규칙으로 올리지 않는다(사건 1회는 후보다).
+recurrence_risk: medium
+harness_element: HE-5
+proposed_harness_change: "(제안, 사람 결정) 둘 중 하나. (1) **순서를 강제한다** — 위임한 에이전트가 도는 동안 주 세션은 작업 트리를 편집하지 않는다(문서 편집을 에이전트 완료 뒤로 미루거나, 에이전트를 worktree 격리로 돌린다). Agent 도구에 isolation: worktree 가 있으므로 수단은 이미 있다. (2) **쓰기 뒤 읽기를 습관이 아니라 검사로 만든다** — 커밋 직전 `git status` 의 변경 목록과 \"이번 단위에서 바꾸려고 한 파일 목록\" 을 대조하는 단계. (2) 는 그 목록을 어디에 적을지를 먼저 정해야 하고(지금 그런 자리가 없다) 그래서 더 비싸다. (1) 이 더 싸고 원인에 가깝다. 둘 다 .claude/ 또는 harness/ 라 사람이 커밋한다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  다음에 위임 + 주 세션 문서 편집이 겹치는 단위에서, 커밋 직전 `git status` 의 목록이
+  의도한 파일 전부를 담고 있는지 **본다**. 담기지 않은 파일이 1건이라도 나오면 사건 2회가
+  되고 그때 위 제안 (1) 을 사람에게 올린다. 0건이면 이 후보는 그대로 둔다 —
+  "안 일어났다" 는 "막았다" 가 아니다.
+owner: showjihyun
+expires: none
