@@ -5,11 +5,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const listRuns = vi.fn();
+const createClientSpy = vi.fn();
 // `AetherHttpError` 는 **실제 클래스**를 그대로 씁니다 — 가짜로 만들면 화면의
 // `instanceof` 분기가 테스트에서만 성립하고 실제 SDK 오류에서는 성립하지 않습니다.
 vi.mock("@aether/sdk", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@aether/sdk")>()),
-  createClient: () => ({ listRuns }),
+  createClient: (options: unknown) => {
+    createClientSpy(options);
+    return { listRuns };
+  },
 }));
 
 import Loading from "./loading";
@@ -37,8 +41,23 @@ async function renderPage(cursor?: string) {
 describe("/runs", () => {
   beforeEach(() => {
     listRuns.mockReset();
+    createClientSpy.mockReset();
+    // MVP-2p: 키가 없으면 서버 컴포넌트가 호출하지 않습니다. 기본은 **있는** 경우로 두고,
+    // 없는 경우는 그것을 보는 테스트가 직접 `stubEnv("", …)` 로 덮습니다.
+    vi.stubEnv("AETHER_API_KEY", "aeth_test_fake_key");
   });
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllEnvs();
+  });
+
+  it("D-15: 서버 컴포넌트는 서버 키(AETHER_API_KEY)를 SDK 에 넘긴다", async () => {
+    listRuns.mockResolvedValue({ items: [], next_cursor: null });
+    await renderPage();
+    expect(createClientSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ apiKey: "aeth_test_fake_key" }),
+    );
+  });
 
   it("spec 0006 R-5: 행이 렌더된다 (상태 badge, Agent, 시작, 소요)", async () => {
     listRuns.mockResolvedValue({ items: [ROW], next_cursor: null });
@@ -116,6 +135,17 @@ describe("/runs", () => {
     await renderPage("x");
 
     expect(screen.getByRole("link", { name: "처음부터 보기" }).getAttribute("href")).toBe("/runs");
+  });
+
+  it("api 키가 없으면 호출하지 않고 그 사실을 말한다 (중계의 503 과 같은 말)", async () => {
+    // 가장 흔한 개발 실수입니다. 401 을 그냥 오류로 그리면 "api 가 떠 있는지 확인" 이라는
+    // 틀린 다음 행동이 나옵니다 — 브라우저 경로(중계)는 이미 "키를 주입하세요" 를
+    // 말하므로 두 경로가 같은 말을 해야 합니다(MVP-2p 리뷰 2026-10-18).
+    vi.stubEnv("AETHER_API_KEY", "");
+    await renderPage();
+
+    expect(screen.getByText("api 키가 없습니다")).toBeTruthy();
+    expect(listRuns).not.toHaveBeenCalled();
   });
 
   it("빈 커서 쪽은 막다른 길이 아니다 — 처음부터 보기가 있다", async () => {

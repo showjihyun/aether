@@ -40,6 +40,8 @@ curl localhost:8000/healthz   # {"status":"ok","service":"api","version":"<git d
 docker compose -f infra/docker/compose.yaml exec api aether-api keys create --label <이름>
 ```
 
+**화면(`:3000`)을 쓰려면 web 에도 키가 필요합니다** — 브라우저는 api 를 직접 부르지 않고 **web 서버가 중계**합니다(spec 0006 D-15). 위 명령으로 `--label web` 키를 하나 더 발급해 `infra/docker/.env` 의 `AETHER_WEB_API_KEY` 에 넣고 web 을 다시 만드십시오. 비워 두면 화면이 "api 키가 없습니다" 로 그 사실을 말합니다(조용히 빈 화면이 되지 않습니다). 그 키는 **web 컨테이너 안에만** 있고 브라우저로 가지 않습니다.
+
 원문 키는 이때 **한 번만** stdout 에 출력됩니다 — 다시 조회할 방법이 없으니 그 자리에서
 저장하십시오. 환경변수나 `.env` 로 키를 주입하는 부트스트랩은 없습니다.
 

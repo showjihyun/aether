@@ -1,5 +1,7 @@
 import { createClient } from "@aether/sdk";
 
+import { MissingApiKey } from "@/components/ListStates";
+
 import { CopyableId } from "@/components/CopyableId";
 import { RelativeTime } from "@/components/RelativeTime";
 import { RunStatusBadge } from "@/components/RunStatusBadge";
@@ -24,8 +26,14 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 export default async function RunDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  // 키가 없으면 호출하지 않고 그 사실을 말합니다 — 중계의 503 과 같은 말입니다(MVP-2p 리뷰).
+  const apiKey = process.env.AETHER_API_KEY?.trim();
+  if (!apiKey) return <MissingApiKey />;
+
   const client = createClient({
     baseUrl: process.env.AETHER_API_URL ?? "http://localhost:8000",
+    // 서버에서 서버로 가는 호출이라 중계를 거치지 않고 키를 직접 넘깁니다(D-15). 키는 브라우저로 가지 않습니다.
+    apiKey: process.env.AETHER_API_KEY,
   });
 
   let run;
@@ -80,9 +88,8 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
 
       <RunTabs
         runId={run.run_id}
-        // 브라우저가 닿는 주소입니다. 서버 쪽 `AETHER_API_URL`(compose 안에서는 http://api:8000)과
-        // 다를 수 있어 따로 둡니다.
-        apiBaseUrl={process.env.AETHER_PUBLIC_API_URL ?? "http://localhost:8000"}
+        // 브라우저는 api 를 직접 부르지 않고 web 서버의 중계 경로(same-origin)만 부릅니다(D-15).
+        apiBaseUrl="/api/aether"
         traceId={run.trace_id}
       />
     </div>

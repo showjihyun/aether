@@ -7,6 +7,28 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
+/** 서버 컴포넌트가 쓸 api 키가 없을 때.
+ *
+ * 중계(브라우저 경로)는 이 경우 503 과 함께 "키를 주입하세요" 를 말합니다(`lib/relay.ts`).
+ * 서버 경로가 같은 상황에서 401 을 그냥 오류로 그리면 "api 가 떠 있는지 확인" 이라는
+ * **틀린 다음 행동**이 나옵니다 — 가장 흔한 개발 실수(키를 안 넣음)에 대해 그렇습니다.
+ * 두 경로가 같은 말을 하게 둡니다(MVP-2p 리뷰 2026-10-18).
+ */
+export function MissingApiKey() {
+  return (
+    <Alert variant="destructive">
+      <CircleAlert aria-hidden="true" />
+      <AlertTitle>api 키가 없습니다</AlertTitle>
+      <AlertDescription>
+        <p>
+          web 컨테이너에 api 키를 주입하세요 — <code className="font-mono text-xs">AETHER_WEB_API_KEY</code>
+          (`infra/docker/.env.example` 참고). 발급은 api 컨테이너에서 한 번만 출력됩니다.
+        </p>
+      </AlertDescription>
+    </Alert>
+  );
+}
+
 /** DESIGN.md 7절 빈 결과: 가운데 정렬, `text-muted-foreground` 한 줄.
  *
  * 7절은 "다음 행동 `button` 하나" 도 요구하지만, 목록이 처음부터 빈 경우 갈 곳이

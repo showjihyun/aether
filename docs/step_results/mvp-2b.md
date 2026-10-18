@@ -32,7 +32,7 @@
 
 - **"입력" 탭이 없습니다**(위). DESIGN 5절을 고쳤습니다.
 - **`RunAccepted` 의 채우는 값이 바뀌었습니다** — `view.requested_by` → `principal.key_id`. 같은 값이지만, `RunView` 가 nullable 이 되면서 타입이 그 경로를 막았습니다.
-- **새 환경변수 `AETHER_PUBLIC_API_URL`** — 브라우저가 닿는 주소는 서버가 닿는 주소와 다를 수 있습니다. **compose 에 넣지 않았고 이름도 확정이 아닙니다**(아래 결정에 딸린 것입니다).
+- **새 환경변수 `AETHER_PUBLIC_API_URL`** — 브라우저가 닿는 주소는 서버가 닿는 주소와 다를 수 있습니다. compose 에 넣지 않았고 이름도 확정이 아니었습니다. **MVP-2p 가 이것을 제거했습니다**(2026-10-18) — 브라우저는 same-origin 중계(`/api/aether`)만 부르므로 그 변수가 필요 없습니다.
 - **`/runs` 의 행 전체가 아니라 상태 칸만 링크**입니다 — `CopyableId` 가 `<button>` 이라 행 전체를 `<a>` 로 감쌀 수 없습니다(중첩 금지).
 
 ## 남긴 것

@@ -1,6 +1,6 @@
 import { createClient } from "@aether/sdk";
 
-import { isBrokenCursor, ListEmpty, ListError, LoadMore } from "@/components/ListStates";
+import { isBrokenCursor, ListEmpty, ListError, LoadMore, MissingApiKey } from "@/components/ListStates";
 import { RelativeTime } from "@/components/RelativeTime";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -15,8 +15,14 @@ export default async function AgentsPage({
   searchParams: Promise<{ cursor?: string }>;
 }) {
   const { cursor } = await searchParams;
+  // 키가 없으면 호출하지 않고 그 사실을 말합니다 — 중계의 503 과 같은 말입니다(MVP-2p 리뷰).
+  const apiKey = process.env.AETHER_API_KEY?.trim();
+  if (!apiKey) return <MissingApiKey />;
+
   const client = createClient({
     baseUrl: process.env.AETHER_API_URL ?? "http://localhost:8000",
+    // 서버에서 서버로 가는 호출이라 중계를 거치지 않고 키를 직접 넘깁니다(D-15). 키는 브라우저로 가지 않습니다.
+    apiKey: process.env.AETHER_API_KEY,
   });
 
   let page;

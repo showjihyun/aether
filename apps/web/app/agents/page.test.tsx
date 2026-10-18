@@ -24,6 +24,16 @@ async function renderPage(cursor?: string) {
   render(await AgentsPage({ searchParams: Promise.resolve(cursor ? { cursor } : {}) }));
 }
 
+// MVP-2p: 서버 컴포넌트는 키가 없으면 호출하지 않고 "api 키가 없습니다" 를 그립니다.
+// 이 파일의 테스트는 **키가 있는 경우**를 보므로 가짜 키를 꽂습니다(명백한 가짜입니다).
+// 키 부재 경로는 app/runs/page.test.tsx 가 따로 봅니다.
+beforeEach(() => {
+  vi.stubEnv("AETHER_API_KEY", "aeth_test_fake_key");
+});
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("/agents", () => {
   beforeEach(() => {
     listAgents.mockReset();

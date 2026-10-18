@@ -186,6 +186,8 @@ services:
         AETHER_VERSION: ${AETHER_VERSION:-dev}
     environment:
       AETHER_API_URL: http://api:8000
+      # D-15: 키는 web 컨테이너 안에만 있고 브라우저로 가지 않습니다(중계가 붙입니다). 비면 화면이 503 으로 말합니다.
+      AETHER_API_KEY: ${AETHER_WEB_API_KEY:-}
     ports:
       - "3000:3000"
     depends_on:
