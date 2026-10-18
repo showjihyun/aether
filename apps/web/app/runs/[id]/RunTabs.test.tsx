@@ -65,7 +65,7 @@ function channel() {
 function renderTabs(traceId: string | null = null) {
   render(
     <TooltipProvider>
-      <RunTabs runId={RUN_ID} apiBaseUrl="http://localhost:8000" traceId={traceId} />
+      <RunTabs runId={RUN_ID} apiBaseUrl="/api/aether" traceId={traceId} />
     </TooltipProvider>,
   );
 }
@@ -200,11 +200,11 @@ describe("RunTabs 이벤트 타임라인", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  it("스트림은 주어진 api 주소로 연다", () => {
+  it("스트림은 주어진 주소(D-15: 중계 경로, 키 없이)로 연다", () => {
     streamRunEvents.mockReturnValue(channel().iterable);
     renderTabs();
 
-    expect(createClient).toHaveBeenCalledWith({ baseUrl: "http://localhost:8000" });
+    expect(createClient).toHaveBeenCalledWith({ baseUrl: "/api/aether" });
     expect(streamRunEvents.mock.calls[0]?.[0]).toBe(RUN_ID);
   });
 
