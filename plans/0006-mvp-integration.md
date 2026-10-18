@@ -32,7 +32,7 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | 4 | **MVP-3** 로컬 LLM 과 모델 볼륨 | 문제 4. `e2e` 가 있어야 "네트워크 없이" 를 판정 | **H-3** 모델 1회 적재 |
 | 5 | **MVP-2a** 목록 화면 둘(`/runs`·`/agents`) | 데이터가 있고 계약이 선 뒤 | — |
 | 6 | **MVP-2b** 상세 화면(`/runs/{id}`: 이벤트 타임라인 + trace) | 2a 의 목록에서 들어갑니다 | — |
-| 7 | **MVP-2c** `/knowledge`·`/workflows` 목록과 Agent 대화(스트림) | 남은 404 둘 + 대화. 스트림은 2b 의 이벤트 코드를 재사용 | — |
+| 7 | **MVP-2c** `/knowledge`·`/workflows`·`/settings` 와 Agent 대화(스트림) | 남은 404 **셋** + 대화. 스트림은 2b 의 이벤트 코드를 재사용 | — |
 | 8 | **MVP-4** 오프라인 시나리오 `e2e` | 앞의 전부를 한 테스트로 겹니다 | — |
 | 9 | **MVP-5** TTFSA 측정 | 문제 5. 에이전트는 Quickstart·양식까지 | **H-4** 처음 보는 사람 1명 |
 
@@ -104,7 +104,7 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | --- | --- |
 | 만드는 것 | `apps/web/app/agents/page.tsx`·`runs/page.tsx` — SDK 목록 함수로 행을 그립니다. 빈 목록·오류 상태를 포함합니다 |
 | 판정 | `web-unit`: SDK 응답 고정값으로 행이 렌더되고, 빈 목록·오류가 각각 다른 화면을 냅니다. **`NAV_ITEMS` 의 `href` 전부에 라우트가 있는지 보는 테스트**(R-6)를 이 단위에서 세우되, 아직 없는 둘(`/knowledge`·`/workflows`)은 2c 가 채우므로 **그 테스트가 2c 까지 빨간 것을 의도로 적습니다**(skip 하지 않습니다 — `xfail` 로 두고 2c 에서 제거) |
-| 주의 | `apps/web` 은 `packages/sdk` 외의 `packages/*` 를 import 하지 않습니다(AR-1, `web-arch` 가 발화). 정적 프리렌더가 빌드 때 api 를 부르지 않게 `force-dynamic` 을 유지합니다(기존 홈 화면의 선례) |
+| 주의 | `apps/web` 은 `packages/sdk` 외의 `packages/*` 를 import 하지 않습니다(AR-1, `web-arch` 가 발화). 정적 프리렌더가 빌드 때 api 를 부르지 않게 `force-dynamic` 을 유지합니다(기존 홈 화면의 선례). **리뷰에서 범위가 둘 늘었습니다**(2026-10-18) — `packages/sdk` 에 `AetherHttpError`(상태 코드를 필드로, additive)와 DESIGN.md 의 표현 규약 네 줄. 화면이 상태 코드를 **메시지 문자열에서 파싱**하고 있었고, 그 분기를 지키는 테스트가 같은 문자열을 베껴 쓰고 있어 **SDK 가 문구를 바꾸면 조용히 깨지는** 자리였습니다 |
 
 ### MVP-2b Run 상세 (A)
 
@@ -114,13 +114,13 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | 판정 | `web-unit`: 이벤트 목록이 `seq` 순서로 렌더되고 `run.finished` 가 마지막. 연결이 끊기면 그 사실이 화면에 나타남. `e2e`(MVP-4): 실제 Run 의 이벤트가 화면에 나타남 |
 | 주의 | 이벤트 봉투는 **계약**입니다(DP-1) — 화면이 그 모양을 바꾸지 않습니다. 모델 응답 본문은 이벤트에 **없습니다**(spec 0002·0005 D-11) |
 
-### MVP-2c `/knowledge`·`/workflows` 와 Agent 대화 (A)
+### MVP-2c `/knowledge`·`/workflows`·`/settings` 와 Agent 대화 (A)
 
 | 항목 | 내용 |
 | --- | --- |
-| 만드는 것 | `app/knowledge/page.tsx`(세트 목록 + 적재 상태), `app/workflows/page.tsx`(정의 목록 + **Run 수준** 실행 목록, D-4), `app/agents/[id]/chat/page.tsx`(대화 — 입력 → `POST /agents/{id}/run` → 스트림) |
-| 판정 | `web-unit`: 세 화면이 고정값으로 렌더. **R-6 의 `xfail` 을 제거**하고 통과시킵니다(사이드바에 404 가 없다). `e2e`: 네 경로가 실제 행을 보여줌(R-5) |
-| 주의 | Workflow 화면에 **노드 실행을 요구하는 호출을 만들지 않습니다**(그 API 가 없습니다, R-7). "준비 중" 자리표시도 두지 않습니다(D-4) |
+| 만드는 것 | `app/knowledge/page.tsx`(세트 목록 + 적재 상태), `app/workflows/page.tsx`(정의 목록 + **Run 수준** 실행 목록, D-4), `app/agents/[id]/chat/page.tsx`(대화 — 입력 → `POST /agents/{id}/run` → 스트림), `app/settings/page.tsx`(테마·연결 정보·키 발급 안내 — **D-13**, 사람 2026-10-18) |
+| 판정 | `web-unit`: **네 화면**이 고정값으로 렌더. **R-6 의 `it.fails` 를 제거**하고 통과시킵니다(사이드바 다섯 항목에 404 가 없다 — 그래서 `/settings` 가 이 단위에 들어왔습니다, **D-13**). `e2e`: 네 경로가 실제 행을 보여줌(R-5) |
+| 주의 | Workflow 화면에 **노드 실행을 요구하는 호출을 만들지 않습니다**(그 API 가 없습니다, R-7). "준비 중" 자리표시도 두지 않습니다(D-4). `/settings` 에 **키 발급·조회를 두지 않습니다** — 키 원문은 발급 때 한 번만 나가는 계약이고(spec 0001 2.9) 인증·비밀값은 사람 검토 자리입니다(AGENTS.md Loop). 그 화면은 **이미 존재하는 것**(테마·API base URL·`/healthz`)만 보여주고 키는 CLI 명령을 안내합니다 |
 
 ### MVP-4 오프라인 시나리오 e2e (A)
 

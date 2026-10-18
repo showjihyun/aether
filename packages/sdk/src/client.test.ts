@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { createClient } from "./client";
+import { AetherHttpError, createClient } from "./client";
 
 function fakeFetch(response: {
   ok: boolean;
@@ -607,5 +607,35 @@ describe("createClient() list functions (spec 0006 2.3, D-9)", () => {
     const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
 
     await expect(client.listIngestions("missing")).rejects.toThrow(/404/);
+  });
+});
+
+describe("AetherHttpError (MVP-2a 리뷰: 상태 코드는 필드다)", () => {
+  // 화면은 HTTP 상태로 분기합니다 — DESIGN.md 7.1 은 `422 invalid_cursor` 에만 "처음부터
+  // 보기" 를 내보내라고 정합니다. 상태가 **메시지 문자열에만** 있으면 화면이 사람이 읽는
+  // 문구를 정규식으로 파싱해야 하고, 그러면 SDK 가 문구를 바꾸는 순간 화면의 분기가
+  // 조용히 깨집니다(그 화면 테스트는 같은 문자열을 손으로 베껴 쓰므로 계속 초록입니다).
+  // 그래서 상태를 **계약**으로 올립니다. 메시지는 바꾸지 않습니다(기존 테스트 유지).
+  it("carries the status as a field, not only in the message", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 422, statusText: "Unprocessable Entity" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    const error = await client.listRuns({ cursor: "broken" }).then(
+      () => undefined,
+      (caught: unknown) => caught,
+    );
+
+    expect(error).toBeInstanceOf(AetherHttpError);
+    expect((error as AetherHttpError).status).toBe(422);
+    expect((error as AetherHttpError).statusText).toBe("Unprocessable Entity");
+    // 메시지는 그대로입니다 — 상태를 필드로 올리는 것이 문구를 바꾸는 일이 되면 안 됩니다.
+    expect((error as Error).message).toMatch(/failed with status 422 Unprocessable Entity$/);
+  });
+
+  it("is an Error, so existing callers that catch Error still work", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.listIngestions("missing")).rejects.toBeInstanceOf(Error);
   });
 });

@@ -1,4 +1,4 @@
-export { createClient } from "./client";
+export { AetherHttpError, createClient } from "./client";
 export type {
   AetherClient,
   AgentDetailResponse,
