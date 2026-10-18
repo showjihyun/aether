@@ -2771,8 +2771,15 @@
             "title": "Requested At"
           },
           "requested_by": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Requested By"
           },
           "started_at": {

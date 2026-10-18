@@ -69,7 +69,7 @@ class RunDetailResponse(BaseModel):
     agent_version: int
     status: RunStatus
     requested_at: datetime
-    requested_by: UUID
+    requested_by: UUID | None
     started_at: datetime | None
     finished_at: datetime | None
     failure_reason: FailureReason | None
@@ -141,7 +141,8 @@ def build_runs_router(
             agent_id=view.agent_id,
             agent_version=view.agent_version,
             requested_at=view.requested_at,
-            requested_by=view.requested_by,
+            # 이 경로는 항상 인증된 principal 이 만듭니다(`RunView` 는 자식 Run 때문에 nullable).
+            requested_by=principal.key_id,
         )
 
     @router.get(

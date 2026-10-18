@@ -1,4 +1,5 @@
 import { createClient } from "@aether/sdk";
+import Link from "next/link";
 
 import { CopyableId } from "@/components/CopyableId";
 import { isBrokenCursor, ListEmpty, ListError, LoadMore } from "@/components/ListStates";
@@ -10,7 +11,7 @@ import { formatDuration } from "@/lib/format";
 // 정적 프리렌더가 빌드 시 api 를 부르면 web-build 가 api 없이 실패합니다(홈 화면과 같은 이유).
 export const dynamic = "force-dynamic";
 
-// 행 클릭(→ 상세)은 MVP-2b 가 목적지를 만들 때 겁니다. 그 전에는 링크를 심지 않습니다(DESIGN 9절).
+// 행 → 상세는 상태 칸의 링크입니다(MVP-2b). `CopyableId` 가 버튼이라 행 전체를 `<a>` 로 감쌀 수 없습니다.
 export default async function RunsPage({
   searchParams,
 }: {
@@ -59,7 +60,9 @@ export default async function RunsPage({
           {page.items.map((run) => (
             <TableRow key={run.run_id}>
               <TableCell>
-                <RunStatusBadge status={run.status} />
+                <Link href={`/runs/${run.run_id}`} className="inline-flex">
+                  <RunStatusBadge status={run.status} />
+                </Link>
               </TableCell>
               <TableCell>
                 <CopyableId id={run.agent_id} />

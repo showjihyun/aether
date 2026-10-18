@@ -65,8 +65,7 @@ def _row_to_view(row: _SelectRow) -> RunView:
         trace_id,
         cancel_requested_at,
     ) = row
-    if requested_by is None:  # pragma: no cover - api 는 항상 인증된 principal 로 만듭니다
-        raise RuntimeError(f"control.runs {run_id} has no requested_by")
+    # `requested_by` 는 NULL 일 수 있습니다 - Workflow 가 선언한 자식 Run 입니다(마이그레이션 0007).
     return RunView(
         run_id=run_id,
         agent_id=agent_id,

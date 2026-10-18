@@ -88,7 +88,7 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 | `/` healthz | P0-3 → P0-3b 가 다시 표현 | `card` 안에 status·service·version, 상태는 `badge` |
 | `/agents` 목록 | **MVP-2a** | `table` — 이름, 현재 Version, 수정 시각. 행 클릭 → 대화는 **MVP-2c** 가 목적지를 만들 때 겁니다 |
 | `/runs` 목록 | **MVP-2a** | `table` — 상태 `badge`, Agent(**짧은 ID** — `RunSummary` 에 이름이 없습니다. 이름을 보이려면 N+1 호출이나 목록 응답 변경이 필요하고 둘 다 이 단위 밖입니다), 시작(`started_at`, 없으면 `—`)·소요. 행 클릭 → 상세는 **MVP-2b** 가 목적지를 만들 때 겁니다 |
-| `/runs/{id}` 상세 | **MVP-2b** | `card` 머리(상태·trace id), `tabs`(이벤트 타임라인 / 트레이스 / 입력) |
+| `/runs/{id}` 상세 | **MVP-2b** | `card` 머리(상태·trace id·요청자·시각), `tabs`(**이벤트 타임라인 / 트레이스** — 둘입니다). **"입력" 탭은 두지 않습니다**: 입력 본문은 어떤 API 응답에도 없습니다(`GET /runs/{id}` 는 `control.runs` 투영 열만 읽습니다, spec 0001 D-11). 내용이 "API 가 돌려주지 않습니다" 한 줄인 탭은 9절이 금지하는 자리표시입니다. 보이려면 API 가 그 열을 돌려줘야 합니다(이 단위 밖) |
 | `/knowledge` 목록 | **MVP-2c** | `table` — 세트 이름, 생성 시각. 적재는 상태 `badge` 와 청크 수 |
 | `/workflows` 목록 | **MVP-2c** | `table` 둘 — 정의(이름·현재 Version)와 실행(상태 `badge`·현재 노드·기다리는 대상). **노드 단위는 보여주지 않습니다**(아래) |
 | Agent 대화 | **MVP-2c** | 좌: 대화(`scroll-area`), 하: `textarea` + `button`. 스트리밍 텍스트는 그대로 append |
