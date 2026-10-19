@@ -22,6 +22,14 @@
                    검색이 실제로 Context 에 들어갔는지는 smoke.sh 가 collector 출력의
                    `context.tokens.knowledge` **값**으로 확인합니다 — 응답 본문은 제품이
                    어느 API 로도 내지 않기 때문입니다(spec 0004 D-11).
+  scenario_offline
+                -- spec 0006 R-10, 2.11 (MVP-4): 오프라인 e2e 의 사슬 전체 - Knowledge Set
+                   생성 -> 적재(`succeeded`) -> MCP·knowledge 바인딩 agent 생성 -> 그 도구
+                   허용 -> Workflow(START -> AGENT -> END) 생성·실행 -> `succeeded`. 한 줄
+                   JSON: `{status, workflow_run_id, workflow_id, workflow_version,
+                   workflow_name, agent_id, agent_version, agent_name, knowledge_set_id,
+                   knowledge_set_name, ingestion_id}`. 도구 호출이 일어났다고는 단언하지
+                   않습니다(함수 docstring).
   bench         -- 같은 agent 에 순차 200 회 run 요청, 처음 20 회(워밍업) 제외 180 회의
                    응답 지연으로 `{p50_ms, p95_ms, max_ms, n, warmup}` 한 줄 JSON.
 
@@ -61,6 +69,12 @@ SMOKE_KNOWLEDGE_TOP_K = 2
 INGESTION_TIMEOUT_SECONDS = 120.0
 MCP_FILESYSTEM_SERVER_NAME = "filesystem"
 MCP_FILESYSTEM_TOOL_NAME = "read_text_file"
+
+# spec 0006 2.11: Workflow Run 은 **진짜 소형 모델**이 답해야 끝납니다(CPU 추론, 첫 호출은
+# 모델 적재 포함). Run 하나의 타임아웃(`SCENARIO_TIMEOUT_SECONDS`)보다 넉넉하게 둡니다 -
+# 임의로 정한 값입니다. 실패 상태는 즉시 올라가므로 길어도 실패 판정은 늦어지지 않습니다.
+WORKFLOW_RUN_TIMEOUT_SECONDS = 180.0
+_WORKFLOW_FAILED_STATUSES = {"failed", "cancelled"}
 
 
 def percentile(values: list[float], p: float) -> float:
@@ -163,6 +177,74 @@ def knowledge_agent_body(knowledge_set_name: str) -> dict[str, Any]:
             "knowledge_top_k": SMOKE_KNOWLEDGE_TOP_K,
         },
     }
+
+
+def offline_agent_body(knowledge_set_name: str) -> dict[str, Any]:
+    """spec 0006 R-10, 2.11: MCP 서버·도구·knowledge 바인딩을 **전부** 가진 agent 정의.
+
+    하나라도 빠지면 시나리오는 성공하지만 아무것도 확인하지 않은 상태가 됩니다
+    (`knowledge_agent_body` 와 같은 함정). `memory_enabled` 는 켜지 않습니다 - 같은 이유.
+    """
+    return {
+        "name": f"smoke-offline-{_random_suffix()}",
+        "definition": {
+            "schema_version": 1,
+            "system_prompt": "You answer briefly from the knowledge blocks you are given.",
+            "tools": [MCP_FILESYSTEM_TOOL_NAME],
+            "mcp_servers": [
+                {"name": MCP_FILESYSTEM_SERVER_NAME, "transport": "stdio", "ref": "filesystem"}
+            ],
+            "knowledge": [knowledge_set_name],
+            "knowledge_top_k": SMOKE_KNOWLEDGE_TOP_K,
+        },
+    }
+
+
+def offline_workflow_body(name: str, agent_id: str, agent_version: int) -> dict[str, Any]:
+    """spec 0006 R-10: START -> AGENT -> END. AGENT 노드는 `agent_id`·`agent_version` 을
+    **반드시** 들고 있어야 합니다(없으면 api 가 400 `invalid_workflow_graph`)."""
+    return {
+        "name": name,
+        "nodes": [
+            {"id": "start", "kind": "START"},
+            {
+                "id": "agent",
+                "kind": "AGENT",
+                "agent_id": agent_id,
+                "agent_version": agent_version,
+            },
+            {"id": "end", "kind": "END"},
+        ],
+        "edges": [
+            {"source": "start", "target": "agent"},
+            {"source": "agent", "target": "end"},
+        ],
+    }
+
+
+def wait_for_workflow_run(
+    api_key: str, workflow_run_id: str, timeout_seconds: float
+) -> dict[str, Any]:
+    """`GET /workflow-runs/{id}` 를 `succeeded` 까지 폴링합니다. `failed`·`cancelled` 는
+    타임아웃을 기다리지 않고 `failure_reason` 과 함께 **즉시** 올립니다. `queued`·`running`·
+    `waiting_*` 는 아직 끝난 것이 아니므로 계속 기다립니다."""
+    deadline = time.monotonic() + timeout_seconds
+    last: dict[str, Any] = {}
+    while time.monotonic() < deadline:
+        last = _request(f"{API_BASE_URL}/workflow-runs/{workflow_run_id}", "GET", api_key, None)
+        status_value = last.get("status")
+        if status_value == "succeeded":
+            return last
+        if status_value in _WORKFLOW_FAILED_STATUSES:
+            raise RuntimeError(
+                f"workflow run {workflow_run_id} ended as {status_value!r} "
+                f"(failure_reason={last.get('failure_reason')!r})"
+            )
+        time.sleep(SCENARIO_POLL_INTERVAL_SECONDS)
+    raise TimeoutError(
+        f"workflow run {workflow_run_id} did not succeed within {timeout_seconds}s "
+        f"(last status={last.get('status')!r})"
+    )
 
 
 def create_knowledge_set(api_key: str) -> dict[str, Any]:
@@ -365,6 +447,55 @@ def scenario_knowledge() -> dict[str, Any]:
     }
 
 
+def scenario_offline() -> dict[str, Any]:
+    """spec 0006 R-10, 2.11: 적재 -> agent(MCP+knowledge) -> 도구 허용 -> Workflow Run.
+
+    단언하는 것은 "선언 + 허용 + Workflow Run 이 `succeeded`" 입니다. **도구 호출이
+    일어났다고 주장하지 않습니다** - 소형 모델이 도구를 부를지는 비결정적이고, 그 경로는
+    `smoke` 의 `scenario_tool` 이 fake 어댑터의 `TOOL_CALL` 마커로 결정적으로 봅니다.
+    """
+    api_key = _require_api_key()
+    knowledge_set = create_knowledge_set(api_key)
+    accepted = request_ingestion(api_key, str(knowledge_set["id"]))
+    wait_for_ingestion(api_key, str(accepted["ingestion_id"]), INGESTION_TIMEOUT_SECONDS)
+    agent = _request(
+        f"{API_BASE_URL}/agents",
+        "POST",
+        api_key,
+        offline_agent_body(str(knowledge_set["name"])),
+    )
+    agent_id, agent_version = str(agent["id"]), int(agent["current_version"])
+    allow_tool_permission(
+        agent_id, agent_version, MCP_FILESYSTEM_SERVER_NAME, MCP_FILESYSTEM_TOOL_NAME
+    )
+    workflow = _request(
+        f"{API_BASE_URL}/workflows",
+        "POST",
+        api_key,
+        offline_workflow_body(f"smoke-offline-wf-{_random_suffix()}", agent_id, agent_version),
+    )
+    workflow_id = str(workflow["id"])
+    accepted_run = _request(
+        f"{API_BASE_URL}/workflows/{workflow_id}/runs", "POST", api_key, {"input": {}}
+    )
+    result = wait_for_workflow_run(
+        api_key, str(accepted_run["workflow_run_id"]), WORKFLOW_RUN_TIMEOUT_SECONDS
+    )
+    return {
+        "status": result["status"],
+        "workflow_run_id": str(accepted_run["workflow_run_id"]),
+        "workflow_id": workflow_id,
+        "workflow_version": accepted_run["workflow_version"],
+        "workflow_name": workflow["name"],
+        "agent_id": agent_id,
+        "agent_version": agent_version,
+        "agent_name": agent["name"],
+        "knowledge_set_id": str(knowledge_set["id"]),
+        "knowledge_set_name": str(knowledge_set["name"]),
+        "ingestion_id": str(accepted["ingestion_id"]),
+    }
+
+
 def bench() -> dict[str, float | int]:
     api_key = _require_api_key()
     agent_id = create_smoke_agent(api_key)
@@ -379,7 +510,8 @@ def bench() -> dict[str, float | int]:
 def main(argv: list[str]) -> int:
     if len(argv) < 2:
         sys.stderr.write(
-            "usage: smoke_client.py <scenario|scenario_tool|scenario_knowledge|bench>\n"
+            "usage: smoke_client.py "
+            "<scenario|scenario_tool|scenario_knowledge|scenario_offline|bench>\n"
         )
         return 2
     command = argv[1]
@@ -390,6 +522,8 @@ def main(argv: list[str]) -> int:
             result = scenario_tool()
         elif command == "scenario_knowledge":
             result = scenario_knowledge()
+        elif command == "scenario_offline":
+            result = scenario_offline()
         elif command == "bench":
             result = bench()
         else:

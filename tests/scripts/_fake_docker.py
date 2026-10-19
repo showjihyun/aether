@@ -9,6 +9,9 @@
 - `FAKE_UP_EXIT` / `FAKE_PULL_EXIT` / `FAKE_ALL_EXIT`  각 호출의 종료 코드(기본 0)
 - `FAKE_UP_EXIT_SEQ`   `up` 호출마다 차례로 소비할 종료 코드(공백 구분, 예: "1 0")
 - `FAKE_LOGS` / `FAKE_SCENARIO_JSON`  `logs`·시나리오 호출의 출력
+- `FAKE_SCENARIO_OFFLINE_JSON`  `scenario_offline` 의 출력(일반 `scenario` 분기보다 먼저 가려낸다)
+- `FAKE_WEB_CHECK_EXIT`  `web-routes-check` 의 종료 코드(기본 0)
+- `FAKE_CHUNK_SEQ`  `psql` 호출마다 차례로 소비할 숫자(기본 "0 3" = 적재가 청크를 쌓았다)
 - `FAKE_PROBE_EXIT`  외부 접속 시도의 결과(0=막힘, 7=닿음)
 - `FAKE_NO_RECORD`  pull 이 성공해도 목록에 남기지 않는 서버
 - pull 이 성공하면 이후 `ollama list` 에 그 모델이 나타난다(상태는 로그 옆 마커 파일)
@@ -27,6 +30,7 @@ _BASH = shutil.which("bash") or "bash"
 
 _FAKE = r"""#!/usr/bin/env bash
 echo "$*" >> "$FAKE_DOCKER_LOG"
+OFFLINE_DEFAULT='{"status":"succeeded","agent_name":"a-1","knowledge_set_name":"k-1","workflow_name":"w-1"}'
 if [ -n "${FAKE_ALL_EXIT:-}" ]; then exit "$FAKE_ALL_EXIT"; fi
 case " $* " in
   *" ollama list"*)
@@ -37,11 +41,23 @@ case " $* " in
     exit 0 ;;
   *" ollama pull "*)
     if [ "${FAKE_PULL_EXIT:-0}" = 0 ] && [ -z "${FAKE_NO_RECORD:-}" ]; then
-      printf '%s' "${!#}" > "$FAKE_DOCKER_LOG.pulled"
+      m="${!#}"; case "$m" in *:*) ;; *) m="$m:latest" ;; esac   # 실제 list 는 :latest
+      printf '%s' "$m" > "$FAKE_DOCKER_LOG.pulled"
     fi
     exit "${FAKE_PULL_EXIT:-0}" ;;
   *" ps -q"*) printf '%s' "${FAKE_PS_Q:-}"; exit 0 ;;
   *" e2e-offline-probe "*) exit "${FAKE_PROBE_EXIT:-0}" ;;
+  *" psql "*)
+    seq="$FAKE_DOCKER_LOG.sqlseq"
+    if [ ! -f "$seq" ]; then printf '%s' "${FAKE_CHUNK_SEQ:-0 3}" > "$seq"; fi
+    v="$(awk '{print $1}' "$seq")"; rest="$(awk '{$1=""; sub(/^ /,""); print}' "$seq")"
+    printf '%s' "$rest" > "$seq"
+    printf '%s' "${v:-0}"
+    exit 0 ;;
+  *" scenario_offline"*)
+    printf '%s
+' "${FAKE_SCENARIO_OFFLINE_JSON:-$OFFLINE_DEFAULT}"; exit 0 ;;
+  *" web-routes-check "*) exit "${FAKE_WEB_CHECK_EXIT:-0}" ;;
   *" scenario"*) printf '%s
 ' "${FAKE_SCENARIO_JSON:-{\"run_id\":\"r\",\"status\":\"succeeded\"}}"; exit 0 ;;
   *" keys create"*) echo "fake-key"; exit 0 ;;

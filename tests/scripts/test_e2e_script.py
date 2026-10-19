@@ -55,7 +55,7 @@ def test_happy_path_order_empty_volume_then_fetch_then_offline(tmp_path: Path) -
 
     assert result.returncode == 0, result.stdout + result.stderr
     ups = _ups(calls)
-    assert len(ups) == 2, calls
+    assert len(ups) == 3, calls  # 빈 볼륨 up, 오프라인 up, 키 발급 뒤 web up (MVP-4)
     pull = next(i for i, c in enumerate(calls) if f"ollama pull {MODEL}" in c)
     assert ups[0] < pull < ups[1], calls
     assert "compose.offline.yaml" not in calls[ups[0]]
@@ -114,3 +114,88 @@ def test_succeeded_without_a_request_reaching_the_model_server_fails_r8(tmp_path
     assert result.returncode != 0
     assert "R-8" in result.stderr
     assert "chat/completions" in result.stderr
+
+
+def _index(calls: list[str], needle: str) -> int:
+    return next(i for i, c in enumerate(calls) if needle in c)
+
+
+def test_embedding_model_is_pulled_before_the_offline_up(tmp_path: Path) -> None:
+    """D-19: 임베딩 모델도 온라인 단계에서 받는다(오프라인 up 보다 앞)."""
+    result, calls = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    ups = _ups(calls)
+    assert any("ollama pull nomic-embed-text" in c for c in calls), calls
+    assert ups[0] < _index(calls, "ollama pull nomic-embed-text") < ups[1], calls
+
+
+def test_web_comes_up_after_the_key_on_the_offline_files(tmp_path: Path) -> None:
+    """D-20: web 은 keys create 뒤에, 오프라인 파일 집합으로 올라간다."""
+    result, calls = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    web_up = next(
+        i for i, c in enumerate(calls) if " up " in f" {c} " and c.rstrip().endswith(" web")
+    )
+    assert _index(calls, "keys create") < web_up
+    assert "compose.offline.yaml" in calls[web_up]
+    assert _index(calls, "scenario_offline") < web_up < _index(calls, "web-routes-check")
+
+
+def test_issued_key_never_appears_in_output(tmp_path: Path) -> None:
+    """D-20: 발급한 키(가짜 docker 는 fake-key)가 stdout·stderr 어디에도 없다."""
+    ok, _ = _run(tmp_path / "ok")
+    bad, _ = _run(tmp_path / "bad", {"FAKE_WEB_CHECK_EXIT": "1"})
+
+    for result in (ok, bad):
+        assert "fake-key" not in result.stdout + result.stderr
+
+
+def test_failing_screen_check_fails_r5(tmp_path: Path) -> None:
+    """R-5: 화면 확인이 실패하면 e2e 도 실패한다."""
+    result, _ = _run(tmp_path, {"FAKE_WEB_CHECK_EXIT": "1"})
+
+    assert result.returncode != 0
+    assert "R-5" in result.stderr
+
+
+def test_non_succeeded_workflow_run_fails_r10(tmp_path: Path) -> None:
+    """R-10: Workflow Run 이 succeeded 가 아니면 실패."""
+    result, _ = _run(tmp_path, {"FAKE_SCENARIO_OFFLINE_JSON": '{"status":"failed"}'})
+
+    assert result.returncode != 0
+    assert "R-10" in result.stderr
+
+
+def test_ingestion_that_stored_no_chunks_fails_r10(tmp_path: Path) -> None:
+    """R-10 리뷰(2026-10-19): 적재는 **빈 디렉터리에서도 `succeeded`** 가 됩니다 - 그래서
+    `succeeded` 만 보면 사슬의 Knowledge 고리가 빕니다. `smoke` 가 같은 구멍을 청크 수로
+    막고 있고(`scripts/smoke.sh`: "ingestion reported succeeded but stored no chunks"),
+    실제 임베딩이 도는 유일한 자리인 e2e 가 그보다 느슨할 이유가 없습니다."""
+    result, _ = _run(tmp_path, {"FAKE_CHUNK_SEQ": "7 7"})
+
+    assert result.returncode != 0
+    assert "R-10" in result.stderr
+    assert "chunk" in result.stderr.lower()
+
+
+def test_chunk_count_brackets_the_offline_scenario(tmp_path: Path) -> None:
+    """R-10: 청크 수를 시나리오 **앞뒤로** 재야 '이 적재가 쌓았다' 가 됩니다."""
+    result, calls = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    sql = [i for i, c in enumerate(calls) if "knowledge_chunks" in c]
+    assert len(sql) == 2, calls
+    assert sql[0] < _index(calls, "scenario_offline") < sql[1], calls
+
+
+def test_runs_screen_must_show_this_runs_id(tmp_path: Path) -> None:
+    """R-5 리뷰(2026-10-19): `/runs` 는 R-5 가 이름으로 부르는 화면인데 기대값이 없으면
+    '200 이고 오류 화면이 아니다' 까지만 봅니다(빈 목록도 통과). Run 의 id 는 전체가
+    HTML 에 있습니다(`CopyableId` 의 `title`, 상세 링크의 href)."""
+    result, calls = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    check = calls[_index(calls, "web-routes-check")]
+    assert "WEB_EXPECT_RUN=r" in check, check
