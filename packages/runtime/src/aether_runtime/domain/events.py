@@ -6,9 +6,8 @@ pydantic 모델이 소유합니다 — 유스케이스는 이 모델로 값을 �
 `.model_dump(exclude_none=True)` 로 봉투에 실어, `?` 로 표시된 선택 필드(예:
 `run.status.failure_reason`)가 없을 때 키 자체가 빠지게 합니다.
 
-`model.delta` 는 **예약**입니다 — Phase 1(P1-4)의 루프는 `complete` 만 쓰므로 이
-이벤트를 발생시키지 않습니다(2.6). 모델은 P1-6(streaming)이 실제로 쓰기 시작할 때를
-대비해 지금 정의해 둡니다.
+`model.delta` 는 D-17(MVP-2d)부터 실제로 발생합니다 — 루프가 `stream` 을 쓰고 텍스트
+조각마다 하나를 다른 이벤트와 똑같이 저장합니다. reasoning(D-19)은 내지 않습니다.
 
 각 `*Payload` 는 `.model_json_schema()` 를 그대로 낼 수 있습니다 — `PAYLOAD_MODELS` 가
 `aether-api events-schema`(P1-6)의 근거가 됩니다.
@@ -80,7 +79,8 @@ class RunFinishedPayload(BaseModel):
 
 
 class ModelDeltaPayload(BaseModel):
-    """예약(2.7) — Phase 1 은 발생시키지 않습니다."""
+    """`model.delta { text }` — 모델 답변의 조각 하나. 도착하는 대로 하나씩 발행되고
+    다른 이벤트와 똑같이 저장됩니다(D-17). 이으면 그 턴의 답변 전체입니다."""
 
     text: str
 

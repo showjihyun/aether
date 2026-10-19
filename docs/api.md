@@ -107,7 +107,7 @@
 | `tool.called` | `task_id`, `tool_call_id`, `name`, `arguments` | 도구 실행 직전 |
 | `tool.result` | `task_id`, `tool_call_id`, `name`, `is_error`, `content`, `truncated` | 도구 실행 직후(잘림 반영) |
 | `run.finished` | `status` | 종결 시 **항상 마지막**. 재개 시 재발행되어도 같은 `seq` |
-| `model.delta` | `text` | **예약** — Phase 1 은 발생시키지 않음 |
+| `model.delta` | `text` | 답변 조각 하나. 도착하는 대로 하나씩 발행되고 **다른 이벤트와 똑같이 저장**됩니다(spec 0006 D-17, MVP-2d). 이으면 그 턴의 답변 전체입니다. Phase 1~4 에서는 발생하지 않았습니다 |
 
 ## 5.1 목록 경로 (MVP-0)
 

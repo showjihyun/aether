@@ -11,12 +11,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any
 from uuid import UUID, uuid4
 
 from aether_runtime.adapters.outbound.model_gateway.fake import FakeModelGateway
 from aether_runtime.application.ports.outbound.model_gateway import (
+    ModelDelta,
     ModelError,
     ModelGateway,
     ModelRequest,
@@ -171,8 +173,10 @@ class _TimeoutThenClockAdvanceGateway:
         self.clock.advance(self.advance_by)
         raise ModelError(kind="timeout")
 
-    def stream(self, request: ModelRequest) -> Any:
-        raise NotImplementedError
+    def stream(self, request: ModelRequest) -> Iterator[ModelDelta]:
+        # D-17: 유스케이스가 `stream` 을 쓰므로 같은 타임아웃 시나리오를 여기서도 냅니다.
+        self.complete(request)
+        yield ModelDelta(done=True, finish_reason="stop")
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         raise NotImplementedError
