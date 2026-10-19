@@ -1,6 +1,8 @@
 # aether
 
-Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 AI Runtime 을 실행하는 Open Hybrid Enterprise AI OS 입니다. 지금은 Phase 0(Architecture & Foundation) 입니다 — 자세한 배경은 [AGENTS.md](AGENTS.md).
+Cloud / Private Cloud / On-Premise / Air-Gapped / Edge 에서 같은 AI Runtime 을 실행하는 Open Hybrid Enterprise AI OS 입니다. **Phase 4 완료**(2026-10-17, Workflow Engine)이고 지금은 MVP 통합입니다 — Phase 의 정본은 [docs/roadmap.md](docs/roadmap.md), 단위 상태는 [intents/mvp-backlog.md](intents/mvp-backlog.md), 자세한 배경은 [AGENTS.md](AGENTS.md).
+
+**처음이라면 [docs/quickstart.md](docs/quickstart.md) 로 가십시오** — clone 에서 첫 Agent 성공까지 한 장입니다. 아래는 개발·검증·오프라인 판정이라 그 문서보다 깁니다.
 
 ## 개발 설치
 
