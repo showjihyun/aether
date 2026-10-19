@@ -1,4 +1,5 @@
 import { createClient } from "@aether/sdk";
+import Link from "next/link";
 
 import { isBrokenCursor, ListEmpty, ListError, LoadMore, MissingApiKey } from "@/components/ListStates";
 import { RelativeTime } from "@/components/RelativeTime";
@@ -8,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // 정적 프리렌더가 빌드 시 api 를 부르면 web-build 가 api 없이 실패합니다(홈 화면과 같은 이유).
 export const dynamic = "force-dynamic";
 
-// 행 클릭(→ 대화)은 MVP-2c 가 목적지를 만들 때 겁니다. 그 전에는 링크를 심지 않습니다(DESIGN 9절).
+// 이름 칸이 대화(`/agents/{id}/chat`, MVP-2e)로 가는 링크입니다 - 목적지가 생겨서 겁니다(DESIGN 9절).
 export default async function AgentsPage({
   searchParams,
 }: {
@@ -61,7 +62,11 @@ export default async function AgentsPage({
         <TableBody>
           {page.items.map((agent) => (
             <TableRow key={agent.id}>
-              <TableCell>{agent.name}</TableCell>
+              <TableCell>
+                <Link href={`/agents/${agent.id}/chat`} className="underline-offset-4 hover:underline">
+                  {agent.name}
+                </Link>
+              </TableCell>
               <TableCell>
                 <Badge variant="outline">{`v${agent.current_version}`}</Badge>
               </TableCell>

@@ -130,6 +130,13 @@ describe("web -> api 중계 (D-15, MVP-2p)", () => {
     expect(new TextDecoder().decode(second.value)).toContain("data: second");
   }, 3000);
 
+  it("D-18: 허용 목록은 넷이고 전부 GET 이다 (MVP-2e 가 넓히지 않았다)", () => {
+    // 타입 리터럴 `"GET"` 이 컴파일 시점에 막지만, **넓히지 않았다는 것**이 이 중계의
+    // 계약이므로 실행 시점 단언도 둡니다 - 대화가 쓰기를 더할 자리가 여기였고
+    // 사람이 서버 액션을 골랐습니다(D-18).
+    expect(ALLOWED_ROUTES.map((r) => r.method)).toEqual(["GET", "GET", "GET", "GET"]);
+  });
+
   it("판정 4 (D-15): 허용 목록의 모든 경로는 통과한다", async () => {
     expect(ALLOWED_ROUTES.length).toBe(4);
     for (const route of ALLOWED_ROUTES) {
