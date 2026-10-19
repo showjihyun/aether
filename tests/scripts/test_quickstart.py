@@ -12,6 +12,7 @@ TTFSA 는 이 문서 하나로 측정됩니다 — 문서가 없는 파일·환�
 from __future__ import annotations
 
 import re
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -35,16 +36,40 @@ def test_quickstart_exists() -> None:
     assert QUICKSTART.is_file(), f"{QUICKSTART} 가 없습니다"
 
 
+def _git_ignores(path: str) -> bool:
+    """`.gitignore` 가 가리는 경로인가. 측정자가 **직접 만드는** 파일(`infra/docker/.env`)은
+    깨끗한 체크아웃에 없는 것이 정상이고, 있으면 오히려 비밀값이 커밋된 것입니다.
+
+    로컬에만 있는 파일을 실재로 보면 이 테스트가 **로컬에서만 초록**이 됩니다 - 2026-10-19
+    에 CI 가 그것을 잡았습니다(`improvement-log/2026-10-19-001`). 그래서 "있다" 가 아니라
+    "있거나, git 이 가린다" 를 봅니다.
+    """
+    result = subprocess.run(
+        ["git", "check-ignore", "-q", "--", path],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        check=False,
+    )
+    return result.returncode == 0
+
+
 def test_every_repo_path_it_mentions_exists() -> None:
     """문서가 없는 파일을 가리키면 그 줄에서 측정이 막힙니다."""
     missing = sorted(
         {
             candidate
-            for candidate in _PATHS.findall(_text())
-            if not (REPO_ROOT / candidate.rstrip(".,)")).exists()
+            for candidate in (c.rstrip(".,)") for c in _PATHS.findall(_text()))
+            if not (REPO_ROOT / candidate).exists() and not _git_ignores(candidate)
         }
     )
     assert not missing, f"quickstart 가 없는 경로를 가리킵니다: {missing}"
+
+
+def test_the_env_file_it_tells_you_to_create_is_gitignored() -> None:
+    """위 테스트가 `.env` 를 통과시키는 **이유**를 고정합니다. 그 파일이 어느 날 추적
+    대상이 되면(= 비밀값이 커밋될 수 있는 상태) 여기서 드러나야 합니다."""
+    assert _git_ignores("infra/docker/.env"), ".env 가 더 이상 gitignore 되지 않습니다"
+    assert (REPO_ROOT / "infra" / "docker" / ".env.example").is_file()
 
 
 def test_every_env_key_it_mentions_is_in_env_example() -> None:
