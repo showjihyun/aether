@@ -526,7 +526,7 @@ WEBHOOK, SCHEDULE 노드는 인바운드 네트워크와 스케줄러가 필요�
 
 ## MVP 통합 — Month 4
 
-Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17). Spec: [../specs/0006-mvp-integration.md](../specs/0006-mvp-integration.md) (승인됨 2026-10-17 — D-1 ~ D-11). **plan 은 아직입니다** — 단위는 plan 승인 뒤에 시작합니다. Phase 1~4 가 끝난 뒤가 아니라 **Phase 1 이 끝나면 MVP-1·MVP-3 부터** 시작할 수 있습니다. 시나리오를 늦게 붙일수록 그 사이의 결정이 시나리오와 어긋납니다.
+Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17 · **완료 2026-10-20** — 단위 열하나 병합과 R-12 사람 판정). Spec: [../specs/0006-mvp-integration.md](../specs/0006-mvp-integration.md) (승인됨 2026-10-17 — D-1 ~ D-11). **plan 은 아직입니다** — 단위는 plan 승인 뒤에 시작합니다. Phase 1~4 가 끝난 뒤가 아니라 **Phase 1 이 끝나면 MVP-1·MVP-3 부터** 시작할 수 있습니다. 시나리오를 늦게 붙일수록 그 사이의 결정이 시나리오와 어긋납니다.
 
 **Phase 완료 판정** — 로드맵 10장의 시나리오가 자동 테스트로 성립하고, 처음 보는 사람이 clone 부터 첫 Run 성공까지 10분 안에 도달한 측정 기록이 있습니다.
 
