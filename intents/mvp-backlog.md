@@ -613,6 +613,26 @@ Q1~Q5 는 [0001](0001-phase-0-foundation.md) 의 것이며, 여기서 다시 답
 | Q6 | 로컬 LLM 서버 기본 후보. OpenAI-호환 API 를 내는 것이면 어댑터는 하나로 족합니다 | P1-3, MVP-3 | 사람, Phase 1 intent 발급 시 |
 | Q7 | 로컬 Vector DB. 서비스를 늘리지 않는 선택(PostgreSQL 확장)인가 전용 서비스인가 | P3-2 | 사람, Phase 3 intent 발급 시 |
 
+## Quickstart 마찰 — 아직 intent 가 없는 후보
+
+MVP-5 가 정한 규칙("10분을 넘기거나 막혔으면 **막힌 지점을 backlog 의 단위로 등록**한다 — 숫자를 조정하지 않는다")에 따라 등록합니다. 근거는 [../docs/measurements/ttfsa-agent-dryrun-2026-10-20.md](../docs/measurements/ttfsa-agent-dryrun-2026-10-20.md) 이고, 그 기록은 **사람 측정이 아니라** 에이전트가 Quickstart 한 장만 들고 밟아 본 것입니다(R-12 의 근거가 아닙니다).
+
+**이 단위들은 어느 intent 에도 속하지 않습니다.** 0006 은 완료이고 0007 은 초안입니다. 그래서 `상태` 는 전부 `보류`(intent 대기)입니다 — 집으려면 사람이 0007 에 포함시키거나 별 intent 를 발급해야 합니다. 번호는 F-* 로 두어 Phase 단위 번호와 섞이지 않게 합니다.
+
+| 번호 | 단위 | 어디 | 상태 |
+| --- | --- | --- | --- |
+| F-1 | 3절이 `--project`·`AETHER_FETCH_PROJECT` 를 말하지 않습니다 — 같은 절의 가장 큰 경고가 "프로젝트 이름을 고른다" 를 전제하는데 고를 방법이 없습니다 | `docs/quickstart.md` | 보류 |
+| F-2 | **4절의 유일한 확인(`curl /healthz`)이 worker 가 죽어도 `ok`** 입니다. `up --wait` 의 종료 코드와 `docker compose ps`·`logs worker` 가 문서에 없습니다 | `docs/quickstart.md` | 보류 |
+| F-3 | worker 가 없을 때 `aether run` 이 **무한 대기**합니다(관측 1회, 재현 필요). 증상 표에 "CLI 가 멈춘다" 가 없습니다. 제품 쪽(타임아웃·안내)과 문서 쪽 둘 다 걸립니다 | `apps/cli`, `docs/quickstart.md` | 보류 |
+| F-4 | 0절 준비물에 `openssl` 이 없는데 2절이 그것을 씁니다 | `docs/quickstart.md` | 보류 |
+| F-5 | 2절 "**네 줄**" 과 실제 고치는 키 **여섯 개**가 어긋납니다 | `docs/quickstart.md` | 보류 |
+| F-6 | **셸 전제가 없습니다** — 4절의 `VAR=$(...) docker compose ...` 는 PowerShell 에서 파서 오류입니다 | `docs/quickstart.md` | 보류 |
+| F-7 | `migrate` 가 설계상 끝나는 일회성 서비스라는 말이 없어 `Exited` 가 실패처럼 보입니다 | `docs/quickstart.md` | 보류 |
+| F-8 | 5·6절의 **출력 형태**를 보여주지 않아 어느 줄이 키·id 인지 추측해야 합니다 | `docs/quickstart.md` | 보류 |
+| F-9 | 3절 표기 "약 379 MB" 와 실제 pull **397 MB** | `docs/quickstart.md` | 보류 |
+
+**F-* 를 고치는 것이 TTFSA 를 "좋아 보이게" 만드는 일이 되지 않도록**, 사람 측정(H-4)은 F-* 수정 전후 어느 쪽에서 쟀는지를 그 기록에 적습니다. 조건을 바꿔 숫자를 맞추는 것이 이 KPI 를 망치는 유일한 방법입니다(EI-3).
+
 ## 이 문서를 갱신하는 때
 
 | 사건 | 무엇을 바꾸는가 |
