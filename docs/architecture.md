@@ -157,7 +157,7 @@ Phase 1 까지 끝났습니다(2026-09-16). `apps/{api,web,worker}`·`infra/dock
 
 Phase 2 에서 **`packages/mcp` 와 `packages/policy` 가 채워졌습니다**(intent 0003) — mcp 에는 MCP 클라이언트(stdio·http)·Tool Discovery·Gateway 유스케이스(판정 → 호출 → 감사)·감사 싱크가, policy 에는 (Agent Version, 서버, 도구) → allow/deny 판정 함수와 정책 표 어댑터가 들어 있습니다. 도구는 저장소 안의 MCP Server(`tools/mcp-servers/`)와 참조 서버로 옵니다.
 
-아직 빈 껍데기인 것: `packages/{workflow,context,memory,evaluation}` — 각각 Phase 3 이후입니다.
+Phase 3 이 **`packages/context` 와 `packages/memory`** 를(Compiler·적재·검색·Memory), Phase 4 가 **`packages/workflow`** 를(그래프 검증·노드 실행기·파킹·승인) 채웠습니다. 아직 빈 껍데기인 것은 **`packages/evaluation` 하나**입니다 — 세 층의 `__init__.py` 뿐이고 Phase 7 의 일입니다.
 
 **참조 MCP 서버의 버전은 사람이 봅니다.** `@modelcontextprotocol/server-filesystem` 같은 npm 참조 서버는 이미지 빌드 시점에 버전을 고정해 넣습니다(`infra/docker/worker.Dockerfile`, spec 0003 D-8 — 실행 시 `npx` 로 내려받지 않습니다. Air-Gapped 요구이자 공급망 문제입니다). 그 버전은 Dependabot 감시 밖이므로 사람이 주기적으로 확인해 갱신합니다(spec 0003 C-5).
 
