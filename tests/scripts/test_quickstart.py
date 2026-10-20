@@ -77,6 +77,10 @@ def test_every_env_key_it_mentions_is_in_env_example() -> None:
     known = set(_ENV_KEYS.findall(ENV_EXAMPLE.read_text(encoding="utf-8")))
     # CLI 가 읽는 두 변수는 compose 의 `.env` 가 아니라 셸 환경입니다(docs/cli.md).
     known |= {"AETHER_API_KEY", "AETHER_API_URL", "AETHER_VERSION"}
+    # 문서가 가리키는 스크립트가 **직접 읽는** 변수도 실재입니다(예: `AETHER_FETCH_PROJECT`).
+    # 예외 목록에 이름을 적는 대신 그 스크립트에서 찾습니다 - 스크립트가 그 손잡이를 없애면
+    # 이 테스트가 그 자리에서 실패해야 합니다.
+    known |= set(_ENV_KEYS.findall(FETCH_MODEL.read_text(encoding="utf-8")))
     unknown = sorted(set(_ENV_KEYS.findall(_text())) - known)
     assert not unknown, f"quickstart 가 모르는 환경변수를 적습니다: {unknown}"
 
@@ -115,3 +119,39 @@ def test_measurement_template_asks_for_the_five_fields() -> None:
     text = template.read_text(encoding="utf-8")
     for field in ("측정자", "환경", "막힌 지점", "총 시간"):
         assert field in text, f"양식에 '{field}' 가 없습니다"
+
+
+# 아래 둘은 2026-10-20 의 dry-run 이 찾은 마찰을 고정합니다
+# (docs/measurements/ttfsa-agent-dryrun-2026-10-20.md 의 F-2·F-4).
+# 고친 자리가 다음 편집에서 조용히 사라지는 것을 막습니다.
+
+_PREREQ_TABLE = re.compile(r"## 0\. 필요한 것(.*?)\n## ", re.S)
+# 본문이 "실행하라" 고 주는 명령의 첫 낱말. 이 표에 없으면 측정자가 없는 도구를 만납니다.
+_TOOLS_THE_DOC_RUNS = ("docker", "git", "uv", "openssl", "curl")
+
+
+def test_the_prereq_table_lists_every_tool_the_doc_tells_you_to_run() -> None:
+    """F-4: 2절이 `openssl` 을 쓰는데 0절 표에는 Docker·git·uv 셋뿐이었습니다.
+    없는 도구를 만나는 자리가 측정의 첫 막힘이 됩니다."""
+    text = _text()
+    table = _PREREQ_TABLE.search(text)
+    assert table, "0절 '필요한 것' 표를 찾지 못했습니다"
+    listed = table.group(1)
+    missing = [
+        tool
+        for tool in _TOOLS_THE_DOC_RUNS
+        if re.search(rf"(?<![\w-]){tool}(?![\w-])", text) and tool not in listed
+    ]
+    assert not missing, f"문서가 쓰는 도구가 0절 표에 없습니다: {missing}"
+
+
+def test_quickstart_tells_you_how_to_see_that_the_stack_actually_came_up() -> None:
+    """F-2: 4절의 유일한 확인이 `curl /healthz` 였고, 그것은 **worker 가 죽어도 ok** 입니다
+    (`/healthz` 는 설계상 DB·worker 를 보지 않습니다 - P0-2). 실제로 깨진 것을 알려 주는
+    것은 compose 의 종료 코드와 서비스 상태이므로, 문서가 그 둘을 적어야 합니다."""
+    text = _text()
+    assert "docker compose" in text and "ps" in text, "서비스 상태를 보는 방법이 없습니다"
+    assert re.search(r"docker compose[^\n]*\bps\b", text), (
+        "`docker compose ... ps` 가 없습니다 - healthz 는 worker 의 죽음을 보지 않습니다"
+    )
+    assert "logs" in text, "worker 로그를 보라는 안내가 없습니다"
