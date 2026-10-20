@@ -1,0 +1,47 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-20-001
+date: 2026-10-20
+status: candidate
+symptom: 새로 쓴 문서 드리프트 테스트가 **로컬에서만 초록**이었다. 깨끗한 체크아웃에 없는 파일(gitignore 대상)을 "실재한다" 고 본 것이고, 그 사실을 CI 가 잡았다
+evidence: |
+  2026-10-20, MVP-5 (PR #177). `tests/scripts/test_quickstart.py` 의
+  `test_every_repo_path_it_mentions_exists` 는 `docs/quickstart.md` 가 가리키는 저장소
+  상대 경로가 전부 실재하는지 본다. 로컬 전량(`verify.sh --full`, 21/21, 824,487 ms)에서
+  통과했고 변이 셋도 전부 검출했다. CI 의 같은 단계는 실패했다:
+
+      FAILED tests/scripts/test_quickstart.py::test_every_repo_path_it_mentions_exists
+      AssertionError: quickstart 가 없는 경로를 가리킵니다: ['infra/docker/.env']
+      1 failed, 180 passed in 11.23s
+
+  Quickstart 2절이 `cp infra/docker/.env.example infra/docker/.env` 를 지시하므로 그
+  경로를 **문서가 가리키는 것이 맞다.** 그 파일은 비밀값이라 `.gitignore` 가 막고, 그래서
+  깨끗한 체크아웃에는 **없는 것이 정상**이다. 로컬에는 Phase 0 부터 남아 있었다.
+
+  같은 종류의 비대칭이 이 저장소에 이미 기록돼 있다 — `harness.config` 의 `web-typecheck`
+  주석이 `check-sdk-drift.sh` 를 **작업 트리**와 비교하게 바꾼 이유로 "CI 는 깨끗한
+  체크아웃이라 작업 트리 = 커밋" 을 적고 있다(improvement-log/2026-09-17-005). 그쪽은
+  로컬이 더 엄격해지는 방향이었고, 이번은 **로컬이 더 느슨해지는** 방향이다.
+root_cause: |
+  테스트가 "저장소에 있는가" 를 `Path.exists()` 로 물었다. 그 질문은 **작업 트리의 상태**를
+  묻는 것이고, 작업 트리에는 추적되지 않는 파일이 섞여 있다. 물어야 했던 것은 "커밋에
+  있는가, 또는 측정자가 만드는 것인가" 였다. 로컬 전량 통과가 완료 근거라는 규칙 아래에서,
+  이 부류의 테스트는 **로컬에서 통과하면서 CI 에서만 실패**하므로 한 왕복을 반드시 쓴다.
+fix: |
+  "있다" 대신 **"있거나, git 이 가린다"** 를 본다 — `git check-ignore -q` 로 판단하고,
+  그 분기가 열려 있는 **이유**를 별 테스트로 고정했다
+  (`test_the_env_file_it_tells_you_to_create_is_gitignored`: `.env` 가 어느 날 추적
+  대상이 되면 = 비밀값이 커밋될 수 있는 상태가 되면 그 자리에서 드러난다).
+  예외 목록에 경로 하나를 적는 쪽은 택하지 않았다 — 다음 gitignore 파일에서 같은 실패가
+  반복된다. 확인: `infra/docker/.env` 를 치운 상태(= CI 조건)에서 8건 통과, 그리고
+  `and not _git_ignores(candidate)` 를 지우는 변이에서 그 테스트가 실패했다.
+recurrence_risk: medium
+harness_element: HE-3
+proposed_harness_change: "(제안, 사람 결정) 저장소의 파일 존재를 단언하는 테스트는 `Path.exists()` 대신 **추적 여부**를 묻는 공용 보조(`tests/scripts` 의 작은 함수, 또는 `harness/` 의 lint 패턴)를 쓰게 한다. 더 센 쪽은 `verify` 의 앞 단계에서 `git status --porcelain --ignored` 로 **추적되지 않는 파일이 판정에 영향을 주는지**를 보는 것이지만, 그 신호는 잡음이 많아 권하지 않는다. 가장 싼 쪽은 이 교훈을 `tests/scripts/README` 류 한 줄로 남기는 것이다 — 다만 자연어 지시는 AGENTS.md Learning 절의 우선순위에서 마지막이다. 어느 쪽이든 `harness/**` 라 사람이 커밋한다"
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  저장소 파일의 실재를 단언하는 테스트를 다음에 쓸 때. 그리고 `infra/docker/.env` 가
+  추적 대상이 되는 일이 생기면 `test_the_env_file_it_tells_you_to_create_is_gitignored`
+  가 그 자리에서 실패한다(이번 수정이 남긴 회귀 장치).
+owner: showjihyun
+expires: none
