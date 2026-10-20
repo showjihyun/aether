@@ -5,8 +5,8 @@
 | 번호 | 0006 |
 | 작성일 | 2026-10-17 |
 | 대상 Phase | [../docs/roadmap.md](../docs/roadmap.md) 의 **MVP 통합**(Month 4) — 원본 로드맵 10장 |
-| 상태 | **승인됨** |
-| 승인 | showjihyun, 2026-10-17 |
+| 상태 | **완료** (2026-10-20) |
+| 승인 | showjihyun, 2026-10-17. **완료 판정**: showjihyun, 2026-10-20 — R-12 를 참으로 판정([../docs/measurements/ttfsa-2026-10-20.md](../docs/measurements/ttfsa-2026-10-20.md), 단계별 숫자는 기록되지 않았습니다) |
 | 후속 spec | [../specs/0006-mvp-integration.md](../specs/0006-mvp-integration.md) (**승인됨 2026-10-17**, D-1 ~ D-11) |
 
 작업 단위는 [mvp-backlog.md](mvp-backlog.md) 의 MVP-1 ~ MVP-5 가 소유합니다. 이 문서는 그 다섯 단위가 **왜** 이번에 함께 가야 하는지, 끝났을 때 무엇이 관측되어야 하는지, 넘지 않을 선이 무엇인지를 고정합니다. 단위의 범위·완료 판정을 여기 복제하지 않습니다.
