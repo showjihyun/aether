@@ -11,6 +11,10 @@
 | Docker (Compose v2) | `docker compose version` |
 | git | `git --version` |
 | [uv](https://docs.astral.sh/uv/) | `uv --version` — `aether` CLI 를 돌립니다 |
+| `openssl` | `openssl version` — 2절에서 비밀값을 만듭니다(다른 난수 생성기를 쓰셔도 됩니다) |
+| `curl` | `curl --version` — 4절에서 api 를 확인합니다 |
+
+**이 문서의 명령은 bash 기준입니다**(macOS·Linux, Windows 에서는 Git Bash). PowerShell 은 환경변수를 명령 앞에 붙이는 문법(`VAR=값 명령`)과 `export` 가 없어 **4절과 5절이 그대로는 실패합니다** — 그 두 절에 PowerShell 대체 명령을 함께 적어 두었습니다.
 
 인터넷이 **한 번** 필요합니다(이미지와 모델). 그 뒤로는 끊어도 됩니다 — 그것이 이 제품의 요구입니다.
 
@@ -28,7 +32,7 @@ uv sync --all-packages
 cp infra/docker/.env.example infra/docker/.env
 ```
 
-`infra/docker/.env` 를 열어 **네 줄**을 고칩니다.
+`infra/docker/.env` 를 열어 **키 여섯 개**를 고칩니다(아래 표는 네 행이고, 첫 행에 비밀값 셋이 묶여 있습니다).
 
 | 키 | 값 |
 | --- | --- |
@@ -45,9 +49,11 @@ cp infra/docker/.env.example infra/docker/.env
 scripts/fetch-model.sh --test-model
 ```
 
-약 379 MB 를 `aether-dev` 프로젝트의 모델 볼륨에 넣습니다. 멱등입니다 — 이미 있으면 받지 않고 그렇다고 출력합니다.
+약 400 MB(`qwen2.5:0.5b`)를 `aether-dev` 프로젝트의 모델 볼륨에 넣습니다. 멱등입니다 — 이미 있으면 받지 않고 그렇다고 출력합니다. 마지막 줄의 `project=…` 가 **어느 프로젝트의 볼륨에 넣었는지**를 말합니다.
 
 > **`-p aether-dev` 를 모든 compose 명령에 붙이십시오.** 볼륨 이름은 프로젝트 이름에 붙습니다. `-p` 를 빼면 compose 가 compose 파일의 디렉터리 이름(`docker`)을 쓰고, 그러면 **다른 볼륨**이라 받아 둔 모델이 스택에 보이지 않습니다. worker 는 그때 조용히 넘어가지 않고 "볼륨에 없다 + 받는 방법" 을 적고 멈춥니다. 이것이 이 저장소에서 가장 자주 밟는 돌입니다.
+>
+> **다른 프로젝트 이름을 쓰려면 이 스크립트에도 같은 이름을 넘기십시오** — `scripts/fetch-model.sh --test-model --project <이름>`(또는 `AETHER_FETCH_PROJECT=<이름>`). `COMPOSE_PROJECT_NAME` 은 이 스크립트가 보지 않습니다. 넘기지 않으면 모델이 `aether-dev` 볼륨으로 가고, 당신의 스택은 비어 있는 볼륨을 보게 됩니다.
 
 ## 4. 스택 띄우기
 
@@ -57,11 +63,26 @@ AETHER_VERSION=$(git describe --tags --always) docker compose -p aether-dev \
   up --build -d --wait
 ```
 
-첫 실행은 이미지를 빌드합니다(api·worker·web). 끝나면 확인합니다.
+PowerShell 이면 같은 명령이 이렇게 됩니다.
+
+```powershell
+$env:AETHER_VERSION = (git describe --tags --always)
+docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml up --build -d --wait
+```
+
+첫 실행은 이미지를 빌드합니다(api·worker·web). **빌드 캐시가 없는 머신에서는 이 단계가 이 문서에서 가장 긴 구간입니다.**
+
+끝나면 **세 가지**를 봅니다. 셋을 다 보는 이유는 아래에 있습니다.
 
 ```bash
-curl localhost:8000/healthz   # {"status":"ok","service":"api","version":"…"}
+echo $?                                                      # 1. 위 up 명령의 종료 코드. 0 이 아니면 뜨지 못한 서비스가 있습니다
+docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml ps   # 2. 서비스 상태
+curl localhost:8000/healthz                                  # 3. {"status":"ok","service":"api","version":"…"}
 ```
+
+> **`/healthz` 만 믿으면 안 됩니다.** 그 응답은 **api 프로세스가 살아 있다**는 뜻이고, 설계상 DB 도 worker 도 보지 않습니다. 그래서 **worker 가 죽은 스택에서도 `ok` 가 나옵니다** — 그 상태로 6절에 가면 Run 이 `queued` 에서 영원히 멈춥니다. 1번과 2번이 그것을 먼저 알려 줍니다.
+>
+> 2번 출력에서 `migrate` 가 `Exited (0)` 인 것은 **정상**입니다 — 마이그레이션을 한 번 돌리고 끝나는 일회성 서비스입니다. `worker` 가 `Exited` 면 비정상이고, 이유는 `docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml logs worker` 가 말해 줍니다(모델이 볼륨에 없으면 그 문장과 받는 방법을 적고 멈춥니다).
 
 ## 5. API 키 발급
 
@@ -70,10 +91,16 @@ docker compose -p aether-dev -f infra/docker/compose.yaml \
   exec -T api aether-api keys create --label quickstart
 ```
 
+출력은 **두 줄**이고 **첫 줄 전체가 키 원문**입니다(라벨이 붙지 않습니다). 둘째 줄은 `id=… label=quickstart` 로 그 키의 식별자입니다.
+
 원문은 **이때 한 번만** 출력되고 다시 조회할 방법이 없습니다. 그 자리에서 환경변수로 둡니다.
 
 ```bash
-export AETHER_API_KEY=<위에서 출력된 값>
+export AETHER_API_KEY=<첫 줄 전체>
+```
+
+```powershell
+$env:AETHER_API_KEY = "<첫 줄 전체>"
 ```
 
 ## 6. 첫 Agent 실행 — 여기서 시계를 멈춥니다
@@ -82,6 +109,8 @@ export AETHER_API_KEY=<위에서 출력된 값>
 uv run aether agent create --name first-agent
 uv run aether run <위에서 출력된 id> --input "한 문장으로 자기소개를 해줘"
 ```
+
+`agent create` 의 출력은 **UUID 한 줄**이고, 그 줄 전체가 `aether run` 에 넣을 id 입니다.
 
 `aether run` 은 이벤트를 **도착하는 대로** 한 줄씩 출력하다가 `run.finished` 에서 끝냅니다. 모델이 답한 글자는 `model.delta` 로 흐릅니다. 마지막 상태를 다시 보려면:
 
@@ -97,6 +126,7 @@ uv run aether runs get <run-id>
 | --- | --- |
 | worker 가 "모델이 볼륨에 없습니다 + `scripts/fetch-model.sh`" 로 멈춤 | 3번과 4번의 `-p` 가 다릅니다. 또는 `.env` 의 `AETHER_MODEL_ID` 가 받은 태그와 다릅니다 |
 | CLI 가 `exit 2` | `AETHER_API_KEY` 가 없습니다(키는 **환경변수로만** 받습니다 — 파일에 쓰지 않습니다) |
+| `aether run` 이 `run: <id>` 한 줄만 찍고 **아무 이벤트 없이 멈춰 있다** | 이벤트를 만들 **worker 가 없습니다.** 지금 CLI 에는 타임아웃이 없어 그대로 기다립니다 — `Ctrl+C` 로 끊고 4절의 1·2번(종료 코드·`ps`)과 `logs worker` 를 보십시오. 다른 창에서 `uv run aether runs get <run-id>` 가 `queued` 면 같은 원인입니다 |
 
 ## 7. 화면 보기 (선택)
 
