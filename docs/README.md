@@ -7,6 +7,7 @@
 | [quickstart.md](quickstart.md) | 처음 보는 사람이 clone 에서 첫 Agent 성공까지 무엇을 하는가(소형 모델 경로, D-21) | 저장소를 처음 띄울 때, 그리고 TTFSA 를 재기 전 |
 | [measurements/ttfsa-TEMPLATE.md](measurements/ttfsa-TEMPLATE.md) | 그 시간을 **무엇을 적어** 재는가(측정자·환경·단계별 시각·막힌 지점·총 시간) | TTFSA 를 재는 사람이 측정 직전에 |
 | [measurements/ttfsa-2026-10-20.md](measurements/ttfsa-2026-10-20.md) | R-12 를 **누가 언제 참으로 판정했는가**, 그리고 그 판정에 **무엇이 비어 있는가** | intent 0006 의 완료 근거를 확인할 때 |
+| [measurements/ttfsa-agent-dryrun-2026-10-20.md](measurements/ttfsa-agent-dryrun-2026-10-20.md) | Quickstart 를 문서만 보고 밟으면 **어디서 끊기는가**(에이전트 dry-run — 사람 측정이 아닙니다) | Quickstart 를 고치기 전, 또는 TTFSA 를 재기 전 |
 | [architecture.md](architecture.md) | 계층이 무엇이고 의존 방향이 어디로 흐르는가 | 코드를 추가·이동하기 전 |
 | [domain.md](domain.md) | Agent, Run, Tool, Context 가 이 제품에서 정확히 무엇을 뜻하는가 | 이름을 붙이거나 스키마를 정하기 전 |
 | [data-model.md](data-model.md) | PostgreSQL 스키마·역할·테이블·열·제약·트리거의 열 단위 정본이 무엇인가 | 마이그레이션을 고치거나 저장소 접근 코드를 쓰기 전 |
