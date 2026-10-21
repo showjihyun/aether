@@ -51,6 +51,9 @@ from aether_api.adapters.inbound.stream.status_consumer import StatusConsumer, e
 from aether_api.adapters.inbound.stream.workflow_agent_run_consumer import (
     WorkflowAgentRunConsumer,
 )
+from aether_api.adapters.inbound.stream.workflow_node_status_consumer import (
+    WorkflowNodeStatusConsumer,
+)
 from aether_api.adapters.inbound.stream.workflow_run_status_consumer import (
     WorkflowRunStatusConsumer,
 )
@@ -63,6 +66,9 @@ from aether_api.adapters.outbound.db.run_declaration_store import PostgresRunDec
 from aether_api.adapters.outbound.db.tool_permissions import PostgresToolPermissionStore
 from aether_api.adapters.outbound.db.workflow_approval_store import (
     PostgresWorkflowApprovalStore,
+)
+from aether_api.adapters.outbound.db.workflow_node_state_projection_store import (
+    PostgresWorkflowNodeStateProjectionStore,
 )
 from aether_api.adapters.outbound.db.workflow_repository import PostgresWorkflowRepository
 from aether_api.adapters.outbound.db.workflow_run_declaration_store import (
@@ -80,6 +86,9 @@ from aether_api.application.ports.inbound.authenticate import Authenticate
 from aether_api.application.ports.outbound.request_tracing import RequestTracing
 from aether_api.application.usecases.apply_ingestion_status import ApplyIngestionStatusUseCase
 from aether_api.application.usecases.apply_run_status import ApplyRunStatusUseCase
+from aether_api.application.usecases.apply_workflow_node_status import (
+    ApplyWorkflowNodeStatusUseCase,
+)
 from aether_api.application.usecases.apply_workflow_run_status import (
     ApplyWorkflowRunStatusUseCase,
 )
@@ -271,6 +280,36 @@ def _build_production_workflow_status_consumer(settings: Settings) -> Callable[[
     return run
 
 
+_WORKFLOW_NODE_STATUS_STREAM = "aether:workflow_node_states:status"
+_WORKFLOW_NODE_STATUS_GROUP = "aether-api"
+
+
+def _build_production_workflow_node_status_consumer(
+    settings: Settings,
+) -> Callable[[Event], None]:
+    """spec 0007 2.3 (P5-1): `_build_production_workflow_status_consumer` 와 같은 모양 --
+    `aether:workflow_node_states:status` 투영 소비자. `control.workflow_node_states` 에
+    쓴다(api 만 control role 로 씁니다)."""
+
+    def run(stop: Event) -> None:
+        client = _connect_redis_with_backoff(settings.redis_url, stop)
+        if client is None or stop.is_set():
+            return
+        apply_status = ApplyWorkflowNodeStatusUseCase(
+            PostgresWorkflowNodeStateProjectionStore(lambda: psycopg.connect(settings.psycopg_dsn))
+        )
+        ensure_group(client, _WORKFLOW_NODE_STATUS_STREAM, _WORKFLOW_NODE_STATUS_GROUP)
+        consumer = WorkflowNodeStatusConsumer(
+            client,
+            apply_status,
+            stream=_WORKFLOW_NODE_STATUS_STREAM,
+            group=_WORKFLOW_NODE_STATUS_GROUP,
+        )
+        consumer.run_until(stop)
+
+    return run
+
+
 _WORKFLOW_AGENT_RUN_STREAM = "aether:workflow:agent_runs:requested"
 _WORKFLOW_AGENT_RUN_GROUP = "aether-api"
 
@@ -316,6 +355,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
     knowledge_runner: Callable[[Event], None] = app.state.knowledge_status_consumer_runner
     workflow_runner: Callable[[Event], None] = app.state.workflow_status_consumer_runner
     agent_run_runner: Callable[[Event], None] = app.state.workflow_agent_run_consumer_runner
+    node_runner: Callable[[Event], None] = app.state.workflow_node_status_consumer_runner
     thread = Thread(target=runner, args=(stop,), name="aether-api-status-consumer", daemon=True)
     knowledge_thread = Thread(
         target=knowledge_runner,
@@ -335,7 +375,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         name="aether-api-workflow-agent-run-consumer",
         daemon=True,
     )
+    node_thread = Thread(
+        target=node_runner,
+        args=(stop,),
+        name="aether-api-workflow-node-status-consumer",
+        daemon=True,
+    )
     thread.start()
+    node_thread.start()
     knowledge_thread.start()
     workflow_thread.start()
     agent_run_thread.start()
@@ -347,6 +394,7 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
         knowledge_thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
         workflow_thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
         agent_run_thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
+        node_thread.join(_STATUS_CONSUMER_STOP_JOIN_TIMEOUT)
 
 
 def create_app(
@@ -357,6 +405,7 @@ def create_app(
     knowledge_status_consumer: Callable[[Event], None] | None = None,
     workflow_status_consumer: Callable[[Event], None] | None = None,
     workflow_agent_run_consumer: Callable[[Event], None] | None = None,
+    workflow_node_status_consumer: Callable[[Event], None] | None = None,
     request_tracing: RequestTracing | None = None,
 ) -> FastAPI:
     """설정을 읽어 telemetry 를 초기화하고 라우터를 등록한 `FastAPI` 앱을 조립합니다.
@@ -407,6 +456,11 @@ def create_app(
         workflow_agent_run_consumer
         if workflow_agent_run_consumer is not None
         else _build_production_workflow_agent_run_consumer(settings)
+    )
+    app.state.workflow_node_status_consumer_runner = (
+        workflow_node_status_consumer
+        if workflow_node_status_consumer is not None
+        else _build_production_workflow_node_status_consumer(settings)
     )
     app.include_router(build_router(settings.version))
 

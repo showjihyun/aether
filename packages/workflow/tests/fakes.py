@@ -17,6 +17,9 @@ from aether_workflow.application.ports.outbound.agent_run_launcher import AgentR
 from aether_workflow.application.ports.outbound.agent_run_reader import AgentVersionRef
 from aether_workflow.application.ports.outbound.model_invoker import ModelAnswer
 from aether_workflow.application.ports.outbound.tool_invoker import ToolOutcome
+from aether_workflow.application.ports.outbound.workflow_node_status_notifier import (
+    WorkflowNodeStatusMessage,
+)
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
     WorkflowRunDeclaration,
 )
@@ -318,6 +321,14 @@ class FakeWorkflowStatusNotifier:
         self.messages: list[WorkflowStatusMessage] = []
 
     def notify(self, message: WorkflowStatusMessage) -> None:
+        self.messages.append(message)
+
+
+class FakeWorkflowNodeStatusNotifier:
+    def __init__(self) -> None:
+        self.messages: list[WorkflowNodeStatusMessage] = []
+
+    def notify(self, message: WorkflowNodeStatusMessage) -> None:
         self.messages.append(message)
 
 

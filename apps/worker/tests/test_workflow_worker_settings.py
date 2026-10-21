@@ -76,3 +76,15 @@ def test_node_output_limit_below_the_envelope_is_refused(monkeypatch: pytest.Mon
 
     with pytest.raises(ValueError, match="workflow_node_output_max_bytes"):
         Settings()
+
+
+def test_node_status_stream_is_its_own_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    """spec 0007 P5-1: 노드 실행 투영 통지는 **새 스트림**이다 - 소비자 둘인 기존
+    `aether:workflow_runs:status` 를 넓히지 않는다. 환경으로 바꿀 수 있다."""
+    settings = Settings()
+
+    assert settings.workflow_node_status_stream == "aether:workflow_node_states:status"
+    assert settings.workflow_node_status_stream != settings.workflow_status_stream
+
+    monkeypatch.setenv("AETHER_WORKFLOW_NODE_STATUS_STREAM", "x:nodes")
+    assert Settings().workflow_node_status_stream == "x:nodes"

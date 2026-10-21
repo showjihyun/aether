@@ -116,6 +116,12 @@ class Settings(BaseSettings):
     """spec 0005 2.9 개정 2: worker -> api, Workflow Run 상태 투영 통지. api 의 소비자가
     `control.workflow_runs` 에 적용합니다(api 만 control role 로 씁니다)."""
 
+    workflow_node_status_stream: str = "aether:workflow_node_states:status"
+    """spec 0007 2.3 (P5-1): worker -> api, 노드 실행 투영 통지. `workflow_status_stream` 과
+    **다른 스트림**입니다 - 그 스트림은 소비자가 둘(api 투영, 파킹 깨우기)이라 필드를 늘리지
+    않습니다. api 의 소비자가 `control.workflow_node_states` 에 적용합니다(api 만 control role
+    로 씁니다)."""
+
     workflow_wake_group: str = "aether-workflow"
     """spec 0005 2.5 개정 3 (P4-2a B2): 파킹된 Workflow Run 을 깨우는 **빠른 경로**가
     `worker_status_stream`
