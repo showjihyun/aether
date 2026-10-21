@@ -606,7 +606,7 @@ Intent: [0006](0006-mvp-integration.md) (승인됨 2026-10-17 · **완료 2026-1
 
 ## Phase 5 — Visual Agent Builder
 
-Intent: [0007](0007-phase-5-visual-agent-builder.md) (승인됨 2026-10-21 · **활성**). Spec: [../specs/0007-phase-5-visual-agent-builder.md](../specs/0007-phase-5-visual-agent-builder.md) (승인됨 2026-10-21 — D-1 ~ D-11 이 공통 결정입니다). Plan: [../plans/0007-phase-5-visual-agent-builder.md](../plans/0007-phase-5-visual-agent-builder.md) (**초안** 2026-10-21 — 9 단위, 사람 손 셋. **승인 행이 채워지기 전에는 첫 단위를 시작하지 않습니다**). 기간: Month 5.
+Intent: [0007](0007-phase-5-visual-agent-builder.md) (승인됨 2026-10-21 · **활성**). Spec: [../specs/0007-phase-5-visual-agent-builder.md](../specs/0007-phase-5-visual-agent-builder.md) (승인됨 2026-10-21 — D-1 ~ D-11 이 공통 결정입니다). Plan: [../plans/0007-phase-5-visual-agent-builder.md](../plans/0007-phase-5-visual-agent-builder.md) (**승인됨 2026-10-21** — 9 단위, 사람 손 셋). 기간: Month 5.
 
 **행의 순서가 실행 순서입니다**(plan 0007 1절이 소유합니다). 투영 → 조회 → 화면 순서이고(P5-1 ~ P5-3), 쓰기 경로는 **P5-4 가 첫 자리**로 모양을 세운 뒤 P5-6·P5-7 이 그것을 베낍니다. a11y 는 **러너(P5-8) → 단계 등록(H-2) → 강제 수준(H-3)** 으로 갈라집니다 — `harness.config` 가 "없는 코드를 검사하는 단계를 미리 적지 않습니다" 를 요구하고, 위반 건수를 보기 전에 강제 수준을 정하지 않기 때문입니다.
 
@@ -615,7 +615,7 @@ Intent: [0007](0007-phase-5-visual-agent-builder.md) (승인됨 2026-10-21 · **
 | 번호 | 단위 | 의존 | 게이트 | 상태 |
 | --- | --- | --- | --- | --- |
 | H-1 | DESIGN.md 1절 — 캔버스 의존 + `shadcn` 핀 불일치 | — | **사람 결정** (P5-5 를 막습니다) | 대기 |
-| P5-1 | 노드 실행 투영 — 마이그레이션 · worker 통지 · api 소비자 | P4-2a | — | 대기 |
+| P5-1 | 노드 실행 투영 — 마이그레이션 · worker 통지 · api 소비자 | P4-2a | — | **진행** (착수 2026-10-21) |
 | P5-2 | `GET /workflow-runs/{id}/nodes` + SDK 함수 | P5-1 | — | 대기 |
 | P5-3 | Workflow Run 상세의 노드 목록 화면 | P5-2 | — | 대기 |
 | P5-4 | Agent 생성·수정 화면 — **첫 쓰기 경로**(서버 액션) | MVP-2p | — | 대기 |
