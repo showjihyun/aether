@@ -586,6 +586,26 @@ describe("createClient() list functions (spec 0006 2.3, D-9)", () => {
     ]);
   });
 
+  it("listWorkflowRunNodes GETs /workflow-runs/{id}/nodes with limit and cursor (P5-2)", async () => {
+    const fetchMock = fakeFetch({ ok: true, json: empty });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await client.listWorkflowRunNodes("run-1");
+    await client.listWorkflowRunNodes("run-1", { limit: 2, cursor: "c" });
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      "http://localhost:8000/workflow-runs/run-1/nodes",
+      "http://localhost:8000/workflow-runs/run-1/nodes?limit=2&cursor=c",
+    ]);
+  });
+
+  it("listWorkflowRunNodes throws with the status code on 404 (unknown run)", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.listWorkflowRunNodes("missing")).rejects.toThrow(/404/);
+  });
+
   it("sends the Bearer key and returns the parsed page", async () => {
     const page = { items: [{ id: "x", name: "n", created_at: "t" }], next_cursor: "c2" };
     const fetchMock = fakeFetch({ ok: true, json: page });

@@ -1443,6 +1443,80 @@
           }
         }
       }
+    },
+    "/workflow-runs/{workflow_run_id}/nodes": {
+      "get": {
+        "summary": "List Workflow Run Nodes Route",
+        "operationId": "list_workflow_run_nodes_route_workflow_runs__workflow_run_id__nodes_get",
+        "parameters": [
+          {
+            "name": "workflow_run_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Workflow Run Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListWorkflowRunNodesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "unauthorized"
+          },
+          "404": {
+            "description": "workflow_run_not_found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2360,6 +2434,34 @@
         "title": "ListRunsResponse",
         "description": "`GET /runs` 의 성공 응답."
       },
+      "ListWorkflowRunNodesResponse": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkflowNodeState"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ListWorkflowRunNodesResponse",
+        "description": "`GET /workflow-runs/{id}/nodes` 의 성공 응답."
+      },
       "ListWorkflowRunsResponse": {
         "properties": {
           "items": {
@@ -2461,6 +2563,18 @@
         "type": "object",
         "title": "ModelRef",
         "description": "`model.id` 가 `null` 이면 배포 설정 `AETHER_MODEL_ID` 를 씁니다."
+      },
+      "NodeExecutionStatus": {
+        "type": "string",
+        "enum": [
+          "running",
+          "waiting_run",
+          "waiting_approval",
+          "waiting_timer",
+          "succeeded",
+          "failed"
+        ],
+        "title": "NodeExecutionStatus"
       },
       "NodeKind": {
         "type": "string",
@@ -3109,6 +3223,67 @@
           "node_id"
         ],
         "title": "ViolationModel"
+      },
+      "WorkflowNodeState": {
+        "properties": {
+          "node_id": {
+            "type": "string",
+            "title": "Node Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/NodeExecutionStatus"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "node_id",
+          "kind",
+          "status",
+          "started_at",
+          "finished_at",
+          "failure_reason"
+        ],
+        "title": "WorkflowNodeState",
+        "description": "`GET /workflow-runs/{id}/nodes` 의 `items[]` 원소 - 노드 하나의 가장 최근 상태."
       },
       "WorkflowResponse": {
         "properties": {

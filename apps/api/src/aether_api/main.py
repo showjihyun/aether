@@ -39,6 +39,7 @@ from aether_api.adapters.inbound.http.runs import build_runs_router
 from aether_api.adapters.inbound.http.workflow_approvals import (
     build_workflow_approvals_router,
 )
+from aether_api.adapters.inbound.http.workflow_run_nodes import build_workflow_run_nodes_router
 from aether_api.adapters.inbound.http.workflow_runs import build_workflow_runs_router
 from aether_api.adapters.inbound.http.workflows import build_workflows_router
 from aether_api.adapters.inbound.stream.ingestion_status_consumer import (
@@ -116,6 +117,7 @@ from aether_api.application.usecases.list_runs import ListRunsUseCase
 from aether_api.application.usecases.list_workflow_approvals import (
     ListWorkflowApprovalsUseCase,
 )
+from aether_api.application.usecases.list_workflow_run_nodes import ListWorkflowRunNodesUseCase
 from aether_api.application.usecases.list_workflow_runs import ListWorkflowRunsUseCase
 from aether_api.application.usecases.list_workflows import ListWorkflowsUseCase
 from aether_api.application.usecases.read_run_events import ReadRunEventsUseCase
@@ -572,6 +574,20 @@ def create_app(
             ListWorkflowRunsUseCase(workflow_run_declaration_store),
             ListKnowledgeSetsUseCase(knowledge_declaration_store),
             ListIngestionsUseCase(knowledge_declaration_store),
+        )
+    )
+
+    # P5-2(spec 0007 2.3): 노드 실행 조회. 투영(`control.workflow_node_states`)만 읽는다 -
+    # `data` 평면은 모른다(D-3, D-4).
+    app.include_router(
+        build_workflow_run_nodes_router(
+            require_principal(authenticate),
+            ListWorkflowRunNodesUseCase(
+                workflow_run_declaration_store,
+                PostgresWorkflowNodeStateProjectionStore(
+                    lambda: psycopg.connect(settings.psycopg_dsn)
+                ),
+            ),
         )
     )
     return app

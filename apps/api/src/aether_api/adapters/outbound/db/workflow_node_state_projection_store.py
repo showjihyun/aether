@@ -15,11 +15,30 @@
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Callable
+from uuid import UUID
 
 import psycopg
+from aether_workflow.domain.node_execution import NodeExecutionStatus
 
+from aether_api.domain.cursor import InvalidCursor
+from aether_api.domain.workflow_node_state import WorkflowNodeStatePage, WorkflowNodeStateView
 from aether_api.domain.workflow_node_status_message import WorkflowNodeStatusMessage
+
+
+def _encode_cursor(node_id: str) -> str:
+    return base64.urlsafe_b64encode(node_id.encode("utf-8")).decode("ascii")
+
+
+def _decode_cursor(cursor: str) -> str:
+    try:
+        node_id = base64.urlsafe_b64decode(cursor.encode("ascii")).decode("utf-8")
+    except ValueError:  # base64·utf-8 해독 실패는 모두 ValueError 계열
+        raise InvalidCursor(cursor) from None
+    if not node_id:
+        raise InvalidCursor(cursor)
+    return node_id
 
 
 class PostgresWorkflowNodeStateProjectionStore:
@@ -61,3 +80,38 @@ class PostgresWorkflowNodeStateProjectionStore:
             )
             applied = cur.fetchone()
         return applied is not None
+
+    def list_for_run(
+        self, workflow_run_id: UUID, limit: int, cursor: str | None
+    ) -> WorkflowNodeStatePage:
+        """`node_id` 오름차순 키셋 페이지(P5-2) - 노드당 한 행이라 안정적인 키입니다."""
+        params: dict[str, object] = {"workflow_run_id": workflow_run_id, "limit": limit + 1}
+        after = ""
+        if cursor is not None:
+            after = "AND node_id > %(after)s"
+            params["after"] = _decode_cursor(cursor)
+        with self._connect() as conn, conn.cursor() as cur:
+            cur.execute(
+                f"""
+                SELECT node_id, kind, status, started_at, finished_at, failure_reason
+                FROM control.workflow_node_states
+                WHERE workflow_run_id = %(workflow_run_id)s {after}
+                ORDER BY node_id
+                LIMIT %(limit)s
+                """,
+                params,
+            )
+            rows = cur.fetchall()
+        items = [
+            WorkflowNodeStateView(
+                node_id=r[0],
+                kind=r[1],
+                status=NodeExecutionStatus(r[2]),
+                started_at=r[3],
+                finished_at=r[4],
+                failure_reason=r[5],
+            )
+            for r in rows[:limit]
+        ]
+        next_cursor = _encode_cursor(items[-1].node_id) if len(rows) > limit else None
+        return WorkflowNodeStatePage(items=items, next_cursor=next_cursor)

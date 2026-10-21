@@ -19,6 +19,9 @@
  * MVP-0: 목록 5경로(`listRuns`·`listWorkflows`·`listWorkflowRuns`·`listKnowledgeSets`·
  * `listIngestions`)를 더합니다(spec 0006 2.3, D-9). 페이지 규칙은 `listAgents` 와 같습니다 —
  * `limit`·`cursor` 와 `{ items, next_cursor }`. 기존 함수는 바뀌지 않았습니다(D-11).
+ *
+ * P5-2: `listWorkflowRunNodes` 하나를 더합니다(spec 0007 2.3). 노드 출력은 응답에 없습니다(D-4).
+ * 기존 함수·타입은 바뀌지 않았습니다(additive).
  */
 
 import type { paths } from "./generated/openapi";
@@ -61,6 +64,8 @@ export type ListKnowledgeSetsResponse =
   paths["/knowledge-sets"]["get"]["responses"]["200"]["content"]["application/json"];
 export type ListIngestionsResponse =
   paths["/knowledge-sets/{knowledge_set_id}/ingestions"]["get"]["responses"]["200"]["content"]["application/json"];
+export type ListWorkflowRunNodesResponse =
+  paths["/workflow-runs/{workflow_run_id}/nodes"]["get"]["responses"]["200"]["content"]["application/json"];
 
 /** 상태 필터의 값 — 생성된 쿼리 파라미터 타입에서 유도합니다. */
 export type RunStatus = NonNullable<NonNullable<paths["/runs"]["get"]["parameters"]["query"]>["status"]>;
@@ -154,6 +159,10 @@ export interface AetherClient {
     knowledgeSetId: string,
     params?: ListIngestionsParams,
   ): Promise<ListIngestionsResponse>;
+  listWorkflowRunNodes(
+    workflowRunId: string,
+    params?: PageParams,
+  ): Promise<ListWorkflowRunNodesResponse>;
 }
 
 function joinUrl(baseUrl: string, path: string): string {
@@ -373,6 +382,19 @@ export function createClient(options: CreateClientOptions): AetherClient {
         headers,
         "GET",
         buildListPath(`/knowledge-sets/${knowledgeSetId}/ingestions`, params),
+      );
+    },
+
+    async listWorkflowRunNodes(
+      workflowRunId: string,
+      params?: PageParams,
+    ): Promise<ListWorkflowRunNodesResponse> {
+      return requestJson<ListWorkflowRunNodesResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        buildListPath(`/workflow-runs/${workflowRunId}/nodes`, params),
       );
     },
 
