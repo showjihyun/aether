@@ -101,7 +101,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -125,6 +125,10 @@ from aether_workflow.application.ports.outbound.tool_invoker import (
     ToolInvoker,
 )
 from aether_workflow.application.ports.outbound.workflow_event_sink import WorkflowEventSink
+from aether_workflow.application.ports.outbound.workflow_node_status_notifier import (
+    WorkflowNodeStatusMessage,
+    WorkflowNodeStatusNotifier,
+)
 from aether_workflow.application.ports.outbound.workflow_run_declaration_reader import (
     WorkflowRunDeclaration,
     WorkflowRunDeclarationReader,
@@ -201,6 +205,8 @@ class _Cursor:
     seq: int
     node_id: str | None
     contained: frozenset[str] = frozenset()
+    kinds: dict[str, NodeKind] = field(default_factory=dict)
+    """노드 id -> 종류. 노드 상태 통지(`node_notifier`)가 `kind` 를 싣는 데만 씁니다."""
     wake_at: datetime | None = None
     """이 호출이 `waiting_timer` 에서 깨어났다면 그때 저장돼 있던 `wake_at`(`_to_running` 이 저장소
     의 값을 지우기 전의 것). `WAIT` 노드의 재개 판정이 읽는다."""
@@ -225,7 +231,9 @@ class AdvanceWorkflowRunUseCase:
         output_max_bytes: int = 8192,
         models: ModelInvoker | None = None,
         tools: ToolInvoker | None = None,
+        node_notifier: WorkflowNodeStatusNotifier | None = None,
     ) -> None:
+        self._node_notifier = node_notifier
         self._output_max_bytes = output_max_bytes
         self._models = models
         self._tools = tools
@@ -297,6 +305,7 @@ class AdvanceWorkflowRunUseCase:
             execution.status_seq,
             execution.current_node_id,
             branch_members(declaration.nodes, declaration.edges),
+            kinds={n.id: n.kind for n in declaration.nodes},
             wake_at=(
                 execution.wake_at if execution.status is WorkflowRunStatus.WAITING_TIMER else None
             ),
@@ -513,6 +522,60 @@ class AdvanceWorkflowRunUseCase:
             current_node_id=node_id,
         )
         self._publish(cursor, type_, payload, self._clock.now())
+        if type_ in ("node.started", "node.finished"):
+            self._announce_recorded_node(cursor, node_id, payload.get("iteration"))
+
+    def _announce_recorded_node(self, cursor: _Cursor, node_id: str, iteration: object) -> None:
+        """노드 실행 기록의 **지금 상태**를 투영 통지로 냅니다(spec 0007 2.3, P5-1). `status_seq` 는
+        방금 낸 `node.*` 이벤트의 `seq` 입니다. 포트가 꽂히지 않았으면 기록을 읽지도 않습니다.
+        출력(`output`)은 읽지도 싣지도 않습니다(D-4)."""
+        if self._node_notifier is None:
+            return
+        record = (
+            self._record(cursor.workflow_run_id, node_id, iteration)
+            if isinstance(iteration, int)
+            else self._latest_record(cursor.workflow_run_id, node_id)
+        )
+        if record is None:
+            return
+        self._announce_node(
+            cursor,
+            node_id,
+            record.status,
+            started_at=record.started_at,
+            finished_at=record.finished_at,
+            failure_reason=(
+                WorkflowFailureReason(record.failure_reason)
+                if record.failure_reason is not None
+                else None
+            ),
+        )
+
+    def _announce_node(
+        self,
+        cursor: _Cursor,
+        node_id: str,
+        status: NodeExecutionStatus,
+        *,
+        started_at: datetime | None = None,
+        finished_at: datetime | None = None,
+        failure_reason: WorkflowFailureReason | None = None,
+    ) -> None:
+        kind = cursor.kinds.get(node_id)
+        if self._node_notifier is None or kind is None:
+            return
+        self._node_notifier.notify(
+            WorkflowNodeStatusMessage(
+                workflow_run_id=cursor.workflow_run_id,
+                node_id=node_id,
+                kind=kind,
+                status=status,
+                status_seq=cursor.seq,
+                started_at=started_at,
+                finished_at=finished_at,
+                failure_reason=failure_reason,
+            )
+        )
 
     # -- CONDITION ------------------------------------------------------------
 
@@ -769,6 +832,7 @@ class AdvanceWorkflowRunUseCase:
                 wake_at=wake_at,
             )
         )
+        self._announce_node(cursor, node.id, NodeExecutionStatus.WAITING_TIMER)
         return WorkflowRunStatus.WAITING_TIMER
 
     # -- HUMAN / APPROVAL 노드와 승인 대기 -----------------------------------------
@@ -887,6 +951,7 @@ class AdvanceWorkflowRunUseCase:
                 waiting_node_execution_id=node_execution_id,
             )
         )
+        self._announce_node(cursor, node.id, NodeExecutionStatus.WAITING_APPROVAL)
         cursor.seq = requested_seq
         self._publish(
             cursor,
@@ -1164,6 +1229,7 @@ class AdvanceWorkflowRunUseCase:
                 waiting_run_id=agent_run_id,
             )
         )
+        self._announce_node(cursor, node.id, NodeExecutionStatus.WAITING_RUN)
         return WorkflowRunStatus.WAITING_RUN
 
     def _fail_node(

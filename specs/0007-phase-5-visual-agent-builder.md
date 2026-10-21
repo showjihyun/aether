@@ -54,10 +54,11 @@ intent 가 정한 문제와 범위는 반복하지 않습니다. 여기서 답�
 | Agent Run 상태 | `aether:runs:status` | `control.runs` |
 | Knowledge 적재 상태 | `aether:knowledge:ingestions:status` | `control.knowledge_ingestions` |
 | Workflow Run 상태 | `aether:workflow_runs:status` | `control.workflow_runs` |
-| **이번** | **노드 실행 통지**(새 스트림 또는 위 Workflow 스트림의 확장 — plan 이 고릅니다) | **`control.workflow_node_executions`**(새 투영 테이블) |
+| **이번** | **노드 상태 통지** `aether:workflow_node_states:status`(새 스트림 — 개정 1) | **`control.workflow_node_states`**(새 투영 테이블 — 개정 1) |
 
 - **쓰는 주체는 api 입니다.** worker 는 통지만 보냅니다(`aether_data` 역할은 `control` 에 쓸 수 없습니다 — 이 사실이 설계를 결정합니다). AR-13 의 평면 경계가 그대로입니다. **spec 0005 개정 2 가 같은 이유로 같은 선택을 했습니다** — 그 개정의 요점은 "GRANT 를 넓히지 않은 것" 이고, 이 spec 도 같습니다.
 - **투영은 사본이고 정본이 아닙니다.** `data.workflow_run_executions` 가 정본이고, 투영에는 **화면이 쓰는 열만** 둡니다 — 노드 id·종류·상태·시각·실패 이유. **노드 출력(`output`)은 투영에 넣지 않습니다**(2.4 와 C-3).
+- **이름은 `node_states` 입니다**(개정 1). 정본이 `data.workflow_node_executions` 이므로 투영에 같은 이름을 쓰면 **같은 이름이 두 평면에** 생깁니다 — 이 표에는 상태만 있고 실행 기록이 없으므로 이름을 그 사실에 맞췄습니다.
 - 조회는 `GET /workflow-runs/{id}/nodes` 이고 페이지 규칙은 `GET /agents` 를 베낍니다(spec 0006 D-3 과 같은 선).
 
 ### 2.4 노드 출력은 화면에 가지 않습니다 (D-4)
@@ -133,7 +134,7 @@ spec 0005 **D-8**(노드 출력을 `data` 에 둔다)의 되돌리기 조건은 
 | --- | --- | --- | --- |
 | D-1 | 캔버스는 **npm 의존(`@xyflow/react`) 버전 핀**. CDN 없음, 테마는 DESIGN.md 토큰으로 덮음. **DESIGN.md 수정이 그 단위보다 앞** | OQ1(사람), DP-4, DESIGN 1절 | 2.1, R-9·R-10 |
 | D-2 | 브라우저의 **쓰기는 Next 서버 액션**. 중계 허용 목록은 **`GET` 넷 그대로**(한 칸도 늘리지 않음) | **OQ2(사람 2026-10-21)**, D-15·D-18 선례 | 2.2, R-2 |
-| D-3 | 노드 실행은 **worker 통지 → api 가 `control.workflow_node_executions` 에 적용** 하는 투영. 조회는 `GET /workflow-runs/{id}/nodes`. **`data` 권한 추가 0건** | OQ3(사람), spec 0001 R-7, AR-13, 선례 셋 | 2.3, R-5·R-6 |
+| D-3 | 노드 실행은 **worker 통지 → api 가 `control.workflow_node_states` 에 적용** 하는 투영(이름은 개정 1). 조회는 `GET /workflow-runs/{id}/nodes`. **`data` 권한 추가 0건** | OQ3(사람), spec 0001 R-7, AR-13, 선례 셋 | 2.3, R-5·R-6 |
 | D-4 | **노드 출력은 투영에 넣지 않습니다** — spec 0005 D-8 을 다시 열지 않습니다 | spec 0005 C-3, intent.md H-2 | 2.4, R-5 |
 | D-5 | 설정 패널은 **Model·Tools·Context·Memory 넷**이고 **Policy 는 읽기 전용** | **OQ6(사람 2026-10-21)**, 기본 deny | 2.5, R-11 |
 | D-6 | **자연어 Agent 생성은 Phase 6 이후** | OQ4(사람) | 2.6, 6절 |
@@ -179,4 +180,5 @@ intent 에서 이미 뺀 것(반복하지 않고 링크): 협업 편집, Workflo
 
 | 개정 | 내용 |
 | --- | --- |
+| 개정 1 | **[편집]** 2026-10-21, P5-1 구현이 드러낸 둘. ① **투영 표 이름을 `control.workflow_node_executions` → `control.workflow_node_states`** 로, 스트림을 `aether:workflow_node_states:status` 로 고칩니다. 초안의 이름은 정본(`data.workflow_node_executions`)과 **같은 이름을 두 평면에** 만들고, 그것을 지키던 구조 테스트(`tests/arch/test_workflow_output_stays_in_data.py::test_the_api_never_touches_the_node_execution_output` — api 코드가 그 표 이름을 부르지 않는지 보는 판정)가 **먼저 발화했습니다**. 테스트를 좁히는 쪽을 택하지 않았습니다 — 그 판정이 지키는 것이 바로 "어느 평면의 표인지 코드에서 읽힌다" 이고, 이 표에는 상태만 있어 새 이름이 사실에 더 가깝습니다. ② **`status` 는 `control` 의 새 enum 이 아니라 `text` + CHECK** 입니다 — `aether_control` 에 `data` 스키마 USAGE 가 없어 `data.workflow_node_execution_status` 를 쓸 수 없고, `control` 에 새 enum 을 두면 "workflow enum 은 둘뿐" 이라는 기존 불변식이 깨집니다. 값 여섯을 손으로 맞춰 둡니다. **요구사항(R-5·R-6)의 뜻은 그대로입니다** |
 | 초안 | 2026-10-21. intent 0007 의 열린 질문 **일곱을 D-1 ~ D-11 로** 닫았습니다. 사람이 답한 둘은 🔒 입니다 — **OQ2**(쓰기는 서버 액션, 중계 불변)와 **OQ6**(Policy 는 읽기만). 설계하면서 드러난 셋: ① **투영을 쓰는 주체는 worker 가 아니라 api 입니다** — `aether_data` 역할은 `control` 에 쓸 수 없고, 선례 셋이 모두 "worker 통지 → api 적용" 이었습니다(2.3). ② **`Node` 에 좌표 열이 없어** 캔버스의 배치를 저장할 자리가 없고, 정의에 넣으면 노드를 옮기는 일이 새 버전을 만듭니다(D-9). ③ **`violations[]` 에 간선 식별자가 없어** intent 의 "엣지 위의 문장" 이 성립하지 않습니다(C-7). 같은 자리에서 **불일치 1건을 보고합니다** — DESIGN.md 는 `shadcn@3.8.5` 고정, `package.json` 은 `4.21.0`(C-6). 가장 확신이 낮은 결정은 **D-1**(새 시각 의존)이고 되돌리는 비용은 캔버스 화면 하나입니다 |

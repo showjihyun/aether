@@ -73,6 +73,9 @@ from aether_workflow.adapters.outbound.db.workflow_run_state_store import (
 )
 from aether_workflow.adapters.outbound.redis.agent_run_launcher import RedisAgentRunLauncher
 from aether_workflow.adapters.outbound.redis.workflow_event_sink import RedisWorkflowEventSink
+from aether_workflow.adapters.outbound.redis.workflow_node_status_notifier import (
+    RedisWorkflowNodeStatusNotifier,
+)
 from aether_workflow.adapters.outbound.redis.workflow_status_notifier import (
     RedisWorkflowStatusNotifier,
 )
@@ -525,6 +528,9 @@ def _build_production_workflow_handler(
         models=ModelGatewayInvoker(_build_model_gateway(settings)),
         tools=ToolGatewayInvoker(
             lambda: _build_tool_gateway(settings, connect, run_kind="workflow")
+        ),
+        node_notifier=RedisWorkflowNodeStatusNotifier(
+            client, stream=settings.workflow_node_status_stream
         ),
     )
     return HandleWorkflowRequestedUseCase(advance, OtelTraceContext())
