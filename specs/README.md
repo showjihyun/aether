@@ -58,6 +58,11 @@ intent 와 spec 은 짝으로 커밋합니다. 요구사항과 그때의 결정�
 | --- | --- | --- | --- |
 | [0001](0001-phase-0-foundation.md) | Phase 0 — Architecture & Foundation | [intents/0001](../intents/0001-phase-0-foundation.md) | 승인됨 |
 | [0002](0002-phase-1-agent-runtime.md) | Phase 1 — Agent Runtime | [intents/0002](../intents/0002-phase-1-agent-runtime.md) | 승인됨 (2026-09-12) |
+| [0003](0003-phase-2-mcp-gateway.md) | Phase 2 — Enterprise MCP Gateway | [intents/0003](../intents/0003-phase-2-mcp-gateway.md) | 승인됨 (2026-09-25 · 개정 1~5) |
+| [0004](0004-phase-3-context-compiler.md) | Phase 3 — Context Compiler / RAG | [intents/0004](../intents/0004-phase-3-context-compiler.md) | 승인됨 (2026-10-05) |
+| [0005](0005-phase-4-workflow-engine.md) | Phase 4 — Workflow Engine | [intents/0005](../intents/0005-phase-4-workflow-engine.md) | 승인됨 (2026-10-12) |
+| [0006](0006-mvp-integration.md) | MVP 통합 (Month 4) | [intents/0006](../intents/0006-mvp-integration.md) | 승인됨 (2026-10-17 · 개정 1~8) |
+| [0007](0007-phase-5-visual-agent-builder.md) | Phase 5 — Visual Agent Builder | [intents/0007](../intents/0007-phase-5-visual-agent-builder.md) | **초안** (2026-10-21, 승인 대기) |
 
 ## 관련 문서
 
