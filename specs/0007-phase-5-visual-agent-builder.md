@@ -5,10 +5,10 @@
 | 번호 | 0007 |
 | 작성일 | 2026-10-21 |
 | 선행 intent | [../intents/0007-phase-5-visual-agent-builder.md](../intents/0007-phase-5-visual-agent-builder.md) (승인됨 2026-10-21) |
-| 상태 | **초안** (승인 대기) |
-| 승인 | (비어 있습니다 — 이 행이 채워지기 전에는 plan 으로 넘어가지 않습니다) |
-| 대상 단위 | 아직 없습니다. 단위를 쪼개는 것은 plan 의 일이고 [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 가 그것을 받습니다 |
-| 후속 plan | (승인 뒤 `plans/0007-phase-5-visual-agent-builder.md`) |
+| 상태 | **승인됨** (2026-10-21) |
+| 승인 | showjihyun, 2026-10-21 — **D-1 ~ D-11 전부 채택** |
+| 대상 단위 | [../intents/mvp-backlog.md](../intents/mvp-backlog.md) 의 **P5-1 ~ P5-9** (plan 0007 이 쪼갰습니다) |
+| 후속 plan | [../plans/0007-phase-5-visual-agent-builder.md](../plans/0007-phase-5-visual-agent-builder.md) (초안 2026-10-21, 승인 대기) |
 
 intent 가 정한 문제와 범위는 반복하지 않습니다. 여기서 답하는 것은 **무엇을 만족해야 하고 경계가 어디인가** 입니다. 이 문서의 모든 "지금" 은 **2026-10-21, 커밋 `ebce026`** 에서 확인한 것입니다.
 
