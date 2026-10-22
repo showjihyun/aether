@@ -334,6 +334,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/workflow-runs/{workflow_run_id}/nodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Workflow Run Nodes Route */
+        get: operations["list_workflow_run_nodes_route_workflow_runs__workflow_run_id__nodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -792,6 +809,16 @@ export interface components {
             next_cursor?: string | null;
         };
         /**
+         * ListWorkflowRunNodesResponse
+         * @description `GET /workflow-runs/{id}/nodes` 의 성공 응답.
+         */
+        ListWorkflowRunNodesResponse: {
+            /** Items */
+            items: components["schemas"]["WorkflowNodeState"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /**
          * ListWorkflowRunsResponse
          * @description `GET /workflow-runs` 의 성공 응답.
          */
@@ -839,6 +866,11 @@ export interface components {
             /** Id */
             id?: string | null;
         };
+        /**
+         * NodeExecutionStatus
+         * @enum {string}
+         */
+        NodeExecutionStatus: "running" | "waiting_run" | "waiting_approval" | "waiting_timer" | "succeeded" | "failed";
         /**
          * NodeKind
          * @enum {string}
@@ -1067,6 +1099,23 @@ export interface components {
             reason: string;
             /** Node Id */
             node_id: string | null;
+        };
+        /**
+         * WorkflowNodeState
+         * @description `GET /workflow-runs/{id}/nodes` 의 `items[]` 원소 - 노드 하나의 가장 최근 상태.
+         */
+        WorkflowNodeState: {
+            /** Node Id */
+            node_id: string;
+            /** Kind */
+            kind: string;
+            status: components["schemas"]["NodeExecutionStatus"];
+            /** Started At */
+            started_at: string | null;
+            /** Finished At */
+            finished_at: string | null;
+            /** Failure Reason */
+            failure_reason: string | null;
         };
         /**
          * WorkflowResponse
@@ -2432,6 +2481,54 @@ export interface operations {
             };
             /** @description unauthorized */
             401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_workflow_run_nodes_route_workflow_runs__workflow_run_id__nodes_get: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                workflow_run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListWorkflowRunNodesResponse"];
+                };
+            };
+            /** @description unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description workflow_run_not_found */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

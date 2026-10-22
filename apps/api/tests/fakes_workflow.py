@@ -18,6 +18,7 @@ from aether_api.domain.workflow import (
     WorkflowView,
 )
 from aether_api.domain.workflow_approval import AlreadyApproved, WorkflowApprovalView
+from aether_api.domain.workflow_node_state import WorkflowNodeStatePage, WorkflowNodeStateView
 from aether_api.domain.workflow_run import WorkflowRunPage, WorkflowRunView
 from aether_workflow.domain.node import Edge, Node
 from aether_workflow.domain.run_status import WorkflowRunStatus
@@ -260,3 +261,28 @@ class FakeWorkflowRunNotifier:
         self.calls.append((workflow_run_id, workflow_version_id, traceparent))
         if self._should_fail:
             raise RuntimeError("FakeWorkflowRunNotifier: injected requested failure")
+
+
+class FakeWorkflowNodeStateStore:
+    """`WorkflowNodeStateProjectionStore.list_for_run` 계약의 인메모리 구현(spec 0007 2.3, P5-2).
+
+    정렬은 `node_id` 오름차순(PostgreSQL 구현과 같음), 커서는 정수 오프셋(불투명 계약만 지킴).
+    """
+
+    def __init__(self) -> None:
+        self._rows: dict[UUID, dict[str, WorkflowNodeStateView]] = {}
+
+    def put(self, workflow_run_id: UUID, view: WorkflowNodeStateView) -> None:
+        self._rows.setdefault(workflow_run_id, {}).setdefault(view.node_id, view)
+        self._rows[workflow_run_id][view.node_id] = view
+
+    def list_for_run(
+        self, workflow_run_id: UUID, limit: int, cursor: str | None
+    ) -> WorkflowNodeStatePage:
+        ordered = sorted(self._rows.get(workflow_run_id, {}).values(), key=lambda v: v.node_id)
+        start = offset_of(cursor)
+        page = ordered[start : start + limit]
+        end = start + len(page)
+        return WorkflowNodeStatePage(
+            items=page, next_cursor=str(end) if end < len(ordered) else None
+        )

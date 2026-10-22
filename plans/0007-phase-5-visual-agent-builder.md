@@ -60,7 +60,7 @@ spec 이 정한 요구사항(R-1 ~ R-12)·결정(D-1 ~ D-11)은 반복하지 않
 | 만드는 것(마이그레이션) | `apps/api/migrations/versions/0012_workflow_node_state_projection.py` — **`control.workflow_node_states`**(spec 개정 1 — 정본 `data.workflow_node_executions` 와 **이름이 겹치지 않게** 합니다). 열은 화면이 쓰는 것만: `workflow_run_id`·`node_id`·`kind`·`status`·`status_seq`·`started_at`·`finished_at`·`failure_reason`. 키는 **`(workflow_run_id, node_id)`**. GRANT 는 `aether_control` 에만 — **`aether_data` 에 `control` 쓰기 권한을 주지 않습니다**(spec D-3) |
 | 만드는 것(worker 쪽) | 노드 실행이 상태를 바꿀 때의 **통지**. 기존 `aether:workflow_runs:status` 를 넓히는 쪽과 새 스트림을 두는 쪽 중, **새 스트림** `aether:workflow_node_states:status` — 기존 메시지의 소비자가 둘(api 투영 group `aether-api`, 파킹 깨우기 group `aether-workflow`)이라 필드를 늘리면 둘 다 영향을 받습니다 |
 | 만드는 것(api 쪽) | `apps/api/.../adapters/inbound/stream/` 에 소비자 하나. `status_seq` **단조성으로 늦은 메시지를 버립니다**(기존 소비자 셋과 같은 규칙) |
-| 판정 | `api-unit`: 소비자가 (a) 새 노드를 넣고 (b) 같은 키의 낮은 `seq` 를 **버리고** (c) 모르는 필드를 무시합니다. `api-integration`: worker 통지 → 투영 테이블까지 한 번. 마이그레이션 테스트: **`aether_data` 가 `control.workflow_node_executions` 에 쓰려 하면 거부**되고, api 역할에 `data` 권한이 **여전히 0건** |
+| 판정 | `api-unit`: 소비자가 (a) 새 노드를 넣고 (b) 같은 키의 낮은 `seq` 를 **버리고** (c) 모르는 필드를 무시합니다. `api-integration`: worker 통지 → 투영 테이블까지 한 번. 마이그레이션 테스트: **`aether_data` 가 `control.workflow_node_states` 에 쓰려 하면 거부**되고, api 역할에 `data` 권한이 **여전히 0건** |
 | 주의 | **노드 출력(`output`)을 열에 넣지 않습니다**(D-4). 넣으면 spec 0005 D-8 의 되돌리기 문이 열리고 `tests/arch/test_workflow_output_stays_in_data.py` 가 발화합니다 |
 
 ### P5-2 노드 실행 조회 API 와 SDK (A)

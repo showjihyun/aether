@@ -116,7 +116,7 @@
 - 쿼리: `limit`(기본 **50**, 1~200, 범위 밖은 **422**), `cursor`(이전 응답의 `next_cursor`, **불투명**한 값)
 - 응답: `{ "items": [...], "next_cursor": string | null }` — 마지막 쪽은 `null`, **빈 목록도 200** + `items: []`
 - **정렬은 경로별로 고정**이고 바꿀 수 없습니다(`order` 파라미터 없음)
-- 깨진 `cursor`(빈 문자열·base64 아님·형식 틀림)는 **여섯 경로 전부**(`GET /agents` 포함) **422 `{"detail": "invalid_cursor"}`** 입니다
+- 깨진 `cursor`(빈 문자열·base64 아님·형식 틀림)는 **일곱 경로 전부**(`GET /agents` 포함) **422 `{"detail": "invalid_cursor"}`** 입니다
 
 | 경로 | 정렬 | 필터 |
 | --- | --- | --- |
@@ -125,6 +125,7 @@
 | `GET /knowledge-sets/{id}/ingestions` | **최신 것부터**. 없는 세트는 `404 knowledge_set_not_found` | `status` |
 | `GET /workflows` | 오래된 것부터(`GET /agents` 와 같음) | 없음 |
 | `GET /knowledge-sets` | 오래된 것부터 | 없음 |
+| `GET /workflow-runs/{id}/nodes` | `node_id` 오름차순. 없는 Run 은 `404 workflow_run_not_found` | 없음 |
 
 **Run·Workflow Run·적재가 최신 것부터인 이유**: 목록 화면의 첫 쪽에 **방금 돌린 것**이 있어야 합니다. 오래된 것부터면 사용자가 마지막 쪽까지 가야 합니다. `/workflows`·`/knowledge-sets` 는 정의 목록이라 생성 순이 자연스럽고 `GET /agents` 와 같습니다.
 
@@ -132,7 +133,7 @@
 
 **`GET /workflow-runs` 는 `control.workflow_runs`(투영)만 봅니다** — 노드 실행은 `data` 평면이고 api 역할은 그 평면에 권한이 없습니다(spec 0006 D-4). 그래서 **이 경로가 api 역할로 통과하는 것 자체가** 평면을 지켰다는 증거입니다.
 
-SDK: `listRuns`·`listWorkflows`·`listWorkflowRuns`·`listKnowledgeSets`·`listIngestions`(`packages/sdk`).
+SDK: `listRuns`·`listWorkflows`·`listWorkflowRuns`·`listKnowledgeSets`·`listIngestions`·`listWorkflowRunNodes`(`packages/sdk`).
 
 ## 6. Plane 사이의 스트림 계약
 
@@ -147,6 +148,7 @@ Redis Streams(spec 0001 D-10). 방향은 선언은 Control, 실행은 Data 이�
 | `aether:knowledge:ingestions:status` | Data → Control | `ingestion_id`, `status`, `at`, `chunk_count?`, `failure_reason?` | api consumer group — `control.knowledge_ingestions` 에 투영 | Redis 자동 |
 | `aether:workflow_runs:requested` | Control → Data | `workflow_run_id`, `workflow_version_id`, `traceparent` | worker consumer group `aether-worker`, `count=1`. Run 과 같은 패턴(자기 PEL → `XAUTOCLAIM` → `XREADGROUP >`). lease 를 다른 worker 가 쥐고 있으면 ack 하지 않음 | Redis 자동 |
 | `aether:workflow_runs:status` | Data → Control | `workflow_run_id`, `seq`, `status`, `at`, `current_node_id?`, `waiting_run_id?`, `started_at?`, `finished_at?`, `failure_reason?` (값 없는 선택 필드는 키 없음) | api consumer group `aether-api` — `seq` 단조 증가로 멱등 투영 | Redis 자동 |
+| `aether:workflow_node_states:status` | Data → Control | `workflow_run_id`, `node_id`, `kind`, `status`, `status_seq`, `started_at?`, `finished_at?`, `failure_reason?` (값 없는 선택 필드는 키 없음) | api consumer group `aether-api` — `control.workflow_node_states` 에 투영. `status_seq` 비교는 **`(run, node)` 단위**이고 독약 메시지는 WARNING 과 함께 ack | Redis 자동 |
 | `aether:workflow:agent_runs:requested` | Data → Control | `agent_run_id`, `agent_version_id`, `input`, `requested_by`, `traceparent` | api consumer group `aether-api` — 받은 id 로 `control.runs` 에 `INSERT … ON CONFLICT DO NOTHING` 하고 `aether:runs:requested` 에 통지 | Redis 자동 |
 | `aether:workflow_runs:{id}:events` | Data → 독자 | `data` = Workflow 자기 어휘의 봉투 JSON(9절) | **읽는 경로가 아직 없습니다** — SSE 는 Phase 5 | **explicit `<seq>-0`**, `MAXLEN ~`, 종결 뒤 TTL. Run 이벤트와 같은 계약 |
 
@@ -275,7 +277,7 @@ Agent 를 거치지 않고 **한 번** 부르는 노드 셋입니다. 파킹하�
 
 `AGENT` 노드의 출력은 `{"text": <자식 Run 의 마지막 assistant 본문>, "status": <자식의 종결 상태>}` 입니다. 상한은 **직렬화된 UTF-8 바이트** 기준 `AETHER_WORKFLOW_NODE_OUTPUT_MAX_BYTES`(기본 8192, 최소 64)이고, 넘기면 **본문만** 잘라 `output_truncated` 를 함께 참으로 적습니다 — 조용히 자르지 않습니다. 자르는 단위는 코드 포인트라 한 글자를 반으로 가르지 않습니다. `status` 는 판정에 쓰이므로 줄이지 않습니다. `START`·`END`·`CONDITION` 은 출력이 **없습니다**(`NULL`).
 
-**출력은 `data.workflow_node_executions` 에만 있습니다.** 조회 API 도, span·감사·보고도 아닙니다(spec D-8·C-3). 읽는 곳은 지금 **`CONDITION` 하나**이고 그 사실을 구조 테스트(`tests/arch/test_workflow_output_stays_in_data.py`)가 AST 로 고정합니다 — 출력에서 파생된 값이 발행·통지·페이로드·로깅 호출의 인자로 들어가면 실패합니다. 조회 API 를 만들지 않은 이유는 **api 역할이 `data` 에 권한이 없기** 때문입니다(0001 R-7) — 투영이 필요하고 그것은 화면이 생기는 Phase 5 의 일입니다. 소비자가 하나뿐인 덕에 C-3 의 되돌리기가 쌉니다.
+**출력은 `data.workflow_node_executions` 에만 있습니다.** 조회 API 도, span·감사·보고도 아닙니다(spec D-8·C-3). 읽는 곳은 지금 **`CONDITION` 하나**이고 그 사실을 구조 테스트(`tests/arch/test_workflow_output_stays_in_data.py`)가 AST 로 고정합니다 — 출력에서 파생된 값이 발행·통지·페이로드·로깅 호출의 인자로 들어가면 실패합니다. **Phase 5 가 투영을 만든 뒤에도 그렇습니다**(P5-1·P5-2) — `control.workflow_node_states` 와 `GET /workflow-runs/{id}/nodes` 에는 상태·시각·실패 사유만 있고 `output` 이 **없습니다**(spec 0007 D-4). 투영이 필요했던 이유는 **api 역할이 `data` 에 권한이 없기** 때문이고(0001 R-7), 그 권한은 지금도 0건입니다. 소비자가 하나뿐인 덕에 C-3 의 되돌리기가 쌉니다.
 
 실패 사유 둘이 더 생겼습니다 — `condition_path_missing`(`exists` 가 아닌 연산자가 없는 경로를 가리킴)과 `condition_type_mismatch`(`gt`·`lt` 에 숫자가 아닌 값 등). **없는 경로는 조용한 거짓이 아닙니다** — `exists` 만 거짓이고 나머지는 실행이 실패합니다. 조용히 한쪽으로 가는 Workflow 는 디버깅할 수 없습니다.
 
@@ -295,6 +297,20 @@ Agent 를 거치지 않고 **한 번** 부르는 노드 셋입니다. 파킹하�
 재큐가 두 번 와도 전진은 한 번입니다. 자식이 아직 종결이 아니면 실행기는 **아무 것도 바꾸지 않습니다** — 이벤트도, `seq` 도, 발사도 없습니다. 자식이 종결이면 노드를 마치고 다음으로 가며, 자식이 `succeeded` 가 아니면 Workflow Run 은 `failed` + `agent_run_failed` 입니다.
 
 실패 사유 셋이 더 생겼습니다 — `agent_run_failed`, `agent_version_not_found`(노드가 가리킨 Agent Version 이 없음), `workflow_run_without_requester`(0007 이전에 만들어진 Run — 요청자를 모르면 자식을 띄우지 않습니다).
+
+### 9.1 노드 상태 조회 (P5-1·P5-2)
+
+| 경로 | 응답 | 오류 |
+| --- | --- | --- |
+| `GET /workflow-runs/{id}/nodes` | `200 { items: [{ node_id, kind, status, started_at, finished_at, failure_reason }], next_cursor }` | `401`, `404 workflow_run_not_found`, `422 invalid_cursor` |
+
+페이지 규칙은 5.1 과 같습니다(`GET /agents` 를 그대로 베낍니다 — 새 규약 없음). **노드가 없는 Run 은 200 + 빈 목록**이고, 없는 Run 은 404 입니다 — 빈 목록으로 뭉개지 않습니다.
+
+읽는 곳은 **투영 하나**(`control.workflow_node_states`)입니다. 정본은 `data.workflow_node_executions` 이고 api 역할은 그 평면에 권한이 없습니다(0001 R-7) — 그래서 **이 경로가 api 역할로 통과하는 것 자체가** 평면을 지켰다는 증거입니다(`GET /workflow-runs` 와 같은 선). 투영을 채우는 쪽은 worker 의 통지이고 적용하는 쪽은 api 입니다(6절의 `aether:workflow_node_states:status`).
+
+노드당 **가장 최근 상태 한 행**입니다 — `LOOP` 의 회차별 이력은 투영에 쌓지 않습니다(PK 가 `(workflow_run_id, node_id)`). `output` 은 응답에 없고(위 절), `status_seq` 도 내보내지 않습니다(투영의 내부 기준).
+
+SDK 는 `listWorkflowRunNodes(workflowRunId, params?)` 하나입니다.
 
 ### 9.1 Workflow 이벤트 어휘
 

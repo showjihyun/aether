@@ -16,6 +16,7 @@ export type {
   ListKnowledgeSetsResponse,
   ListRunsParams,
   ListRunsResponse,
+  ListWorkflowRunNodesResponse,
   ListWorkflowRunsParams,
   ListWorkflowRunsResponse,
   ListWorkflowsResponse,

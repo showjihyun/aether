@@ -287,6 +287,24 @@ Workflow Run 의 **실행 상태와 lease** 입니다(마이그레이션 0006, s
 
 `output`(jsonb)과 `output_truncated` 는 **P4-2b 가 씁니다**(2026-10-15 적용). 상한은 **직렬화된 UTF-8 바이트** 기준이고 애플리케이션이 지킵니다 — 잘렸다는 사실을 `output_truncated` 로 남깁니다(spec 0005 D-8). 출력은 이 표에만 있고 **span·감사·보고에는 넣지 않습니다**. `status` 를 enum 이 아니라 text 로 둔 것은 노드 실행 상태의 집합이 spec 에 없기 때문입니다. 집합은 P4-2a 의 실행기가 정했습니다(`aether_workflow.domain.node_execution.NodeExecutionStatus`) — 컬럼을 enum 으로 좁히는 것은 파킹이 `waiting_run` 을 더하는 **같은 단위의 두 번째 PR** 로 미룹니다(마이그레이션 하나로 끝내기 위해서입니다).
 
+### `control.workflow_node_states`
+
+노드 실행의 **투영**입니다(마이그레이션 0012, spec 0007 2.3·D-3, P5-1). 정본은 위의 `data.workflow_node_executions` 이고, 이 표에는 **화면이 쓰는 열만** 있습니다. PK 는 `(workflow_run_id, node_id)` — 노드당 **가장 최근 상태 한 행**이고 회차(`iteration`)별 이력을 쌓지 않습니다.
+
+| 열 | 뜻 |
+| --- | --- |
+| `workflow_run_id`·`node_id` | PK. `workflow_run_id` 는 `control.workflow_runs.id` 를 참조합니다(같은 평면) |
+| `kind` | 노드 종류(`AGENT`·`TOOL`·`CONDITION` …). 화면이 아이콘·행 모양을 고르는 데 씁니다 |
+| `status` | **`text` + CHECK** 여섯 값(`running`·`waiting_run`·`waiting_approval`·`waiting_timer`·`succeeded`·`failed`). enum 이 **아닙니다** — `aether_control` 에는 `data` 스키마 USAGE 가 없어 정본의 `data.workflow_node_execution_status` 를 쓸 수 없고(0001 R-7), `control` 에 새 enum 을 두면 "workflow enum 은 둘" 이라는 기존 불변식이 깨집니다(spec 0007 개정 1) |
+| `status_seq` | 멱등 기준. 투영은 **한 문장**이고 `WHERE status_seq < excluded.status_seq` 가 늦은 메시지를 버립니다 — 키가 `(run, node)` 이므로 비교도 노드 단위입니다 |
+| `started_at`·`finished_at`·`failure_reason` | 시각과 사유. `started_at` 은 `COALESCE(new, old)`, 나머지는 메시지 값 그대로입니다(루프에서 노드가 다시 `running` 이 될 때 이전 회차의 종결 값이 남지 않게) |
+
+**노드 출력(`output`)은 이 표에 없습니다**(spec 0007 D-4). 출력은 `data` 에 머물고 소비자는 `CONDITION` 하나뿐이며, 그 사실을 `tests/arch/test_workflow_output_stays_in_data.py` 가 고정합니다(spec 0005 D-8·C-3).
+
+**쓰는 주체는 worker 가 아니라 api 입니다.** `aether_data` 는 `control` 에 쓸 수 없으므로(0001) worker 가 `aether:workflow_node_states:status` 스트림으로 통지하고 api 소비자가 적용합니다 — `data.run_executions` → `aether:runs:status` → `control.runs` 와 같은 선입니다([api.md](api.md) 6절). 0012 의 GRANT 는 `aether_control` **하나뿐**이고 `aether_data` 에는 아무 권한도 주지 않았습니다.
+
+읽는 경로는 `GET /workflow-runs/{id}/nodes` 입니다(P5-2) — 투영만 읽고 `data` 는 보지 않습니다.
+
 ### 마이그레이션 0008 — 승인 경로
 
 P4-4 가 요구한 넷입니다. **네 번째 줄이 사람 검토 항목(H-1)** 입니다.
@@ -333,6 +351,25 @@ P4-2a 의 파킹이 요구한 셋입니다.
 | GRANT·Policy | **변경 없음** |
 
 **왜.** Workflow 의 `TOOL`·`MCP` 노드가 부른 도구 호출은 `run_id` 가 **Workflow Run** 입니다. FK 가 `control.runs` 를 가리키는 한 그 행은 들어갈 수 없고, `CallToolUseCase` 는 감사 쓰기 실패를 **삼키므로**(spec 0003 D-10) 호출은 성공하고 **감사만 조용히 사라집니다**. 두 평면의 Run 을 한 열이 가리키는 것은 FK 로 표현할 수 없으므로 0007 과 같은 근거로 FK 를 풀고, 대신 `run_kind` 가 출처를 말합니다. **대가**: 감사 행의 참조 무결성을 DB 가 아니라 애플리케이션이 책임집니다. `downgrade()` 는 FK 를 되돌리려고 `run_kind='workflow'` 행을 **삭제합니다** — 되돌리기는 감사 기록을 잃습니다.
+
+### 마이그레이션 0011 — 승인 SELECT 를 열 단위로
+
+| 변경 | 내용 |
+| --- | --- |
+| `control.workflow_approvals` 의 worker SELECT | 표 단위(0008) → **열 셋**(`workflow_run_id`·`node_execution_id`·`approved_at`). `approved_by`·`note`·`id` 는 주지 않습니다 |
+| GRANT 의 방향 | **줄이기만 합니다** — 넓히는 문장이 없습니다 |
+
+실행기는 "이 노드 실행에 승인이 저장돼 있다" 만 판정에 씁니다(spec 0005 2.6 개정 5, C-4 — 승인자 권한 모델은 Phase 8). 그래서 승인 **주체**와 메모는 worker 가 침해돼도 새지 않고, 나중에 어댑터에 `approved_by` 를 더해도 DB 가 거부합니다. 열 단위 GRANT 만 가진 역할의 `SELECT *` 는 PostgreSQL 이 거부하므로 어댑터는 열을 적어 씁니다. 0008 docstring 이 "둘" 이라고 적은 것을 어댑터의 JOIN 을 세어 **셋**으로 고친 것도 이 마이그레이션입니다.
+
+### 마이그레이션 0012 — 노드 상태 투영
+
+| 변경 | 내용 |
+| --- | --- |
+| `control.workflow_node_states` | 신규(위 2절). PK `(workflow_run_id, node_id)`, `status` 는 `text` + CHECK 여섯 값 |
+| GRANT | `aether_control` 에만. **`aether_data` 에는 0건** — `data` 권한 추가도 0건입니다(0001 R-7 유지) |
+| 정본 | 건드리지 않았습니다 — `data.workflow_node_executions` 의 열·enum·GRANT 모두 그대로입니다 |
+
+**이름이 `node_states` 인 이유.** 초안은 `control.workflow_node_executions` 였고, 그러면 **같은 이름이 두 평면에** 생깁니다. 그것을 지키던 구조 테스트(api 코드가 정본의 표 이름을 부르지 않는지 보는 판정)가 먼저 발화했고, 테스트를 좁히는 쪽을 택하지 않았습니다 — 이 표에는 상태만 있고 실행 기록이 없으므로 새 이름이 사실에 더 가깝습니다(spec 0007 개정 1).
 
 ### PostgreSQL 이미지
 
