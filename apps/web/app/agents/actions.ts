@@ -45,6 +45,90 @@ function modelOrNull(modelId: string): string | null {
   return trimmed === "" ? null : trimmed;
 }
 
+// --- 설정 패널(P5-7) 의 칸 파서 ------------------------------------------------------------------
+// 목록 칸은 "한 줄에 하나" 인 문자열로 들어옵니다(액션의 인자는 원시 타입뿐입니다 - 7.2). 규칙은
+// `docs/api.md` 3절의 것만 따릅니다: 중복 없음. 이름의 **존재**는 api 도 생성 때 검증하지 않으므로
+// 여기서도 보지 않습니다(spec 0003 D-16). 줄 수·길이 상한은 api 규칙이 아니라 입력 크기 방어입니다.
+const MAX_ITEMS = 64;
+const MAX_ITEM_LENGTH = 200;
+const MAX_COUNT_DIGITS = /^[1-9][0-9]{0,8}$/;
+
+function lines(text: string): string[] {
+  return text
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line !== "");
+}
+
+function hasControlCharacter(text: string): boolean {
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x20 || code === 0x7f) return true;
+  }
+  return false;
+}
+
+/** 이름 목록(tools·knowledge)의 문제. 없으면 null. */
+function namesProblem(text: string, label: string): string | null {
+  const items = lines(text);
+  if (items.length > MAX_ITEMS) return `${label} 은(는) ${MAX_ITEMS}개까지입니다.`;
+  if (items.some((item) => item.length > MAX_ITEM_LENGTH || hasControlCharacter(item))) {
+    return `${label} 한 줄은 ${MAX_ITEM_LENGTH}자까지이고 제어 문자를 쓸 수 없습니다.`;
+  }
+  if (new Set(items).size !== items.length) return `${label} 에 같은 이름이 두 번 있습니다. 하나만 남기세요.`;
+  return null;
+}
+
+type McpBinding = { name: string; transport: "stdio" | "http"; ref: string };
+
+/** MCP 바인딩 한 줄은 `이름 transport ref` 입니다. 절대 URL·자격증명 꼴의 ref 는 거절합니다. */
+function parseMcpLine(line: string): McpBinding | string {
+  const parts = line.split(/\s+/);
+  if (parts.length !== 3) return `MCP 서버 한 줄은 "이름 transport ref" 세 칸입니다: ${line.slice(0, 40)}`;
+  const [name, transport, ref] = parts as [string, string, string];
+  if (transport !== "stdio" && transport !== "http") {
+    return `MCP 서버 transport 는 stdio 또는 http 입니다: ${name}`;
+  }
+  if (ref.includes("://") || ref.includes("@")) {
+    return `MCP 서버 ref 는 배포 설정이 푸는 키입니다 - 절대 URL 이나 자격증명을 넣지 마세요: ${name}`;
+  }
+  if ([name, ref].some((part) => part.length > MAX_ITEM_LENGTH || hasControlCharacter(part))) {
+    return `MCP 서버 칸은 ${MAX_ITEM_LENGTH}자까지이고 제어 문자를 쓸 수 없습니다.`;
+  }
+  return { name, transport, ref };
+}
+
+function mcpProblem(text: string): string | null {
+  const items = lines(text);
+  if (items.length > MAX_ITEMS) return `MCP 서버는 ${MAX_ITEMS}개까지입니다.`;
+  for (const item of items) {
+    const parsed = parseMcpLine(item);
+    if (typeof parsed === "string") return parsed;
+  }
+  return null;
+}
+
+function parseMcp(text: string): McpBinding[] {
+  const out: McpBinding[] = [];
+  for (const item of lines(text)) {
+    const parsed = parseMcpLine(item);
+    if (typeof parsed !== "string") out.push(parsed);
+  }
+  return out;
+}
+
+/** 빈 칸은 허용(null), 아니면 1 이상의 정수여야 합니다. */
+function countProblem(text: string, label: string): string | null {
+  const trimmed = text.trim();
+  if (trimmed === "" || MAX_COUNT_DIGITS.test(trimmed)) return null;
+  return `${label} 은(는) 1 이상의 정수이거나 비워 두세요(비우면 기본값을 씁니다).`;
+}
+
+function countOrNull(text: string): number | null {
+  const trimmed = text.trim();
+  return trimmed === "" ? null : Number(trimmed);
+}
+
 /** 오류를 폼 위 문장으로 바꿉니다. 409 의 뜻은 호출한 쪽이 압니다(생성: 이름, 수정: 버전). */
 function failFrom(error: unknown, conflict: string): SaveAgentResult {
   if (error instanceof AetherHttpError) {
@@ -113,15 +197,14 @@ export async function createAgentAction(
 /**
  * Agent 의 정의를 고칩니다(`PUT /agents/{id}`) - **새 Version** 이 만들어집니다(spec 0007 2.8).
  *
- * `PUT` 은 정의를 통째로 교체합니다. 폼은 두 칸(시스템 프롬프트·모델 id)만 알기 때문에
- * 현재 정의를 api 에서 **이 액션이** 읽어 그 두 칸만 바꿉니다 - 브라우저가 정의를 보내지 않으므로
+ * `PUT` 은 정의를 통째로 교체합니다. 이 폼은 시스템 프롬프트 한 칸만 알기 때문에
+ * 현재 정의를 api 에서 **이 액션이** 읽어 그 한 칸만 바꿉니다(`model.id` 는 설정 패널이 소유합니다 - D-5) - 브라우저가 정의를 보내지 않으므로
  * 폼에 없는 칸(tools·memory·knowledge·policy...)이 조용히 사라지지 않고, 브라우저가 정의 전체를
  * 쓸 수도 없습니다. 읽기와 쓰기 사이에 다른 저장이 끼면 api 가 `409` 를 돌려줍니다.
  */
 export async function updateAgentAction(
   agentId: string,
   systemPrompt: string,
-  modelId: string,
 ): Promise<SaveAgentResult> {
   if (typeof agentId !== "string" || !ID_SHAPE.test(agentId)) return fail(AGENT_NOT_FOUND);
   if (typeof systemPrompt !== "string" || systemPrompt.trim() === "") {
@@ -129,9 +212,6 @@ export async function updateAgentAction(
   }
   if (systemPrompt.length > MAX_PROMPT_LENGTH) {
     return fail("시스템 프롬프트는 20,000자까지입니다. 줄여서 다시 저장하세요.");
-  }
-  if (typeof modelId !== "string" || (modelId.trim() !== "" && !MODEL_SHAPE.test(modelId.trim()))) {
-    return fail("모델 id 는 영문·숫자와 . _ : / - 만 쓸 수 있습니다. 비워 두면 배포 설정의 모델을 씁니다.");
   }
 
   const apiKey = process.env.AETHER_API_KEY?.trim();
@@ -148,7 +228,81 @@ export async function updateAgentAction(
       definition: {
         ...current.definition,
         system_prompt: systemPrompt,
+      },
+    });
+    return { ok: true, agentId, version: updated.current_version };
+  } catch (error) {
+    return failFrom(
+      error,
+      "누군가 먼저 저장했습니다. 이 화면을 새로고침해 최신 정의를 본 뒤 다시 고치세요.",
+    );
+  }
+}
+
+/**
+ * 설정 패널 넷(Model·Tools·Context·Memory)의 값을 **한 번에** 저장합니다(`PUT /agents/{id}`
+ * = SDK `updateAgent` 하나, spec 0007 D-5) - **새 Version** 이 하나 만들어집니다(R-12).
+ *
+ * `updateAgentAction` 과 같은 방식입니다: 현재 정의를 이 액션이 읽어 **패널이 아는 칸만** 교체하고
+ * 나머지(system_prompt·`policy` 블록 - timeout·max_steps·재시도·backoff 포함)는 읽은 값 그대로
+ * 둡니다. 도구 허용 목록(Policy)은 정의가 아니라 CLI 가 소유합니다(R-11) - 여기서 다루지 않습니다.
+ * `memoryEnabled` 는 `"true"`/`"false"` 문자열입니다(원시 인자마다 내용 검사를 두는 규약 - 7.2).
+ */
+export async function updateAgentSettingsAction(
+  agentId: string,
+  modelId: string,
+  tools: string,
+  mcpServers: string,
+  contextBudget: string,
+  knowledge: string,
+  knowledgeTopK: string,
+  memoryEnabled: string,
+): Promise<SaveAgentResult> {
+  if (typeof agentId !== "string" || !ID_SHAPE.test(agentId)) return fail(AGENT_NOT_FOUND);
+  if (typeof modelId !== "string" || (modelId.trim() !== "" && !MODEL_SHAPE.test(modelId.trim()))) {
+    return fail("모델 id 는 영문·숫자와 . _ : / - 만 쓸 수 있습니다. 비워 두면 배포 설정의 모델을 씁니다.");
+  }
+  if (typeof tools !== "string" || namesProblem(tools, "도구") !== null) {
+    return fail(typeof tools === "string" ? (namesProblem(tools, "도구") ?? "") : "도구 목록 형식이 틀립니다.");
+  }
+  if (typeof mcpServers !== "string" || mcpProblem(mcpServers) !== null) {
+    return fail(typeof mcpServers === "string" ? (mcpProblem(mcpServers) ?? "") : "MCP 서버 형식이 틀립니다.");
+  }
+  if (typeof contextBudget !== "string" || countProblem(contextBudget, "컨텍스트 예산") !== null) {
+    return fail("컨텍스트 예산은 1 이상의 정수이거나 비워 두세요(비우면 배포 설정의 예산을 씁니다).");
+  }
+  if (typeof knowledge !== "string" || namesProblem(knowledge, "Knowledge") !== null) {
+    return fail(
+      typeof knowledge === "string" ? (namesProblem(knowledge, "Knowledge") ?? "") : "Knowledge 형식이 틀립니다.",
+    );
+  }
+  if (typeof knowledgeTopK !== "string" || countProblem(knowledgeTopK, "검색 상위 k") !== null) {
+    return fail("검색 상위 k 는 1 이상의 정수이거나 비워 두세요(비우면 기본값 5 를 씁니다).");
+  }
+  if (typeof memoryEnabled !== "string" || (memoryEnabled !== "true" && memoryEnabled !== "false")) {
+    return fail("Memory 는 켜기 또는 끄기여야 합니다.");
+  }
+
+  const apiKey = process.env.AETHER_API_KEY?.trim();
+  if (!apiKey) return noKey();
+
+  const client = createClient({
+    baseUrl: process.env.AETHER_API_URL ?? "http://localhost:8000",
+    apiKey: process.env.AETHER_API_KEY,
+  });
+
+  try {
+    const current = await client.getAgent(agentId);
+    const updated = await client.updateAgent(agentId, {
+      definition: {
+        ...current.definition,
         model: { ...current.definition.model, id: modelOrNull(modelId) },
+        tools: lines(tools),
+        mcp_servers: parseMcp(mcpServers),
+        context_budget_tokens: countOrNull(contextBudget),
+        knowledge: lines(knowledge),
+        knowledge_top_k: countOrNull(knowledgeTopK),
+        memory_enabled: memoryEnabled === "true",
       },
     });
     return { ok: true, agentId, version: updated.current_version };

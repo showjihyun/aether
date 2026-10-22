@@ -151,28 +151,39 @@ describe("createAgentAction (spec 0007 R-1, R-2, D-2)", () => {
 });
 
 describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
-  it("R-1: 현재 정의를 api 에서 읽어 두 칸만 바꾸고 나머지는 그대로 updateAgent 로 보낸다", async () => {
+  it("R-1: 현재 정의를 api 에서 읽어 시스템 프롬프트 한 칸만 바꾸고 나머지는 그대로 updateAgent 로 보낸다", async () => {
     getAgent.mockResolvedValue(CURRENT);
     updateAgent.mockResolvedValue({ ...CURRENT, current_version: 4 });
 
-    const result = await updateAgentAction(AGENT_ID, "new prompt", "new-model");
+    const result = await updateAgentAction(AGENT_ID, "new prompt");
 
     expect(getAgent).toHaveBeenCalledWith(AGENT_ID);
     expect(updateAgent).toHaveBeenCalledWith(AGENT_ID, {
       definition: {
         ...CURRENT.definition,
         system_prompt: "new prompt",
-        model: { id: "new-model" },
       },
     });
     expect(result).toEqual({ ok: true, agentId: AGENT_ID, version: 4 });
+  });
+
+  it("D-5: 프롬프트만 바꾸는 저장은 모델을 지우지 않는다 (model.id 는 설정 패널이 소유한다)", async () => {
+    getAgent.mockResolvedValue(CURRENT);
+    updateAgent.mockResolvedValue({ ...CURRENT, current_version: 4 });
+    await updateAgentAction(AGENT_ID, "p");
+    expect(updateAgent.mock.calls[0]![1].definition.model).toEqual({ id: "old-model" });
+
+    updateAgent.mockClear();
+    getAgent.mockResolvedValue({ ...CURRENT, definition: { ...CURRENT.definition, model: { id: null } } });
+    await updateAgentAction(AGENT_ID, "p");
+    expect(updateAgent.mock.calls[0]![1].definition.model).toEqual({ id: null });
   });
 
   it("2.8: 정의는 통째로 교체되므로 폼에 없는 칸(tools·memory·knowledge)이 사라지지 않는다", async () => {
     getAgent.mockResolvedValue(CURRENT);
     updateAgent.mockResolvedValue({ ...CURRENT, current_version: 4 });
 
-    await updateAgentAction(AGENT_ID, "p", "");
+    await updateAgentAction(AGENT_ID, "p");
 
     const sent = updateAgent.mock.calls[0]![1].definition;
     expect(sent.tools).toEqual(["search"]);
@@ -187,14 +198,14 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
     ["쿼리", "a?x=1"],
     ["빈 값", ""],
   ])("R-2: 모양이 틀린 agentId(%s)는 업스트림을 부르지 않는다", async (_n, id) => {
-    const result = await updateAgentAction(id, "p", "");
+    const result = await updateAgentAction(id, "p");
     expect(result.ok).toBe(false);
     expect(getAgent).not.toHaveBeenCalled();
     expect(updateAgent).not.toHaveBeenCalled();
   });
 
   it("R-2: 프롬프트가 비면 업스트림을 부르지 않는다", async () => {
-    const result = await updateAgentAction(AGENT_ID, "  ", "");
+    const result = await updateAgentAction(AGENT_ID, "  ");
     expect(result.ok).toBe(false);
     expect(createClient).not.toHaveBeenCalled();
   });
@@ -203,7 +214,7 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
     getAgent.mockResolvedValue(CURRENT);
     updateAgent.mockRejectedValue(httpError(409));
 
-    const result = await updateAgentAction(AGENT_ID, "p", "");
+    const result = await updateAgentAction(AGENT_ID, "p");
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -215,7 +226,7 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
 
   it.each([401, 403])("%i 는 web 의 키를 다시 발급하라는 말이다", async (status) => {
     getAgent.mockRejectedValue(httpError(status));
-    expect(await updateAgentAction(AGENT_ID, "p", "")).toEqual({
+    expect(await updateAgentAction(AGENT_ID, "p")).toEqual({
       ok: false,
       message: "api 가 web 의 키를 거부했습니다. 키를 다시 발급해 주입하세요.",
     });
@@ -223,10 +234,10 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
 
   it("404 는 Agent 가 없다는 말이다 (읽기에서도 쓰기에서도)", async () => {
     getAgent.mockRejectedValue(httpError(404));
-    const read = await updateAgentAction(AGENT_ID, "p", "");
+    const read = await updateAgentAction(AGENT_ID, "p");
     getAgent.mockResolvedValue(CURRENT);
     updateAgent.mockRejectedValue(httpError(404));
-    const write = await updateAgentAction(AGENT_ID, "p", "");
+    const write = await updateAgentAction(AGENT_ID, "p");
     for (const result of [read, write]) {
       expect(result.ok).toBe(false);
       if (!result.ok) expect(result.message).toContain("Agent 를 찾을 수 없습니다");
@@ -238,7 +249,7 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
       getAgent.mockResolvedValue(CURRENT);
       updateAgent.mockReset();
       updateAgent.mockRejectedValue(httpError(status));
-      const result = await updateAgentAction(AGENT_ID, "p", "");
+      const result = await updateAgentAction(AGENT_ID, "p");
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.message).not.toContain("닿지 못했");
@@ -250,7 +261,7 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
   it("네트워크 오류(상태 없음)는 '닿지 못했다' 이다", async () => {
     getAgent.mockResolvedValue(CURRENT);
     updateAgent.mockRejectedValue(new TypeError(`fetch failed ${INTERNAL} ${KEY}`));
-    const result = await updateAgentAction(AGENT_ID, "p", "");
+    const result = await updateAgentAction(AGENT_ID, "p");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.message).toContain("api 에 닿지 못했습니다");
   });
@@ -265,7 +276,7 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
     getAgent.mockResolvedValue(CURRENT);
     updateAgent.mockRejectedValue(error);
 
-    const result = await updateAgentAction(AGENT_ID, "p", "");
+    const result = await updateAgentAction(AGENT_ID, "p");
 
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain(KEY);
@@ -275,6 +286,6 @@ describe("updateAgentAction (spec 0007 R-1, R-12, 2.8, D-8)", () => {
 
   it("예외를 던지지 않는다 (Next 기본 오류 화면이 나오지 않는다)", async () => {
     getAgent.mockRejectedValue(new Error("boom"));
-    await expect(updateAgentAction(AGENT_ID, "p", "")).resolves.toMatchObject({ ok: false });
+    await expect(updateAgentAction(AGENT_ID, "p")).resolves.toMatchObject({ ok: false });
   });
 });

@@ -22,7 +22,6 @@ type Props =
       name: string;
       version: number;
       systemPrompt: string;
-      modelId: string;
     };
 
 /**
@@ -49,7 +48,7 @@ export function AgentForm(props: Props) {
 
   const [name, setName] = useState("");
   const [prompt, setPrompt] = useState(editing ? props.systemPrompt : "");
-  const [model, setModel] = useState(editing ? props.modelId : "");
+  const [model, setModel] = useState("");
   const [version, setVersion] = useState(editing ? props.version : null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,7 +64,7 @@ export function AgentForm(props: Props) {
     let result;
     try {
       result = editing
-        ? await updateAgentAction(props.agentId, prompt, model)
+        ? await updateAgentAction(props.agentId, prompt)
         : await createAgentAction(name, prompt, model);
     } catch {
       // 던진 오류의 문구는 보이지 않습니다(서버 내부 정보가 섞일 수 있습니다).
@@ -146,16 +145,22 @@ export function AgentForm(props: Props) {
           />
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Label htmlFor={ids.model}>모델 id</Label>
-          <Input
-            id={ids.model}
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            autoComplete="off"
-          />
-          <p className="text-xs text-muted-foreground">비워 두면 배포 설정의 모델을 씁니다.</p>
-        </div>
+        {!editing ? (
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={ids.model}>모델 id</Label>
+            <Input
+              id={ids.model}
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              autoComplete="off"
+            />
+            <p className="text-xs text-muted-foreground">비워 두면 배포 설정의 모델을 씁니다.</p>
+          </div>
+        ) : (
+          <p data-testid="model-note" className="text-xs text-muted-foreground">
+            모델은 설정 패널에서 바꿉니다.
+          </p>
+        )}
 
         <div className="flex flex-col gap-2">
           <p data-testid="save-note" className="text-xs text-muted-foreground">

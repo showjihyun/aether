@@ -50,18 +50,18 @@ describe("/agents/[id]/edit", () => {
     expect(createClient).toHaveBeenCalledWith({ baseUrl: "http://api.test:8000", apiKey: KEY });
     expect(getAgent).toHaveBeenCalledWith(AGENT.id);
     expect(screen.getByLabelText<HTMLTextAreaElement>("시스템 프롬프트").value).toBe("old prompt");
-    expect(screen.getByLabelText<HTMLInputElement>("모델 id").value).toBe("old-model");
+    // D-5: 모델은 설정 패널에서 바꿉니다 - 수정 폼에는 모델 칸이 없습니다.
+    expect(screen.queryByLabelText("모델 id")).toBeNull();
     expect(screen.getByText("v3")).toBeTruthy();
     expect(document.body.innerHTML).not.toContain(KEY);
   });
 
-  it("모델 id 가 null 이면 빈 칸으로 채운다", async () => {
-    getAgent.mockResolvedValue({
-      ...AGENT,
-      definition: { schema_version: 1, system_prompt: "p", model: { id: null } },
-    });
+  it("D-5: 설정 패널(Model·Tools·Context·Memory)로 가는 길이 있다", async () => {
+    getAgent.mockResolvedValue(AGENT);
     await renderPage();
-    expect(screen.getByLabelText<HTMLInputElement>("모델 id").value).toBe("");
+    expect(screen.getByRole("link", { name: /설정 패널/ }).getAttribute("href")).toBe(
+      `/agents/${AGENT.id}/settings`,
+    );
   });
 
   it("404 는 Agent 를 찾을 수 없다는 화면이고 폼이 없다", async () => {

@@ -1,7 +1,10 @@
 import { AetherHttpError, createClient } from "@aether/sdk";
+import Link from "next/link";
 
 import { DetailError } from "@/components/DetailError";
 import { MissingApiKey } from "@/components/ListStates";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 import { AgentForm } from "../../AgentForm";
 
@@ -46,13 +49,22 @@ export default async function EditAgentPage({ params }: { params: Promise<{ id: 
   // 클라이언트에는 폼에 필요한 값만 넘깁니다. 정의의 나머지(tools·policy...)는 저장 때 액션이
   // 다시 읽습니다 - 브라우저가 들고 있지 않습니다.
   return (
-    <AgentForm
-      mode="edit"
-      agentId={agent.id}
-      name={agent.name}
-      version={agent.current_version}
-      systemPrompt={agent.definition.system_prompt}
-      modelId={agent.definition.model?.id ?? ""}
-    />
+    <div className="flex flex-col gap-4">
+      <AgentForm
+        mode="edit"
+        agentId={agent.id}
+        name={agent.name}
+        version={agent.current_version}
+        systemPrompt={agent.definition.system_prompt}
+      />
+      <div>
+        <Link
+          href={`/agents/${agent.id}/settings`}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
+        >
+          설정 패널(Model · Tools · Context · Memory)
+        </Link>
+      </div>
+    </div>
   );
 }
