@@ -287,4 +287,14 @@ describe("/workflows", () => {
     expect(waitingCell(rows[1]!)).not.toContain("자식 Run");
   });
 
+  it("spec 0007 R-6: 실행 행에서 노드 상세로 가는 링크가 있다", async () => {
+    listWorkflows.mockResolvedValue(EMPTY);
+    listWorkflowRuns.mockResolvedValue({ items: [RUN], next_cursor: null });
+    await renderPage();
+
+    expect(
+      within(screen.getByRole("table")).getByRole("link", { name: "노드 보기" }).getAttribute("href"),
+    ).toBe(`/workflows/runs/${RUN.workflow_run_id}`);
+  });
+
 });

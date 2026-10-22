@@ -1,4 +1,5 @@
 import { createClient } from "@aether/sdk";
+import Link from "next/link";
 
 import { CopyableId } from "@/components/CopyableId";
 import { isBrokenCursor, ListEmpty, ListError, LoadMore, MissingApiKey } from "@/components/ListStates";
@@ -33,7 +34,6 @@ function Waiting({ label, children }: { label: string; children: React.ReactNode
 
 const messageOf = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
-// 노드 실행 목록은 없습니다 — 그 API 가 없습니다(spec 0006 D-4). 자리표시도 두지 않습니다(DESIGN 9절).
 export default async function WorkflowsPage({
   searchParams,
 }: {
@@ -141,7 +141,15 @@ export default async function WorkflowsPage({
                   return (
                     <TableRow key={run.workflow_run_id}>
                       <TableCell>
-                        <WorkflowRunStatusBadge status={run.status} />
+                        <span className="flex items-center gap-3">
+                          <WorkflowRunStatusBadge status={run.status} />
+                          <Link
+                            href={`/workflows/runs/${run.workflow_run_id}`}
+                            className="text-xs underline underline-offset-4"
+                          >
+                            노드 보기
+                          </Link>
+                        </span>
                       </TableCell>
                       <TableCell>{run.current_node_id ?? EMPTY_CELL}</TableCell>
                       <TableCell>
