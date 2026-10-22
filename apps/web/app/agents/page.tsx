@@ -4,10 +4,23 @@ import Link from "next/link";
 import { isBrokenCursor, ListEmpty, ListError, LoadMore, MissingApiKey } from "@/components/ListStates";
 import { RelativeTime } from "@/components/RelativeTime";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 // 정적 프리렌더가 빌드 시 api 를 부르면 web-build 가 api 없이 실패합니다(홈 화면과 같은 이유).
 export const dynamic = "force-dynamic";
+
+// 만들기 화면으로 가는 길(P5-4). 목록이 비어 있어도 있습니다 - 첫 Agent 를 만들 곳입니다.
+function NewAgentLink() {
+  return (
+    <div className="mb-4 flex justify-end">
+      <Link href="/agents/new" className={cn(buttonVariants({ size: "sm" }))}>
+        새 Agent
+      </Link>
+    </div>
+  );
+}
 
 // 이름 칸이 대화(`/agents/{id}/chat`, MVP-2e)로 가는 링크입니다 - 목적지가 생겨서 겁니다(DESIGN 9절).
 export default async function AgentsPage({
@@ -45,18 +58,23 @@ export default async function AgentsPage({
     return cursor ? (
       <ListEmpty message="이 쪽에는 더 이상 보여줄 것이 없습니다." restartHref="/agents" />
     ) : (
-      <ListEmpty message="아직 Agent 가 없습니다." />
+      <>
+        <NewAgentLink />
+        <ListEmpty message="아직 Agent 가 없습니다." />
+      </>
     );
   }
 
   return (
     <>
+      <NewAgentLink />
       <Table>
         <TableHeader>
           <TableRow>
             <TableHead>이름</TableHead>
             <TableHead>현재 Version</TableHead>
             <TableHead>수정</TableHead>
+            <TableHead>편집</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -72,6 +90,15 @@ export default async function AgentsPage({
               </TableCell>
               <TableCell>
                 <RelativeTime iso={agent.updated_at} />
+              </TableCell>
+              <TableCell>
+                <Link
+                  href={`/agents/${agent.id}/edit`}
+                  aria-label={`${agent.name} 편집`}
+                  className="underline-offset-4 hover:underline"
+                >
+                  편집
+                </Link>
               </TableCell>
             </TableRow>
           ))}

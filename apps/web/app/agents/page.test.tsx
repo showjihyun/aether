@@ -56,8 +56,31 @@ describe("/agents", () => {
 
     const link = screen.getByRole("link", { name: "billing-helper" });
     expect(link.getAttribute("href")).toBe(`/agents/${ROW.id}/chat`);
-    // 이름 칸만 링크다 - 다음 쪽 링크는 next_cursor 가 있을 때만 생긴다.
-    expect(screen.getAllByRole("link")).toHaveLength(1);
+    // 링크는 이름 칸, 편집, 새 Agent 셋이다 - 다음 쪽 링크는 next_cursor 가 있을 때만 생긴다.
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+  });
+
+  it("P5-4 R-1: 행마다 /agents/{id}/edit 으로 가는 편집 링크가 있다", async () => {
+    listAgents.mockResolvedValue({ items: [ROW], next_cursor: null });
+    await renderPage();
+
+    const link = screen.getByRole("link", { name: "billing-helper 편집" });
+    expect(link.getAttribute("href")).toBe(`/agents/${ROW.id}/edit`);
+  });
+
+  it("P5-4 R-1: 새 Agent 를 만드는 길(/agents/new)이 목록 위에 있다", async () => {
+    listAgents.mockResolvedValue({ items: [ROW], next_cursor: null });
+    await renderPage();
+
+    expect(screen.getByRole("link", { name: "새 Agent" }).getAttribute("href")).toBe("/agents/new");
+  });
+
+  it("P5-4 R-1: 목록이 비어 있어도 새 Agent 길이 있다 (첫 Agent 를 만들 곳)", async () => {
+    listAgents.mockResolvedValue({ items: [], next_cursor: null });
+    await renderPage();
+
+    expect(screen.getByRole("link", { name: "새 Agent" }).getAttribute("href")).toBe("/agents/new");
+    expect(screen.getByText("아직 Agent 가 없습니다.")).toBeTruthy();
   });
 
   it("DESIGN 7.1: next_cursor 가 있으면 다음 쪽", async () => {
