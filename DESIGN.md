@@ -15,6 +15,7 @@
 | 아이콘 | `lucide-react` 만 | shadcn 기본. 세트를 섞지 않습니다 |
 | 폰트 | Geist Sans / Geist Mono — **`geist` npm 패키지** | 로컬 번들이라 오프라인(DP-4)에서도 뜹니다. `next/font/google` 은 빌드 시 네트워크에서 폰트를 받아 오프라인 빌드를 깨뜨리므로 쓰지 않습니다(P0-3b) |
 | 테마 전환 | `next-themes`, `class` 전략 | 다크 모드는 선택이 아니라 기본 요구입니다(8절) |
+| 토스트 | **`sonner`** (shadcn 이 가져옴 — 4절의 `sonner` 컴포넌트가 이것을 감쌉니다) | shadcn 기본. 직접 띄우지 않고 `components/ui/sonner` 를 거칩니다(D-5 와 같은 이유). **P0-3b 때 들어왔는데 이 표에 적히지 않았습니다** — P5-5 의 R-10 테스트가 그 빠짐을 드러내 여기 적습니다 |
 | 캔버스 | **`@xyflow/react`** — 버전 `12.12.0` 고정. `dist/base.css` **만** import 하고 기본 테마 `dist/style.css` 는 쓰지 않습니다. 색·선폭은 `app/globals.css` 에서 `--xy-*` 를 2절 토큰으로 덮습니다. attribution 링크는 **그대로 둡니다**(끄지 않습니다) | Workflow 그래프를 그리는 유일한 자리(P5-5·P5-6). MIT, 설치 스크립트 없음, **런타임 네트워크 없음** — 오프라인(DP-4) 실측은 [docs/measurements/canvas-dependency-2026-10-23.md](docs/measurements/canvas-dependency-2026-10-23.md) 입니다. 색·선폭 28곳이 `var(--xy-X, var(--xy-X-default))` 꼴이라 토큰으로 전부 덮입니다. attribution 을 끄는 것은 한 줄이지만 상류가 유료 구독을 요청하므로, 돈을 쓰지 않고 라이선스 위험도 없는 쪽을 골랐습니다 — 에어갭에서 그 링크는 열리지 않을 뿐 네트워크를 타지 않습니다 |
 
 여기 없는 라이브러리(차트, 모션, 다른 컴포넌트 킷)는 필요가 생긴 단위에서 이 문서를 고쳐 추가합니다. 먼저 넣고 나중에 적지 않습니다.
@@ -96,6 +97,7 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 | `/agents/{id}/edit` 수정 | **P5-4** (모델 칸은 **P5-7** 이 옮겼습니다) | 같은 폼에서 **이름 칸이 없습니다** — `PUT /agents/{id}` 는 정의만 바꿉니다. 고치는 칸은 **시스템 프롬프트 하나**이고 **모델은 설정 패널에서** 바꿉니다 — 같은 칸을 두 화면이 각자의 저장 버튼으로 쓰면 "나중 저장이 보이는 칸을 덮는다" 는 틈이 두 배가 됩니다(아래 `/agents/{id}/settings`). 저장 자리에 **"저장하면 새 버전이 만들어지고, 돌고 있는 Run 은 이전 버전을 계속 씁니다"**(R-12·spec 2.8). 폼에 없는 정의 칸(tools·memory…)은 **서버 액션이 현재 정의를 읽어 보존**합니다 — 브라우저가 정의를 보내지 않습니다(7.2) |
 | `/agents/{id}/settings` 설정 패널 | **P5-7** | 패널 **넷**(Model · Tools · Context · Memory)이 한 폼에 있고 **저장 버튼도 하나**입니다 — 패널마다 저장하면 패널 수만큼 새 Version 이 생깁니다. 고치는 정의 칸은 `model.id` · `tools[]` · `mcp_servers[]` · `context_budget_tokens` · `knowledge[]` · `knowledge_top_k` · `memory_enabled` 이고, `system_prompt` 와 정의의 `policy` 블록(타임아웃·재시도)은 **편집 칸 없이 보존**됩니다. `mcp_servers` 에 **자격증명·절대 URL 칸을 두지 않습니다**(`ref` 는 배포 설정이 푸는 키). **MCP Policy(도구 허용 목록) 패널은 없습니다** — 그것을 **읽는** API 가 없고, 없는 것을 자리표시로 그리지 않습니다(9절). 바꾸는 길은 `aether-api` CLI 가 소유합니다(🔒 spec 0007 D-5·R-11) |
 | `/workflows/runs/{id}` 노드 실행 | **P5-3** | `table` — 노드, 종류, 상태 `badge`, 시작, 종료, 실패 사유. 실패한 행은 **배경과 굵은 이름**으로 표시하고 표 위에 **"실패한 노드 N개"** 를 둡니다 — 색만으로 구별하지 않습니다(8절). **노드 출력 열은 두지 않습니다**: 출력은 `data` 평면에 머물고 조회 API 와 투영에 아예 없습니다(spec 0007 **D-4**, spec 0005 D-8). `card` 머리(Run 의 상태·요청 시각)도 **없습니다** — SDK 에 `getWorkflowRun` 이 없고, 내용이 비는 카드는 9절이 금지하는 자리표시입니다 |
+| `/workflows/{id}` 캔버스 | **P5-5** | 그래프를 **그리기만** 합니다 — 노드 종류별 아이콘(6절), 간선, 확대·이동. 끌기·연결·저장은 **P5-6** 입니다. **배치는 열 때마다 자동**이고 좌표를 저장하지 않으므로(spec 0007 D-9), 캔버스 위에 **"배치는 자동이라 열 때마다 달라질 수 있습니다. 노드 위치는 저장되지 않습니다"** 를 둡니다(R-12). 머리에 이름과 **현재 Version** `badge`. 그리는 것은 **현재 Version 의 그래프**입니다 — `GET /workflows/{id}` 가 그것을 돌려줍니다. 버전을 골라 보는 화면은 두지 않습니다(그 경로는 있지만 쓰는 단위가 아직 없습니다) |
 | `/agents/{id}/chat` 대화 | **MVP-2e** | 위: 주고받은 것(`scroll-area`), 아래: `textarea` + 보내기 `button`. `model.delta` 를 **도착하는 대로 append** 합니다(MVP-2d 가 그 이벤트를 흘리게 했습니다). 항목마다 상태 `badge` 와 `/runs/{id}` 로 가는 "타임라인 보기". 도구 호출은 **이름만** 한 줄(본문은 그 타임라인이 보여줍니다). **맨 위에 무엇이 이어지는지 한 줄**을 둡니다 — 아래가 그 이유입니다. 좌우로 나누지 않습니다(목록 하나와 입력 하나라 나눌 것이 없습니다) |
 | `/settings` | **MVP-2c** | `card` 셋 — 테마 선택, 연결(API base URL 읽기 전용 · `/healthz` 의 버전과 상태), API 키 안내. **키를 만들거나 보여주지 않습니다**(아래) |
 
@@ -156,6 +158,26 @@ spec 0002 2.7), `GET /runs/{id}` 에도 출력 열이 없습니다. 그러니 "�
 | `succeeded` | `secondary` | `CircleCheck` |
 | `failed` | `destructive` | `CircleX` |
 | `cancelled` | `outline` | `Ban` |
+
+**Workflow 노드 종류** — `NodeKind` enum(열셋)과 1:1 입니다. 캔버스(P5-5)와 노드 실행 표(P5-3)가 같은 표를 씁니다. 모양은 **전부 같은 카드**이고 뜻은 **아이콘과 이름**이 전달합니다 — 종류마다 다른 색·테두리를 만들지 않습니다(D-1·D-3).
+
+| kind | 아이콘(lucide) | 뜻 |
+| --- | --- | --- |
+| `START` | `Play` | 시작 노드 |
+| `END` | `CircleStop` | 끝 노드 |
+| `AGENT` | `Bot` | Agent 를 실행 |
+| `CONDITION` | `GitBranch` | 조건으로 갈라짐 |
+| `PARALLEL` | `GitFork` | 병렬로 벌어짐 |
+| `JOIN` | `GitMerge` | 벌어진 것이 합쳐짐 |
+| `LOOP` | `Repeat` | 반복(`max_iterations`) |
+| `WAIT` | `Timer` | 시각을 기다림 — Workflow Run 의 `waiting_timer` 와 **같은 아이콘**입니다(같은 뜻) |
+| `LLM` | `Sparkles` | 모델 호출 |
+| `MCP` | `Plug` | MCP 서버의 도구 |
+| `TOOL` | `Wrench` | 내장 도구 |
+| `HUMAN` | `User` | 사람의 입력 |
+| `APPROVAL` | `Hand` | 사람의 승인 — `waiting_approval` 과 **같은 아이콘**입니다(같은 뜻) |
+
+아이콘만으로 뜻을 전달하지 않습니다 — 노드 카드에는 **종류 이름과 노드 id** 가 항상 함께 있습니다(8절).
 
 **적재 상태** — `IngestionStatus` enum(넷). `IngestionStatusBadge` 가 소유하고 위 표의 같은 이름 행과 같은 모양입니다(`queued`·`running`·`succeeded`·`failed`).
 

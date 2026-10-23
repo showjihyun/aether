@@ -606,6 +606,33 @@ describe("createClient() list functions (spec 0006 2.3, D-9)", () => {
     await expect(client.listWorkflowRunNodes("missing")).rejects.toThrow(/404/);
   });
 
+  it("getWorkflow GETs /workflows/{id} and returns the graph (P5-5)", async () => {
+    const workflow = {
+      id: "w-1",
+      name: "triage",
+      current_version: 2,
+      nodes: [{ id: "start", kind: "START" }],
+      edges: [],
+    };
+    const fetchMock = fakeFetch({ ok: true, json: workflow });
+    const client = createClient({ baseUrl: "http://localhost:8000", apiKey: "aeth_k", fetch: fetchMock });
+
+    const result = await client.getWorkflow("w-1");
+
+    expect(result).toEqual(workflow);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/workflows/w-1");
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.method).toBe("GET");
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer aeth_k");
+  });
+
+  it("getWorkflow throws AetherHttpError with the status on 404 (unknown workflow)", async () => {
+    const fetchMock = fakeFetch({ ok: false, status: 404, statusText: "Not Found" });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    await expect(client.getWorkflow("missing")).rejects.toMatchObject({ status: 404 });
+  });
+
   it("sends the Bearer key and returns the parsed page", async () => {
     const page = { items: [{ id: "x", name: "n", created_at: "t" }], next_cursor: "c2" };
     const fetchMock = fakeFetch({ ok: true, json: page });

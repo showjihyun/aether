@@ -22,6 +22,9 @@
  *
  * P5-2: `listWorkflowRunNodes` 하나를 더합니다(spec 0007 2.3). 노드 출력은 응답에 없습니다(D-4).
  * 기존 함수·타입은 바뀌지 않았습니다(additive).
+ *
+ * P5-5: `getWorkflow` 하나를 더합니다(`GET /workflows/{id}` - 현재 Version 의 그래프). 버전을
+ * 골라 보는 `getWorkflowVersion` 은 쓰는 화면이 없어 더하지 않습니다(plan 0007 개정 3).
  */
 
 import type { paths } from "./generated/openapi";
@@ -64,6 +67,8 @@ export type ListKnowledgeSetsResponse =
   paths["/knowledge-sets"]["get"]["responses"]["200"]["content"]["application/json"];
 export type ListIngestionsResponse =
   paths["/knowledge-sets/{knowledge_set_id}/ingestions"]["get"]["responses"]["200"]["content"]["application/json"];
+export type WorkflowResponse =
+  paths["/workflows/{workflow_id}"]["get"]["responses"]["200"]["content"]["application/json"];
 export type ListWorkflowRunNodesResponse =
   paths["/workflow-runs/{workflow_run_id}/nodes"]["get"]["responses"]["200"]["content"]["application/json"];
 
@@ -153,6 +158,7 @@ export interface AetherClient {
   streamRunEvents(runId: string, options?: StreamRunEventsOptions): AsyncIterable<RunEvent>;
   listRuns(params?: ListRunsParams): Promise<ListRunsResponse>;
   listWorkflows(params?: PageParams): Promise<ListWorkflowsResponse>;
+  getWorkflow(workflowId: string): Promise<WorkflowResponse>;
   listWorkflowRuns(params?: ListWorkflowRunsParams): Promise<ListWorkflowRunsResponse>;
   listKnowledgeSets(params?: PageParams): Promise<ListKnowledgeSetsResponse>;
   listIngestions(
@@ -349,6 +355,16 @@ export function createClient(options: CreateClientOptions): AetherClient {
         headers,
         "GET",
         buildListPath("/workflows", params),
+      );
+    },
+
+    async getWorkflow(workflowId: string): Promise<WorkflowResponse> {
+      return requestJson<WorkflowResponse>(
+        doFetch,
+        baseUrl,
+        headers,
+        "GET",
+        `/workflows/${workflowId}`,
       );
     },
 

@@ -287,6 +287,16 @@ describe("/workflows", () => {
     expect(waitingCell(rows[1]!)).not.toContain("자식 Run");
   });
 
+  it("spec 0007 P5-5: 정의 행의 이름이 캔버스 화면으로 가는 링크다", async () => {
+    listWorkflows.mockResolvedValue({ items: [DEF], next_cursor: null });
+    listWorkflowRuns.mockResolvedValue(EMPTY);
+    await renderPage();
+
+    expect(
+      within(screen.getByRole("table")).getByRole("link", { name: "triage-flow" }).getAttribute("href"),
+    ).toBe(`/workflows/${DEF.id}`);
+  });
+
   it("spec 0007 R-6: 실행 행에서 노드 상세로 가는 링크가 있다", async () => {
     listWorkflows.mockResolvedValue(EMPTY);
     listWorkflowRuns.mockResolvedValue({ items: [RUN], next_cursor: null });

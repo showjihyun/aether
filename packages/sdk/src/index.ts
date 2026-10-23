@@ -27,6 +27,7 @@ export type {
   RunStatus,
   StreamRunEventsOptions,
   UpdateAgentRequest,
+  WorkflowResponse,
   WorkflowRunStatus,
 } from "./client";
 export { parseSse } from "./sse";
