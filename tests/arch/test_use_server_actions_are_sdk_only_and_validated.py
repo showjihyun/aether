@@ -218,6 +218,21 @@ def client_write_violations(src: str) -> list[str]:
     ]
 
 
+# R-11 (P5-7): 도구 허용 목록(`control.tool_permissions`, 기본 deny)을 바꾸는 길은
+# CLI 가 소유합니다.
+# 화면 코드에는 그 이름도, 그것을 부르는 모양도 없어야 합니다. 문자열은 보존하고 주석만 지운 `raw`
+# 에서 봅니다 - 경로(`"/permissions"`)는 문자열 안에 있기 때문입니다.
+POLICY_WRITE_PATTERNS = (
+    (r"permission", "허용 목록(permission) 이름"),
+    (r"\.(allow|grant|revoke|deny)\w*\s*\(", "허용·거부를 바꾸는 메서드 호출"),
+)
+
+
+def policy_write_violations(src: str) -> list[str]:
+    raw, _ = scan(src)
+    return [label for pattern, label in POLICY_WRITE_PATTERNS if re.search(pattern, raw, re.I)]
+
+
 def web_sources() -> list[Path]:
     return sorted(
         p
@@ -396,6 +411,32 @@ def test_browser_code_never_calls_an_sdk_write_method() -> None:
         text = path.read_text(encoding="utf-8")
         if is_use_client(text) and (found := client_write_violations(text)):
             offenders[path.relative_to(REPO_ROOT).as_posix()] = found
+    assert offenders == {}
+
+
+def test_it_fires_on_a_path_or_call_that_changes_the_tool_allow_list() -> None:
+    """R-11 양성 대조: 판정기가 공허하지 않다 (경로 문자열·SDK 메서드·변수 이름 셋 다 잡는다)."""
+    assert policy_write_violations('await fetch("/permissions", { method: "POST" });')
+    assert policy_write_violations("await client.allowTool(agentId, name);")
+    assert policy_write_violations("await client.setToolPermissions(x);")
+    assert policy_write_violations("const tool_permissions = [];")
+    # 주석은 무시한다 (설명이 걸리지 않는다). Agent 정의의 policy 블록도 해당 없다
+    assert policy_write_violations("// permission 은 CLI 가 소유합니다") == []
+    assert policy_write_violations("const policy = current.definition.policy;") == []
+
+
+def test_web_has_no_path_that_changes_the_tool_allow_list() -> None:
+    """spec 0007 R-11, D-5: `apps/web` 어디에도 도구 허용 목록을 바꾸는 경로가 없다 (0건).
+
+    읽는 경로도 지금은 없습니다(api 에 허용 목록을 읽는 HTTP 경로가 없음) - 이 테스트는 그 이름
+    자체가 화면 코드에 나타나면 사람이 보도록 합니다."""
+    sources = web_sources()
+    assert sources, "web 소스를 하나도 못 찾았습니다 (빈 목록을 통과로 읽지 않습니다)"
+    offenders = {
+        p.relative_to(REPO_ROOT).as_posix(): found
+        for p in sources
+        if (found := policy_write_violations(p.read_text(encoding="utf-8")))
+    }
     assert offenders == {}
 
 

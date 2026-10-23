@@ -2,12 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const createAgentAction = vi.fn<(name: string, prompt: string, model: string) => Promise<unknown>>();
-const updateAgentAction = vi.fn<(id: string, prompt: string, model: string) => Promise<unknown>>();
+const updateAgentAction = vi.fn<(id: string, prompt: string) => Promise<unknown>>();
 vi.mock("./actions", () => ({
   createAgentAction: (name: string, prompt: string, model: string) =>
     createAgentAction(name, prompt, model),
-  updateAgentAction: (id: string, prompt: string, model: string) =>
-    updateAgentAction(id, prompt, model),
+  updateAgentAction: (id: string, prompt: string) => updateAgentAction(id, prompt),
 }));
 
 import { AgentForm } from "./AgentForm";
@@ -19,7 +18,6 @@ const EDIT = {
   name: "billing-helper",
   version: 3,
   systemPrompt: "old prompt",
-  modelId: "old-model",
 };
 
 beforeEach(() => {
@@ -79,22 +77,22 @@ describe("AgentForm - 수정 (spec 0007 R-1, R-12, D-8)", () => {
     render(<AgentForm {...EDIT} />);
 
     expect(screen.getByLabelText<HTMLTextAreaElement>("시스템 프롬프트").value).toBe("old prompt");
-    expect(screen.getByLabelText<HTMLInputElement>("모델 id").value).toBe("old-model");
+    // D-5: model.id 는 설정의 Model 패널이 한 곳에서 고칩니다 - 수정 폼에는 그 칸이 없습니다.
+    expect(screen.queryByLabelText("모델 id")).toBeNull();
     expect(screen.queryByLabelText("이름")).toBeNull();
     expect(screen.getByText("billing-helper")).toBeTruthy();
     expect(screen.getByText("v3")).toBeTruthy();
   });
 
-  it("R-1: 제출하면 updateAgentAction 을 (agentId, 프롬프트, 모델 id) 로 부른다", async () => {
+  it("R-1: 제출하면 updateAgentAction 을 (agentId, 프롬프트) 로만 부른다 - 모델 인자가 없다", async () => {
     updateAgentAction.mockResolvedValue({ ok: true, agentId: AGENT_ID, version: 4 });
     render(<AgentForm {...EDIT} />);
 
     fill("시스템 프롬프트", "new prompt");
-    fill("모델 id", "");
     submit();
 
     await waitFor(() => expect(updateAgentAction).toHaveBeenCalledTimes(1));
-    expect(updateAgentAction).toHaveBeenCalledWith(AGENT_ID, "new prompt", "");
+    expect(updateAgentAction).toHaveBeenCalledWith(AGENT_ID, "new prompt");
     expect(createAgentAction).not.toHaveBeenCalled();
     expect((await screen.findByRole("status")).textContent).toContain("v4");
   });
