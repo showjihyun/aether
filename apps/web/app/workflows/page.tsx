@@ -89,7 +89,14 @@ export default async function WorkflowsPage({
               <TableBody>
                 {defsResult.value.items.map((workflow) => (
                   <TableRow key={workflow.id}>
-                    <TableCell>{workflow.name}</TableCell>
+                    <TableCell>
+                      <Link
+                        href={`/workflows/${workflow.id}`}
+                        className="underline underline-offset-4"
+                      >
+                        {workflow.name}
+                      </Link>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">v{workflow.current_version}</Badge>
                     </TableCell>

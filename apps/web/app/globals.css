@@ -122,3 +122,41 @@
     @apply bg-background text-foreground;
     }
 }
+
+/* 캔버스(`@xyflow/react`, DESIGN 1절): 기본 테마를 쓰지 않고 `--xy-*` 를 2절 토큰으로 덮습니다.
+   토큰이 `.dark` 에서 바뀌므로 라이트·다크가 따로 필요 없습니다. */
+.react-flow {
+  --xy-background-color: var(--background);
+  --xy-edge-stroke: var(--border);
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-selected: var(--ring);
+  --xy-handle-background-color: var(--border);
+  --xy-node-color: var(--card-foreground);
+  --xy-node-border: none;
+  --xy-attribution-background-color: var(--background);
+  --xy-background-pattern-color: var(--border);
+}
+
+.react-flow__edge-text {
+  fill: var(--foreground);
+  font-size: 0.75rem;
+}
+
+.react-flow__edge-textbg {
+  fill: var(--background);
+}
+
+.react-flow__controls-button {
+  background: var(--card);
+  color: var(--card-foreground);
+  border-bottom: 1px solid var(--border);
+}
+
+.react-flow__attribution {
+  color: var(--muted-foreground);
+}
+
+/* base.css 가 anchor 에 직접 색을 줍니다(특이성이 높음) - 요소는 그대로 두고 색만 토큰으로. */
+.react-flow__attribution a {
+  color: var(--muted-foreground);
+}
