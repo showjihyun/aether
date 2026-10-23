@@ -686,3 +686,68 @@ describe("AetherHttpError (MVP-2a 리뷰: 상태 코드는 필드다)", () => {
     await expect(client.listIngestions("missing")).rejects.toBeInstanceOf(Error);
   });
 });
+
+describe("createWorkflow (P5-6, spec 0007 R-4)", () => {
+  const body = {
+    name: "triage",
+    nodes: [
+      { id: "start", kind: "START" as const },
+      { id: "end", kind: "END" as const },
+    ],
+    edges: [{ source: "start", target: "end" }],
+  };
+
+  it("POSTs /workflows with the body and returns the created workflow (201)", async () => {
+    const created = { id: "w-1", current_version: 1, ...body };
+    const fetchMock = fakeFetch({ ok: true, status: 201, json: created });
+    const client = createClient({ baseUrl: "http://localhost:8000", apiKey: "aeth_k", fetch: fetchMock });
+
+    const result = await client.createWorkflow(body);
+
+    expect(result).toEqual(created);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("http://localhost:8000/workflows");
+    const init = fetchMock.mock.calls[0]?.[1];
+    expect(init?.method).toBe("POST");
+    expect(JSON.parse(init?.body as string)).toEqual(body);
+    expect((init?.headers as Record<string, string>).Authorization).toBe("Bearer aeth_k");
+  });
+
+  it("400 invalid_workflow_graph: the error carries the status AND the parsed body (violations)", async () => {
+    const rejected = {
+      detail: "invalid_workflow_graph",
+      violations: [{ reason: "no_start", node_id: null }],
+    };
+    const fetchMock = fakeFetch({ ok: false, status: 400, statusText: "Bad Request", json: rejected });
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    const error = await client.createWorkflow(body).catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(AetherHttpError);
+    expect((error as AetherHttpError).status).toBe(400);
+    expect((error as AetherHttpError).body).toEqual(rejected);
+  });
+
+  it("a non-JSON error body does not hide the status (body is undefined)", async () => {
+    const fetchMock = vi.fn<typeof globalThis.fetch>(() =>
+      Promise.resolve({
+        ok: false,
+        status: 502,
+        statusText: "Bad Gateway",
+        json: () => Promise.reject(new SyntaxError("Unexpected token <")),
+      } as Response),
+    );
+    const client = createClient({ baseUrl: "http://localhost:8000", fetch: fetchMock });
+
+    const error = await client.createWorkflow(body).catch((e: unknown) => e);
+
+    expect((error as AetherHttpError).status).toBe(502);
+    expect((error as AetherHttpError).body).toBeUndefined();
+  });
+
+  it("existing errors keep their message and status (no body needed to construct one)", () => {
+    const error = new AetherHttpError("m", 404, "Not Found");
+    expect(error.message).toBe("m");
+    expect(error.status).toBe(404);
+    expect(error.body).toBeUndefined();
+  });
+});

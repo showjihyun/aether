@@ -37,6 +37,10 @@ export type HealthzResponse =
 
 export type AgentResponse =
   paths["/agents"]["post"]["responses"]["201"]["content"]["application/json"];
+export type CreateWorkflowRequest =
+  paths["/workflows"]["post"]["requestBody"]["content"]["application/json"];
+export type InvalidWorkflowGraphResponse =
+  paths["/workflows"]["post"]["responses"]["400"]["content"]["application/json"];
 export type ListAgentsResponse =
   paths["/agents"]["get"]["responses"]["200"]["content"]["application/json"];
 export type AgentDetailResponse =
@@ -136,12 +140,18 @@ export interface StreamRunEventsOptions {
 export class AetherHttpError extends Error {
   readonly status: number;
   readonly statusText: string;
+  /**
+   * 파싱된 JSON 오류 본문(JSON 이 아니면 `undefined`). 호출자가 **구조를 확인한 뒤** 읽습니다 -
+   * 신뢰할 수 있는 타입이 아니고, 사용자에게 그대로 보이지 않습니다. 메시지에는 담기지 않습니다.
+   */
+  readonly body: unknown;
 
-  constructor(message: string, status: number, statusText: string) {
+  constructor(message: string, status: number, statusText: string, body?: unknown) {
     super(message);
     this.name = "AetherHttpError";
     this.status = status;
     this.statusText = statusText;
+    this.body = body;
   }
 }
 
@@ -159,6 +169,7 @@ export interface AetherClient {
   listRuns(params?: ListRunsParams): Promise<ListRunsResponse>;
   listWorkflows(params?: PageParams): Promise<ListWorkflowsResponse>;
   getWorkflow(workflowId: string): Promise<WorkflowResponse>;
+  createWorkflow(body: CreateWorkflowRequest): Promise<WorkflowResponse>;
   listWorkflowRuns(params?: ListWorkflowRunsParams): Promise<ListWorkflowRunsResponse>;
   listKnowledgeSets(params?: PageParams): Promise<ListKnowledgeSetsResponse>;
   listIngestions(
@@ -196,10 +207,17 @@ async function requestJson<T>(
   });
 
   if (!response.ok) {
+    let errorBody: unknown;
+    try {
+      errorBody = await response.json();
+    } catch {
+      errorBody = undefined; // JSON 이 아닌 본문은 상태 코드만 남깁니다.
+    }
     throw new AetherHttpError(
       `aether-sdk: ${method} ${path} failed with status ${response.status} ${response.statusText}`,
       response.status,
       response.statusText,
+      errorBody,
     );
   }
 
@@ -366,6 +384,10 @@ export function createClient(options: CreateClientOptions): AetherClient {
         "GET",
         `/workflows/${workflowId}`,
       );
+    },
+
+    async createWorkflow(body: CreateWorkflowRequest): Promise<WorkflowResponse> {
+      return requestJson<WorkflowResponse>(doFetch, baseUrl, headers, "POST", "/workflows", body);
     },
 
     async listWorkflowRuns(params?: ListWorkflowRunsParams): Promise<ListWorkflowRunsResponse> {

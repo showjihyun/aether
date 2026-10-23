@@ -30,11 +30,18 @@ WEB = REPO_ROOT / "apps" / "web"
 ALLOWED_IMPORTS = frozenset({"@aether/sdk", "next/cache", "next/navigation"})
 PRIMITIVE_TYPES = frozenset({"string", "number", "boolean"})
 # 브라우저 코드가 부르면 안 되는 SDK 쓰기 메서드 (읽기와 스트림은 허용)
-CLIENT_FORBIDDEN_WRITES = ("createAgent", "updateAgent", "runAgent", "cancelRun")
+CLIENT_FORBIDDEN_WRITES = (
+    "createAgent",
+    "updateAgent",
+    "runAgent",
+    "cancelRun",
+    "createWorkflow",
+)
 # 이 단위가 세운 서버 액션 파일. 목록에서 사라지면(이름 변경·삭제) 그 사실이 드러나야 합니다.
 EXPECTED_ACTION_FILES = {
     "apps/web/app/agents/[id]/chat/actions.ts",
     "apps/web/app/agents/actions.ts",
+    "apps/web/app/workflows/actions.ts",
 }
 
 # --- 분석기 --------------------------------------------------------------------------------
