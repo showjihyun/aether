@@ -298,7 +298,7 @@ spec 0002 2.7), `GET /runs/{id}` 에도 출력 열이 없습니다. 그러니 "�
 | --- | --- | --- |
 | D-5 Radix 직접 import 금지 | dependency-cruiser | `apps/web/(app\|components)/(?!ui/)` → `radix-ui`, `@radix-ui/*` 금지. 지금은 P0-3b 의 grep — `from` 뒤에 `@radix-ui` 또는 `radix-ui` 가 오는 import 를 `components/ui/` 밖에서 찾는 것 — 이 대신합니다 |
 | D-1 임의 값 금지 | `eslint-plugin-better-tailwindcss` 류 | `no-unregistered-classes` / arbitrary value 규칙 |
-| 8절 접근성 | Playwright + axe (`a11y` 단계) | 프런트엔드 팩 `test:a11y`. MVP-2 에서 켬 |
+| 8절 접근성 | `axe-core` + jsdom (`a11y` 단계) | `pnpm -F @aether/web run test:a11y` (P5-8). 브라우저를 띄우지 않습니다 — Playwright 는 `e2e` 의 것입니다(spec 0007 D-7). `harness.config` 에 단계로 등록하는 것과 강제 수준은 **사람**이 정합니다(H-2·H-3). 이 러너가 **보지 못하는 것**: 색 대비(`color-contrast`)는 jsdom 에서 15경로 전부 판정불가이고, `<html lang>`·`<title>` 같은 문서 수준 규칙은 컨테이너 렌더라 돌지 않습니다 |
 
 ## 이 문서를 갱신하는 때
 
