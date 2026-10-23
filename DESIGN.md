@@ -15,6 +15,7 @@
 | 아이콘 | `lucide-react` 만 | shadcn 기본. 세트를 섞지 않습니다 |
 | 폰트 | Geist Sans / Geist Mono — **`geist` npm 패키지** | 로컬 번들이라 오프라인(DP-4)에서도 뜹니다. `next/font/google` 은 빌드 시 네트워크에서 폰트를 받아 오프라인 빌드를 깨뜨리므로 쓰지 않습니다(P0-3b) |
 | 테마 전환 | `next-themes`, `class` 전략 | 다크 모드는 선택이 아니라 기본 요구입니다(8절) |
+| 캔버스 | **`@xyflow/react`** — 버전 `12.12.0` 고정. `dist/base.css` **만** import 하고 기본 테마 `dist/style.css` 는 쓰지 않습니다. 색·선폭은 `app/globals.css` 에서 `--xy-*` 를 2절 토큰으로 덮습니다. attribution 링크는 **그대로 둡니다**(끄지 않습니다) | Workflow 그래프를 그리는 유일한 자리(P5-5·P5-6). MIT, 설치 스크립트 없음, **런타임 네트워크 없음** — 오프라인(DP-4) 실측은 [docs/measurements/canvas-dependency-2026-10-23.md](docs/measurements/canvas-dependency-2026-10-23.md) 입니다. 색·선폭 28곳이 `var(--xy-X, var(--xy-X-default))` 꼴이라 토큰으로 전부 덮입니다. attribution 을 끄는 것은 한 줄이지만 상류가 유료 구독을 요청하므로, 돈을 쓰지 않고 라이선스 위험도 없는 쪽을 골랐습니다 — 에어갭에서 그 링크는 열리지 않을 뿐 네트워크를 타지 않습니다 |
 
 여기 없는 라이브러리(차트, 모션, 다른 컴포넌트 킷)는 필요가 생긴 단위에서 이 문서를 고쳐 추가합니다. 먼저 넣고 나중에 적지 않습니다.
 
@@ -228,6 +229,7 @@ spec 0002 2.7), `GET /runs/{id}` 에도 출력 열이 없습니다. 그러니 "�
 | 두 번째 컴포넌트 라이브러리, 아이콘 세트 혼용 | shadcn + lucide |
 | 페이지마다 다른 레이아웃 | 앱 셸 하나 |
 | 애니메이션 라이브러리 선제 도입 | Tailwind `transition` + Radix 의 기본. 필요가 생기면 이 문서를 고치고 추가 |
+| 캔버스의 기본 CSS 테마(`style.css`), 캔버스 안의 임의 색 | `base.css` + `--xy-*` 를 토큰으로 덮기(1절) |
 | `dangerouslySetInnerHTML` | 텍스트 렌더(6절) |
 
 ## 10. 기계 판정 후보
