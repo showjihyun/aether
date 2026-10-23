@@ -1,0 +1,73 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-23-001
+date: 2026-10-23
+status: candidate
+symptom: 문서가 **이유를 적어 의도적으로 고정한** 버전이 Dependabot 의 major 범프 병합으로 조용히 바뀌었고, 20일 동안 아무 검사도 그 불일치를 잡지 않았다
+evidence: |
+  2026-10-23, H-1 실측(PR #192) 중 발견. `DESIGN.md` 1절은 `shadcn` CLI 를 **3.8.5 로
+  고정**하고 그 이유까지 적었다 — "v4 CLI 는 init 을 프리셋 8종으로 바꿔 `new-york +
+  neutral` 을 지정할 수 없고, 프리셋을 고르는 것은 그 자체가 새 시각적 결정이라 3.x
+  마지막 안정판에 고정했습니다(P0-3b). 올리려면 이 문서를 먼저 고칩니다".
+
+  P0-3b 는 그 문서대로 박았다:
+
+      $ git show d266b01:apps/web/package.json | grep shadcn
+          "shadcn": "3.8.5",
+
+  지금은 다르다:
+
+      $ grep shadcn apps/web/package.json
+          "shadcn": "4.21.0",
+      $ git log --oneline -S'shadcn@4.21.0' -- pnpm-lock.yaml
+      f72728c Bump shadcn from 3.8.5 to 4.21.0      # dependabot[bot], 2026-10-03
+
+  그 커밋은 "먼저 이 문서를 고치라" 는 요구를 밟지 않았고, DESIGN.md 는 그대로 3.8.5 를
+  말한다. 불일치는 **2026-10-03 부터 2026-10-23 까지 20일간** 살아 있었고, 그동안
+  verify 는 17/17 초록이었다 — 어느 단계도 문서의 핀과 매니페스트를 비교하지 않는다.
+
+  탐지는 검사가 아니라 **사람이 넘긴 결정(H-1)의 실측 중 우연**이었다. spec 0007 C-6 이
+  "보고만 한다" 로 적어 둔 것이 그 우연의 유일한 흔적이다.
+
+  범위 확인: 매니페스트의 **정확 핀은 이것 하나뿐**이다(나머지는 caret 범위).
+
+      $ grep -nE '"[^"]+": *"[0-9]' apps/web/package.json
+      39:    "shadcn": "4.21.0",
+
+  즉 저장소에 있던 의도적 핀 한 개가 자동 범프 한 번에 전부 무음으로 뒤집혔다.
+
+  **같은 부류 둘째 사례**(같은 날 발견, 아직 열려 있음). `infra/docker/api.Dockerfile`
+  8~11행은 핀의 이유를 주석으로 적는다 — "확인: uv 버전은 이 세션에서 로컬로 쓴 0.11.2
+  로 고정. digest 는 `docker buildx imagetools inspect ghcr.io/astral-sh/uv:0.11.2` 로
+  얻었습니다". 그런데 `FROM` 줄은 이미 **0.12.22** 이고(지난 범프), 열려 있는 PR #191 은
+  그것을 **0.13.5** 로 올리면서 주석은 그대로 둔다:
+
+      -FROM ghcr.io/astral-sh/uv:0.12.22@sha256:f513a91... AS uv
+      +FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39... AS uv
+
+  주석이 말하는 버전(0.11.2), 지금 값(0.12.22), 범프 뒤 값(0.13.5)이 셋 다 다르다.
+  자동 범프는 값만 바꾸고 **그 값의 이유를 적은 문장은 건드리지 않는다** — shadcn 과
+  정확히 같은 구조이고, 이쪽은 `verify` 가 초록인 채로 병합을 기다리고 있다.
+root_cause: |
+  "문서가 버전을 고정한다" 는 규약이 **문장으로만** 존재한다. 핀의 근거는 DESIGN.md 에,
+  실제 값은 `apps/web/package.json` 에 있고 둘을 잇는 기계가 없다. Dependabot 은 문서를
+  읽지 않으므로 범프를 올리고, 리뷰어는 "패치 범프 하나" 로 보여 병합한다 —
+  major 범프였고 문서가 금지한 것이었다는 사실이 PR 본문에 나타나지 않는다.
+fix: |
+  이번에는 고치지 않고 **측정하고 보고**했다 — 어느 쪽으로 닫을지는 DESIGN.md 1절을
+  소유한 사람의 결정(H-1)이기 때문이다. `docs/measurements/canvas-dependency-2026-10-23.md`
+  2절에 출처와 두 방향의 비용을 적고, 측정에서 나오는 권고((가) 코드를 3.8.5 로 내리기)를
+  밝혔다. 4.x CLI 가 한 번도 쓰이지 않았음(`components/ui` 커밋 0건)이 그 권고의 근거다.
+recurrence_risk: high
+harness_element: HE-5
+proposed_harness_change: "(제안, 사람 결정) 문서의 핀과 매니페스트를 비교하는 테스트 하나 — `tests/scripts/test_documented_pins_match_manifests.py`. `DESIGN.md` 처럼 핀을 선언하는 문서에서 `<패키지>@<버전>` 또는 '`\"<패키지>\": \"<버전>\"` 로 고정' 꼴을 읽어 해당 매니페스트의 값과 다르면 실패한다(표 하나로 선언 목록을 둔다). 더 싼 쪽은 `.github/dependabot.yml` 에 핀된 패키지의 major `ignore` 를 더하는 것인데, 그것은 범프를 막을 뿐 다음 핀이 생겼을 때 불일치를 잡지 못하므로 둘은 보완 관계다. 전자는 `tests/**`(에이전트가 쓸 수 있음), 후자는 `.github/**`(보호 파일, 사람이 커밋)."
+preferred_enforcement: test
+trust: untrusted
+regression_check: |
+  재발 조건: 문서가 고정한 버전과 매니페스트가 어긋난 상태로 verify 가 초록이 되는 것.
+  판정 기준 — 위 테스트가 생기면 ① 현재 트리에서 `shadcn` 불일치를 **실패로** 잡고
+  ② H-1 이 어느 방향으로 닫히든(문서 수정 또는 코드 수정) 통과해야 한다. 변이 검증은
+  매니페스트의 값을 한 글자 바꿔 실패를 확인하는 것으로 한다(문서를 변이시키지 않는다 —
+  문서 쪽은 사람의 결정 영역이다). 테스트가 없는 동안의 재발 탐지는 다음 `shadcn` 또는
+  `@xyflow/react` 범프 PR 의 리뷰다.
+owner: showjihyun
+expires: none
