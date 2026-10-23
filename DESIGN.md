@@ -98,6 +98,7 @@ P0-3b 가 설치했습니다(17개). MVP-2(Chat, Run 목록, Run 상세)가 필�
 | `/agents/{id}/settings` 설정 패널 | **P5-7** | 패널 **넷**(Model · Tools · Context · Memory)이 한 폼에 있고 **저장 버튼도 하나**입니다 — 패널마다 저장하면 패널 수만큼 새 Version 이 생깁니다. 고치는 정의 칸은 `model.id` · `tools[]` · `mcp_servers[]` · `context_budget_tokens` · `knowledge[]` · `knowledge_top_k` · `memory_enabled` 이고, `system_prompt` 와 정의의 `policy` 블록(타임아웃·재시도)은 **편집 칸 없이 보존**됩니다. `mcp_servers` 에 **자격증명·절대 URL 칸을 두지 않습니다**(`ref` 는 배포 설정이 푸는 키). **MCP Policy(도구 허용 목록) 패널은 없습니다** — 그것을 **읽는** API 가 없고, 없는 것을 자리표시로 그리지 않습니다(9절). 바꾸는 길은 `aether-api` CLI 가 소유합니다(🔒 spec 0007 D-5·R-11) |
 | `/workflows/runs/{id}` 노드 실행 | **P5-3** | `table` — 노드, 종류, 상태 `badge`, 시작, 종료, 실패 사유. 실패한 행은 **배경과 굵은 이름**으로 표시하고 표 위에 **"실패한 노드 N개"** 를 둡니다 — 색만으로 구별하지 않습니다(8절). **노드 출력 열은 두지 않습니다**: 출력은 `data` 평면에 머물고 조회 API 와 투영에 아예 없습니다(spec 0007 **D-4**, spec 0005 D-8). `card` 머리(Run 의 상태·요청 시각)도 **없습니다** — SDK 에 `getWorkflowRun` 이 없고, 내용이 비는 카드는 9절이 금지하는 자리표시입니다 |
 | `/workflows/{id}` 캔버스 | **P5-5** | 그래프를 **그리기만** 합니다 — 노드 종류별 아이콘(6절), 간선, 확대·이동. 끌기·연결·저장은 **P5-6** 입니다. **배치는 열 때마다 자동**이고 좌표를 저장하지 않으므로(spec 0007 D-9), 캔버스 위에 **"배치는 자동이라 열 때마다 달라질 수 있습니다. 노드 위치는 저장되지 않습니다"** 를 둡니다(R-12). 머리에 이름과 **현재 Version** `badge`. 그리는 것은 **현재 Version 의 그래프**입니다 — `GET /workflows/{id}` 가 그것을 돌려줍니다. 버전을 골라 보는 화면은 두지 않습니다(그 경로는 있지만 쓰는 단위가 아직 없습니다) |
+| `/workflows/new` 캔버스(쓰기) | **P5-6** | 노드 추가·연결·삭제와 **저장**. 저장은 **서버 액션**이고(7.2) 그래프는 **JSON 문자열 인자 하나**로 갑니다(아래 7.3). 저장 자리에 **"저장하면 Workflow 가 Version 1 로 만들어지고, 이후 수정은 새 Version 을 만듭니다 — 돌고 있는 Run 은 이전 Version 을 계속 씁니다"**(D-8·R-12). `400` 의 위반은 **해당 노드 카드 위에** 문장으로, `node_id` 가 없는 위반은 **그래프 수준 자리**(캔버스 위 `alert`)에 보입니다 — 간선에는 붙이지 않습니다(응답에 간선 식별자가 없습니다, spec 0007 C-7). **기존 Workflow 를 캔버스에서 고치는 것은 이 화면이 아닙니다** — `/workflows/{id}` 는 읽기 그대로입니다 |
 | `/agents/{id}/chat` 대화 | **MVP-2e** | 위: 주고받은 것(`scroll-area`), 아래: `textarea` + 보내기 `button`. `model.delta` 를 **도착하는 대로 append** 합니다(MVP-2d 가 그 이벤트를 흘리게 했습니다). 항목마다 상태 `badge` 와 `/runs/{id}` 로 가는 "타임라인 보기". 도구 호출은 **이름만** 한 줄(본문은 그 타임라인이 보여줍니다). **맨 위에 무엇이 이어지는지 한 줄**을 둡니다 — 아래가 그 이유입니다. 좌우로 나누지 않습니다(목록 하나와 입력 하나라 나눌 것이 없습니다) |
 | `/settings` | **MVP-2c** | `card` 셋 — 테마 선택, 연결(API base URL 읽기 전용 · `/healthz` 의 버전과 상태), API 키 안내. **키를 만들거나 보여주지 않습니다**(아래) |
 
@@ -179,6 +180,27 @@ spec 0002 2.7), `GET /runs/{id}` 에도 출력 열이 없습니다. 그러니 "�
 
 아이콘만으로 뜻을 전달하지 않습니다 — 노드 카드에는 **종류 이름과 노드 id** 가 항상 함께 있습니다(8절).
 
+**Workflow 그래프 위반 사유** — `400 invalid_workflow_graph` 의 `violations[].reason` **열넷**과 1:1 입니다([docs/api.md](docs/api.md) 8절이 정본). 화면이 문구를 고르는 자리를 만들지 않으려고 여기서 고정합니다. `node_id` 가 있으면 그 노드 카드 위에, `null` 이면 캔버스 위 그래프 수준 자리에 보입니다.
+
+| reason | 문장 |
+| --- | --- |
+| `no_start` | START 노드가 없습니다. 시작 노드 하나를 두십시오 |
+| `multiple_start` | START 노드가 둘 이상입니다. 하나만 둘 수 있습니다 |
+| `end_unreachable` | 이 END 노드에 도달할 수 없습니다 — 시작에서 이어지는 길이 없습니다 |
+| `orphan_node` | 이 노드는 아무 간선에도 닿지 않습니다 |
+| `dangling_edge` | 이 간선이 없는 노드를 가리킵니다 |
+| `duplicate_node_id` | 같은 노드 id 가 둘 이상입니다 |
+| `loop_without_bound` | LOOP 노드에 반복 상한(`max_iterations`)이 없습니다 |
+| `parallel_without_join` | PARALLEL 노드에 대응하는 JOIN 이 없습니다 |
+| `agent_node_without_agent` | 실행 대상 참조가 없습니다 — `AGENT` 는 Agent, `TOOL`·`MCP` 는 서버와 도구 이름이 필요합니다 |
+| `condition_node_without_predicate` | 조건이 비어 있습니다 — 볼 경로와 비교 방법이 필요합니다 |
+| `condition_node_without_both_branches` | 참·거짓 두 갈래가 모두 있어야 합니다 — 나가는 간선의 label 이 `true` 와 `false` 입니다 |
+| `wait_node_without_duration` | WAIT 노드에 기다릴 시간(`wait_seconds`)이 없습니다 |
+| `llm_node_without_prompt` | LLM 노드에 프롬프트가 없습니다 |
+| `tool_node_without_target` | TOOL·MCP 노드에 서버와 도구 이름이 필요합니다 |
+
+**이 표는 기계가 지킵니다** — api 의 `Reason` 열거형, 이 표, 화면의 문장 맵 **셋이 같은 키 집합**임을 테스트가 판정합니다(P5-6, spec 0007 R-4). api 에 사유가 늘면 문장 없는 값이 그 자리에서 드러납니다.
+
 **적재 상태** — `IngestionStatus` enum(넷). `IngestionStatusBadge` 가 소유하고 위 표의 같은 이름 행과 같은 모양입니다(`queued`·`running`·`succeeded`·`failed`).
 
 세 badge 의 키 집합은 SDK 의 타입과 `Record<Status, …>` 로 묶여 있습니다 — api 에 상태가 하나 생기면 **컴파일이 깨집니다**(MVP-2c).
@@ -235,6 +257,20 @@ spec 0002 2.7), `GET /runs/{id}` 에도 출력 열이 없습니다. 그러니 "�
 이 규약을 **파일에서** 고정하는 구조 테스트가 있습니다 — `tests/arch/test_use_server_actions_are_sdk_only_and_validated.py`(R-2). `"use server"` 파일의 import·`fetch`·동적 import·`process.env` 읽기, 인자의 타입과 검증 순서, 브라우저 코드의 쓰기 호출, 그리고 중계에 쓰기 경로가 없다는 것까지 봅니다.
 
 **세션·권한은 여기 없습니다.** "web 에 닿는 사람은 Agent 를 만들 수 있다" 가 지금의 선이고, 그것을 사람 단위로 긋는 것은 Phase 8 입니다(spec 0007 2.2·C-2 — 사람이 받아들인 비용).
+
+### 7.3 그래프를 쓰는 인자 (P5-6 — 7.2 의 "원시 타입만" 과 구조의 긴장)
+
+7.2 는 서버 액션 인자를 **원시 타입만**으로 못 박았습니다. 그런데 그래프는 노드 배열과 간선 배열입니다. 객체·배열을 통째로 받으면 **브라우저가 요청 본문을 쓰는 것과 같아져** 7.2 가 막으려던 것이 그대로 돌아옵니다. 그래서 이렇게 정합니다.
+
+| 결정 | 값 |
+| --- | --- |
+| 인자 | `name: string` 과 `graphJson: string` **둘뿐**입니다. 객체·배열·`FormData` 를 받지 않습니다 |
+| 누가 모양을 소유하는가 | **액션**입니다. `graphJson` 을 파싱한 뒤 **노드마다** id 모양·`kind` 열거형을 검사하고, 간선의 양 끝이 **그 그래프에 있는 노드**인지 봅니다. 하나라도 어긋나면 `createClient(` 보다 **앞에서** `return` 합니다 |
+| 상한 | 노드·간선 **개수**와 문자열 길이에 web 쪽 상한을 둡니다 — api 가 거부할 것을 먼저 거부하는 것이 아니라, **브라우저가 보낸 문자열이 메모리를 먹는 것**을 막는 자리입니다(P5-7 의 줄 수·길이 상한과 같은 성격) |
+| 종류별 설정 | 이 단위의 캔버스는 **구조**(노드·간선)만 만듭니다. `agent_id`·`llm_prompt` 같은 **종류별 칸은 두지 않습니다** — 그것이 없으면 저장이 `400` 으로 거부되고 그 사유가 노드 위에 보입니다(6절). 칸을 만드는 것은 이 단위가 아닙니다 |
+| 저장되지 않는 것 | **좌표**입니다(D-9). 액션이 보내는 JSON 에 좌표가 없고, 있으면 테스트가 실패합니다 |
+
+구조 테스트(`tests/arch/test_use_server_actions_are_sdk_only_and_validated.py`)의 인자 검사가 이 규약을 그대로 판정합니다 — 문자열 인자도 `typeof` 와 **내용 검사**를 함께 거쳐야 하기 때문입니다.
 
 ## 8. 다크 모드 · 접근성 · 반응형
 
