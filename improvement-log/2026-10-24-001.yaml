@@ -1,0 +1,48 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-24-001
+date: 2026-10-24
+status: candidate
+symptom: 브랜치를 바꾼 뒤 남은 `apps/web/.next` 가 **이전 브랜치의 라우트**를 참조해 `web-typecheck` 가 거짓 실패한다. 두 번 겪었다
+evidence: |
+  **1차** 2026-10-23, `h-1-canvas-measurement`(문서 둘만 바꾼 브랜치). 직전에 `p5-7-settings-panels`
+  에서 작업했고 그 브랜치에는 설정 화면이 있었다. 문서만 바꾼 트리에서 verify 가 실패했다:
+
+      apps/web typecheck: .next/types/validator.ts(71,39): error TS2307:
+        Cannot find module '../../app/workflows/../agents/[id]/settings/page.js'
+
+  **2차** 2026-10-24, `p5-5-workflow-canvas-read` 를 새 main 에 리베이스한 뒤. 직전 작업은
+  `p5-6-workflow-canvas-write`(`/workflows/new` 가 있는 브랜치)였다:
+
+      apps/web typecheck: .next/types/validator.ts(152,39): error TS2307:
+        Cannot find module '../../app/workflows/new/page.js'
+
+  둘 다 `rm -rf apps/web/.next` 뒤 재실행으로 통과했다(1차 454,902 ms / 2차 255,617 ms, 17/17).
+  `.next` 는 gitignore 대상이라 `git status` 에 보이지 않고, `git checkout` 도 지우지 않는다.
+
+  **왜 위험한가**: 실패 메시지가 **없는 파일을 가리키는 타입 오류**라서, 작업 중인 변경이 깨뜨린
+  것처럼 읽힌다. 2차에서는 직전에 리베이스로 충돌을 푼 직후였기 때문에 "충돌 해소를 잘못했나" 로
+  먼저 의심했다. 반대 방향의 위험도 있다 — 이전 브랜치에서 만든 `.next` 가 **지금 없는 라우트를
+  성공으로** 담고 있을 수는 없으므로 거짓 성공은 아니지만, 거짓 실패가 반복되면 다음에는
+  "또 그거겠지" 로 **진짜 실패를 지나칠** 수 있다.
+root_cause: |
+  Next 는 `.next/types/validator.ts` 를 **빌드 시점의 라우트 목록**으로 생성하고, `tsc --noEmit`
+  의 대상에 그 생성물이 들어 있다(`tsconfig.json` 의 `include`). 브랜치를 바꾸면 소스의 라우트는
+  바뀌지만 생성물은 그대로 남아, 사라진 라우트의 모듈을 계속 import 한다.
+  `web-typecheck` 단계는 `pnpm -F web run typecheck` 뿐이고 **생성물의 신선도를 보지 않는다.**
+fix: |
+  그 자리에서는 `rm -rf apps/web/.next` 뒤 재실행했다. 검사를 고치거나 `include` 를 좁히지
+  않았다 — 생성물을 타입 검사 대상에서 빼면 Next 가 라우트 계약(`PageProps` 등)을 검증하는
+  장치를 잃는다.
+recurrence_risk: high
+harness_element: HE-11
+proposed_harness_change: "(제안, 사람 결정) 두 방향이 있다. ① `web-typecheck` 단계 명령 앞에 생성물 신선도 가드를 둔다 — `.next/types` 가 현재 `app/` 의 라우트 집합과 어긋나면 그 디렉터리를 지우고 진행(또는 명확한 문장으로 실패). 단계 정의는 `harness.config` 이므로 **보호 파일이고 사람이 커밋**한다. ② 더 싼 쪽은 `scripts/` 에 `web-typecheck` 가 부르는 얇은 래퍼를 두고 거기서 같은 판정을 하는 것이다(스크립트는 에이전트가 쓸 수 있으나 단계 명령을 바꾸는 순간 ①과 같아진다). 어느 쪽도 `tsconfig.json` 의 `include` 를 좁히지 않는다 — 그러면 Next 의 라우트 계약 검증을 잃는다."
+preferred_enforcement: script
+trust: untrusted
+regression_check: |
+  재발 조건: 브랜치를 바꾸거나 리베이스한 직후의 첫 verify 에서 `web-typecheck` 가
+  `.next/types/validator.ts ... Cannot find module '../../app/...'` 로 실패하는 것.
+  판정 기준 — 가드가 생기면 ① 이전 브랜치의 `.next` 가 남은 상태에서 verify 를 돌려
+  **거짓 실패 없이** 통과하고 ② `app/` 의 라우트를 실제로 깨뜨린 변경은 **여전히 실패**해야 한다
+  (후자를 변이로 확인한다 — 페이지 파일의 export 를 지우고 실패를 본다).
+owner: showjihyun
+expires: none
