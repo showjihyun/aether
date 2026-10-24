@@ -199,3 +199,38 @@ def test_runs_screen_must_show_this_runs_id(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stdout + result.stderr
     check = calls[_index(calls, "web-routes-check")]
     assert "WEB_EXPECT_RUN=r" in check, check
+
+
+def test_write_check_runs_after_the_read_check_with_a_unique_name(tmp_path: Path) -> None:
+    """spec 0007 R-8 (P5-9): 읽기 확인 뒤에 쓰기 확인이 돌고, 이 실행만의 이름을 받는다."""
+    result, calls = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert _index(calls, "web-routes-check") < _index(calls, "web-write-check")
+    assert "WEB_WRITE_NAME=e2e-ui-" in calls[_index(calls, "web-write-check")]
+
+
+def test_failing_write_check_fails_r8(tmp_path: Path) -> None:
+    """spec 0007 R-8: 화면(서버 액션)을 통한 생성이 실패하면 e2e 도 실패한다."""
+    result, _ = _run(tmp_path, {"FAKE_WEB_WRITE_EXIT": "1"})
+
+    assert result.returncode != 0
+    assert "R-8" in result.stderr
+    assert "fake-key" not in result.stdout + result.stderr
+
+
+def test_write_check_must_print_its_success_marker(tmp_path: Path) -> None:
+    """spec 0007 R-8 (P5-9 리뷰): 확인이 아무것도 안 하고 0 을 반환해도 초록이면 거짓 성공이다.
+    종료 코드만 보지 않고 출력의 성공 표식(`web_write_check: ok`)을 확인해야 한다."""
+    result, _ = _run(tmp_path, {"FAKE_WEB_WRITE_OUT": "", "FAKE_WEB_WRITE_EXIT": "0"})
+
+    assert result.returncode != 0
+    assert "R-8" in result.stderr
+
+
+def test_write_check_output_stays_in_the_log(tmp_path: Path) -> None:
+    """P5-9: 출력을 변수로 받아도 stderr 로 다시 내보내 로그에 남는다."""
+    result, _ = _run(tmp_path)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "web_write_check: ok" in result.stderr

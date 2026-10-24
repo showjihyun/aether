@@ -11,6 +11,8 @@
 - `FAKE_LOGS` / `FAKE_SCENARIO_JSON`  `logs`·시나리오 호출의 출력
 - `FAKE_SCENARIO_OFFLINE_JSON`  `scenario_offline` 의 출력(일반 `scenario` 분기보다 먼저 가려낸다)
 - `FAKE_WEB_CHECK_EXIT`  `web-routes-check` 의 종료 코드(기본 0)
+- `FAKE_WEB_WRITE_EXIT`  `web-write-check` 의 종료 코드(기본 0)
+- `FAKE_WEB_WRITE_OUT`  `web-write-check` 의 출력(기본은 성공 표식, 빈 값이면 아무것도 안 한 확인)
 - `FAKE_CHUNK_SEQ`  `psql` 호출마다 차례로 소비할 숫자(기본 "0 3" = 적재가 청크를 쌓았다)
 - `FAKE_PROBE_EXIT`  외부 접속 시도의 결과(0=막힘, 7=닿음)
 - `FAKE_NO_RECORD`  pull 이 성공해도 목록에 남기지 않는 서버
@@ -58,6 +60,10 @@ case " $* " in
     printf '%s
 ' "${FAKE_SCENARIO_OFFLINE_JSON:-$OFFLINE_DEFAULT}"; exit 0 ;;
   *" web-routes-check "*) exit "${FAKE_WEB_CHECK_EXIT:-0}" ;;
+  *" web-write-check "*)
+    printf '%s
+' "${FAKE_WEB_WRITE_OUT-web_write_check: ok - fake}"
+    exit "${FAKE_WEB_WRITE_EXIT:-0}" ;;
   *" scenario"*) printf '%s
 ' "${FAKE_SCENARIO_JSON:-{\"run_id\":\"r\",\"status\":\"succeeded\"}}"; exit 0 ;;
   *" keys create"*) echo "fake-key"; exit 0 ;;

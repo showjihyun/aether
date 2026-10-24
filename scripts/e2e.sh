@@ -8,6 +8,8 @@
 #        succeeded. 청크 수는 psql 실측입니다 - 적재는 아무것도 쌓지 않아도 succeeded 입니다.
 #   R-5  (MVP-4, D-20) 같은 스택의 web 이 다섯 경로와 `/` 에서 200 이고, 그중 넷이 이 실행이
 #        만든 값(Run id·Agent·Knowledge Set·Workflow 이름)을 보인다(scripts/web_routes_check.py).
+#   R-8  (spec 0007, P5-9) 같은 web 의 서버 액션 createWorkflowAction 을 지나 Workflow 하나를 만들고
+#        그 이름이 /workflows 에 보인다(scripts/web_write_check.py).
 # 단언하지 않는 것(spec 2.11): MCP 도구 호출이 실제로 일어났는지(소형 모델은 비결정적 -
 # 그 경로는 smoke 가 fake 로 소유), 검색량, 답변 품질. 모델 품질은 판정하지 않습니다(D-12) -
 # `succeeded` 와 경로만 봅니다. 응답 본문과 발급한 api 키는 어디에도 출력하지 않습니다.
@@ -222,5 +224,25 @@ set -e
 # 다섯 경로와 `/` 가 200 이고 오류 화면이 아니며, 그중 **넷**이 이 실행이 만든 값을 보입니다
 # (`/`·`/settings` 는 목록이 아니라 기대값이 없습니다).
 echo "e2e: [R-5] ok - six routes are up and four of them show this run's data" >&2
+
+# --- spec 0007 R-8 (P5-9): 화면이 **만드는** 경로 ----------------------------------------------
+# 서버 액션 createWorkflowAction 을 브라우저의 React 클라이언트와 같은 HTTP 호출로 지나고
+# (액션 id 는 청크에서 **이름으로** 찾습니다 - 못 찾으면 실패), 그 이름이 /workflows 에 행으로
+# 보여야 합니다. 이름은 이 실행만의 것입니다(R-5 의 workflow_name 과 겹치지 않습니다).
+WRITE_NAME="e2e-ui-$$-${RANDOM}"
+# 종료 코드만 보지 않습니다 - 아무것도 하지 않고 0 을 반환하는 확인도 초록이 되기 때문입니다.
+# 출력을 받아 성공 표식(web_write_check: ok)을 확인하고, 로그에는 그대로 다시 내보냅니다.
+set +e
+WRITE_OUT="$("${OFFLINE[@]}" exec -T -e WEB_WRITE_NAME="$WRITE_NAME" \
+  api python - web-write-check <scripts/web_write_check.py 2>&1)"
+WRITE_RC=$?
+set -e
+printf '%s\n' "$WRITE_OUT" >&2
+case "$WRITE_OUT" in
+  *"web_write_check: ok"*) ;;
+  *) fail "R-8 (spec 0007): web_write_check exited ${WRITE_RC} without its success marker - the write path was not proven" ;;
+esac
+[ "$WRITE_RC" -eq 0 ] || fail "R-8 (spec 0007): a Workflow made through the web server action was not created or not listed (web_write_check exit ${WRITE_RC})"
+echo "e2e: [R-8/0007] ok - a Workflow created through the server action is listed on /workflows" >&2
 echo "e2e: pass (project=${PROJECT}, model=${TEST_MODEL}, ${SECONDS}s)"
 exit 0
