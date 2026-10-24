@@ -155,3 +155,71 @@ def test_quickstart_tells_you_how_to_see_that_the_stack_actually_came_up() -> No
         "`docker compose ... ps` 가 없습니다 - healthz 는 worker 의 죽음을 보지 않습니다"
     )
     assert "logs" in text, "worker 로그를 보라는 안내가 없습니다"
+
+
+# 아래 셋은 2026-10-24 의 실측이 찾은 마찰을 고정합니다 (F-10·F-11·F-12).
+
+_FENCE = re.compile(r"```(\w*)\n(.*?)```", re.S)
+_COMPOSE_YAML = REPO_ROOT / "infra" / "docker" / "compose.yaml"
+
+
+def _section(title: str) -> str:
+    match = re.search(rf"^## {re.escape(title)}\n(.*?)(?=^## |\Z)", _text(), re.S | re.M)
+    assert match, f"'{title}' 절을 찾지 못했습니다"
+    return match.group(1)
+
+
+def test_cleanup_command_names_both_compose_files() -> None:
+    """F-10: 정리 명령이 `compose.yaml` 하나만 이름 부르면 `llm` 서비스가 **보이지 않아**
+    `down -v` 가 그 컨테이너와 모델 볼륨(397 MB)을 지우지 못하고, 네트워크도 `Resource is
+    still in use` 로 남습니다. 그런데 문서는 "-v 가 모델까지 지웁니다" 라고 적고 있었습니다.
+    """
+    down = [line for line in _section("다 끝내고 지우기").splitlines() if " down" in line]
+    assert down, "정리 절에 `down` 명령이 없습니다"
+    command = " ".join(down)
+    assert "infra/docker/compose.yaml" in command
+    assert "infra/docker/compose.llm.yaml" in command, (
+        "정리 명령이 compose.llm.yaml 을 빼면 llm 서비스(모델 볼륨의 주인)가 보이지 않습니다"
+    )
+
+
+def test_llm_service_is_hidden_behind_a_profile_in_the_base_compose_file() -> None:
+    """F-10 의 **이유**: 기본 파일의 `llm:` 블록은 `profiles:` 뒤에 있고 그것을 벗기는 것은
+    오버레이(compose.llm.yaml)입니다. 이 단언이 깨지면(프로파일이 사라지면) 위 테스트가
+    요구하는 두 파일이 불필요해졌다는 뜻이니 문서의 한 줄 설명도 함께 고치십시오."""
+    block = re.search(r"^  llm:\n((?:    .*\n|\n)*)", _COMPOSE_YAML.read_text("utf-8"), re.M)
+    assert block, "compose.yaml 에서 llm 서비스를 찾지 못했습니다"
+    assert "profiles:" in block.group(1)
+    overlay = (REPO_ROOT / "infra" / "docker" / "compose.llm.yaml").read_text("utf-8")
+    assert "profiles: !reset []" in overlay
+
+
+def test_ps_that_the_doc_says_shows_exited_services_has_dash_a() -> None:
+    """F-11: 4절 주석이 "`migrate` 가 `Exited (0)` 인 것은 정상" 이라고 했지만 `ps` 는 `-a`
+    없이는 종료된 컨테이너를 **출력하지 않습니다.** 읽는 사람은 있을 수 없는 줄을 찾다가
+    "migrate 가 안 돌았다" 로 결론 냅니다 - 정확히 반대의 경보입니다."""
+    text = _text()
+    assert "Exited" in text, "Exited 를 설명하는 주석이 사라졌습니다 - 이 테스트를 재검토하십시오"
+    ps_lines = [ln for ln in text.splitlines() if re.search(r"docker compose[^\n]*\bps\b", ln)]
+    assert ps_lines
+    missing = [ln for ln in ps_lines if not re.search(r"\bps\b[^\n#]*\s-a\b", ln)]
+    assert not missing, f"`ps` 에 -a 가 없습니다: {missing}"
+
+
+def test_exit_code_is_read_in_the_same_block_as_the_up_command() -> None:
+    """F-12: `$?` 는 **직전** 명령의 종료 코드입니다. `up` 과 `echo $?` 사이에 산문과 다른
+    블록이 끼어 있으면 `ps` 를 먼저 돌린 사람이 다른 명령의 상태를 읽습니다. 종료 코드를
+    `up` 명령과 같은 블록에서 같은 줄로 내야 합니다."""
+    blocks = {lang: body for lang, body in _FENCE.findall(_text()) if "up --build" in body}
+    # PowerShell 의 `$?` 는 불리언이라 등가물은 `$LASTEXITCODE` 입니다. 한쪽 셸에만 확인을
+    # 주면 다른 셸 사용자에게는 F-2 의 1번 확인이 없습니다.
+    expected = {"bash": r"\$\?", "powershell": r"\$LASTEXITCODE"}
+    assert set(blocks) == set(expected), (
+        f"`up` 블록이 bash·powershell 둘이어야 합니다: {set(blocks)}"
+    )
+    for lang, exit_var in expected.items():
+        assert re.search(
+            rf'up --build[^\n]*;\s*echo "exit={exit_var}"',
+            blocks[lang].replace("\\\n", " "),
+        ), f'{lang} `up` 명령 끝에 `; echo "exit=…"` 가 없습니다'
+    assert "echo $?" not in _text(), "직전 명령이 불확실한 `echo $?` 가 남아 있습니다"

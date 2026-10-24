@@ -11,7 +11,7 @@
 | Docker (Compose v2) | `docker compose version` |
 | git | `git --version` |
 | [uv](https://docs.astral.sh/uv/) | `uv --version` — `aether` CLI 를 돌립니다 |
-| `openssl` | `openssl version` — 2절에서 비밀값을 만듭니다(다른 난수 생성기를 쓰셔도 됩니다) |
+| `openssl` | `openssl version` — 2절에서 비밀값을 만듭니다(다른 난수 생성기를 쓰셔도 되지만 **특수문자가 없는 것**으로 — `openssl rand -base64` 는 `+` `/` `=` 를 내어 `.env` 값을 깨뜨립니다) |
 | `curl` | `curl --version` — 4절에서 api 를 확인합니다 |
 
 **이 문서의 명령은 bash 기준입니다**(macOS·Linux, Windows 에서는 Git Bash). PowerShell 은 환경변수를 명령 앞에 붙이는 문법(`VAR=값 명령`)과 `export` 가 없어 **4절과 5절이 그대로는 실패합니다** — 그 두 절에 PowerShell 대체 명령을 함께 적어 두었습니다.
@@ -39,7 +39,7 @@ cp infra/docker/.env.example infra/docker/.env
 | `POSTGRES_PASSWORD` · `AETHER_CONTROL_PASSWORD` · `AETHER_DATA_PASSWORD` | `<generate>` 를 실제 값으로. 예: `openssl rand -hex 24` (셋 다 다른 값) |
 | `AETHER_MODEL_ADAPTER` | `fake` → `openai_compatible` |
 | `AETHER_MODEL_ID` | `qwen3.8:27b` → `qwen2.5:0.5b` |
-| `AETHER_MODEL_API_KEY` | `<optional>` → 빈 값(로컬 모델은 키가 없습니다) |
+| `AETHER_MODEL_API_KEY` | `<optional>` → `AETHER_MODEL_API_KEY=` 처럼 값 없이 둡니다(로컬 모델은 키가 없습니다. 줄을 지우거나 `""` 를 넣지 않습니다) |
 
 채운 `.env` 는 **커밋하지 않습니다**(`.gitignore` 가 막습니다).
 
@@ -60,14 +60,14 @@ scripts/fetch-model.sh --test-model
 ```bash
 AETHER_VERSION=$(git describe --tags --always) docker compose -p aether-dev \
   -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml \
-  up --build -d --wait
+  up --build -d --wait; echo "exit=$?"
 ```
 
 PowerShell 이면 같은 명령이 이렇게 됩니다.
 
 ```powershell
 $env:AETHER_VERSION = (git describe --tags --always)
-docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml up --build -d --wait
+docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml up --build -d --wait; echo "exit=$LASTEXITCODE"
 ```
 
 첫 실행은 이미지를 빌드합니다(api·worker·web). **빌드 캐시가 없는 머신에서는 이 단계가 이 문서에서 가장 긴 구간입니다.**
@@ -75,8 +75,8 @@ docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compos
 끝나면 **세 가지**를 봅니다. 셋을 다 보는 이유는 아래에 있습니다.
 
 ```bash
-echo $?                                                      # 1. 위 up 명령의 종료 코드. 0 이 아니면 뜨지 못한 서비스가 있습니다
-docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml ps   # 2. 서비스 상태
+# 1. 위 up 명령(bash·PowerShell 둘 다)이 마지막에 출력한 `exit=` 를 봅니다(같은 줄에서 읽으므로 다른 명령의 결과와 섞이지 않습니다). 0 이 아니면 뜨지 못한 서비스가 있습니다
+docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml ps -a   # 2. 서비스 상태
 curl localhost:8000/healthz                                  # 3. {"status":"ok","service":"api","version":"…"}
 ```
 
@@ -93,7 +93,7 @@ docker compose -p aether-dev -f infra/docker/compose.yaml \
 
 출력은 **두 줄**이고 **첫 줄 전체가 키 원문**입니다(라벨이 붙지 않습니다). 둘째 줄은 `id=… label=quickstart` 로 그 키의 식별자입니다.
 
-원문은 **이때 한 번만** 출력되고 다시 조회할 방법이 없습니다. 그 자리에서 환경변수로 둡니다.
+원문은 **이때 한 번만** 출력되고 다시 조회할 방법이 없습니다. 그 자리에서 환경변수로 둡니다. **6절까지 같은 셸을 쓰십시오** — 새 터미널을 열면 환경변수가 없고 키는 다시 볼 수 없으니 이 절로 돌아와 새 키를 발급해야 합니다.
 
 ```bash
 export AETHER_API_KEY=<첫 줄 전체>
@@ -103,14 +103,19 @@ export AETHER_API_KEY=<첫 줄 전체>
 $env:AETHER_API_KEY = "<첫 줄 전체>"
 ```
 
+`export` 로 적은 키는 **셸 히스토리에 남습니다.** 남기지 않으려면 `read -rs AETHER_API_KEY && export AETHER_API_KEY` 로 받아 붙여 넣으십시오.
+
 ## 6. 첫 Agent 실행 — 여기서 시계를 멈춥니다
+
+`agent create` 의 출력은 **UUID 한 줄**이고, 그 줄 전체가 `aether run` 에 넣을 id 입니다. 아래 두 블록은 **차례로 따로** 실행합니다(한꺼번에 붙여넣는 것이 아닙니다).
 
 ```bash
 uv run aether agent create --name first-agent
-uv run aether run <위에서 출력된 id> --input "한 문장으로 자기소개를 해줘"
 ```
 
-`agent create` 의 출력은 **UUID 한 줄**이고, 그 줄 전체가 `aether run` 에 넣을 id 입니다.
+```bash
+uv run aether run <위에서 출력된 id 한 줄> --input "한 문장으로 자기소개를 해줘"
+```
 
 `aether run` 은 이벤트를 **도착하는 대로** 한 줄씩 출력하다가 `run.finished` 에서 끝냅니다. 모델이 답한 글자는 `model.delta` 로 흐릅니다. 마지막 상태를 다시 보려면:
 
@@ -118,7 +123,7 @@ uv run aether run <위에서 출력된 id> --input "한 문장으로 자기소�
 uv run aether runs get <run-id>
 ```
 
-`status` 가 `succeeded` 면 **첫 Agent 가 성공한 것**입니다. 이 시점까지가 TTFSA 입니다.
+`status` 가 `succeeded` 면 **첫 Agent 가 성공한 것**입니다. 0.5b 소형 모델의 답은 뜻이 통하지 않는 한국어일 수 있습니다 — 판정은 `succeeded` 이고 답의 품질이 아닙니다. 이 시점까지가 TTFSA 입니다.
 
 실패했다면 그것도 기록할 값입니다 — 멈추지 말고 [양식](measurements/ttfsa-TEMPLATE.md)의 "막힌 지점" 에 적으십시오. 자주 보는 둘:
 
@@ -157,10 +162,12 @@ scripts/fetch-model.sh            # 제품 기본 모델. 네트워크 있는 �
 ## 다 끝내고 지우기
 
 ```bash
-docker compose -p aether-dev -f infra/docker/compose.yaml down -v
+docker compose -p aether-dev -f infra/docker/compose.yaml -f infra/docker/compose.llm.yaml down -v
 ```
 
 `-v` 가 볼륨(모델 포함)까지 지웁니다. 모델을 남기려면 `-v` 를 빼십시오.
+
+**4절과 같은 두 파일을 다 적어야 합니다** — 모델 볼륨을 쥔 `llm` 서비스는 `compose.yaml` 에서 `profiles` 뒤에 숨어 있고 그 프로파일을 벗기는 것이 `compose.llm.yaml` 이라서, 파일 하나로는 `down` 이 그 컨테이너와 볼륨을 보지 못하고 네트워크도 "still in use" 로 남습니다.
 
 ## 다음에 읽을 것
 
