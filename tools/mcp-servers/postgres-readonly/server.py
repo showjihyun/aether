@@ -3,8 +3,8 @@
 
 참조 구현(`@modelcontextprotocol/server-postgres`)이 archive 되어(2026-09-25 확인)
 이 저장소가 직접 만듭니다(D-7, C-6). `packages/mcp`·`tools/mcp-servers/echo`·
-`tools/mcp-servers/builtin` 과 같은 SDK(`mcp` 2.2.0)의 서버 API 로 만든 파이썬
-서버입니다.
+`tools/mcp-servers/builtin` 과 같은 SDK(`mcp`. 핀의 값은 spec 0003 D-1 이
+소유합니다)의 서버 API 로 만든 파이썬 서버입니다.
 
 도구는 `query` **하나**로 좁힙니다. 읽기 전용을 코드로 이중으로 보장합니다:
 

@@ -47,7 +47,7 @@ P2-4 를 P2-2b 앞에 둔 것과 P2-2 를 2a·2b 로 쪼갠 것이 backlog 번�
 | 항목 | 내용 |
 | --- | --- |
 | 만드는 것 | `packages/mcp/src/aether_mcp/domain/tools.py`(`Tool`, `ToolResult`, `McpServerRef`) · `application/ports/outbound/mcp_client.py`(`McpClient`) · `application/ports/inbound/discover_tools.py` · `application/usecases/discover_tools.py` · `adapters/outbound/mcp_client/stdio.py`·`http.py` · `tools/mcp-servers/echo/`(도구 `echo`·`fail`. **파이썬 + 같은 `mcp` SDK 의 서버 API** — 테스트에 새 언어 런타임을 들이지 않습니다) |
-| 고치는 것 | `packages/mcp/pyproject.toml` 에 `mcp == 2.2.0`(D-1), 루트 `uv.lock` |
+| 고치는 것 | `packages/mcp/pyproject.toml` 에 `mcp == 2.2.0`(D-1), 루트 `uv.lock`. **P2-1 이 실제로 쓴 값이므로 그대로 둡니다** — 핀의 현재 값은 spec 0003 D-1 이 소유합니다(개정 6 에서 2.3.0) |
 | 판정 | `api-unit`: echo 서버 stdio Discovery 로 도구 2개 + 스키마(R-1), `call` 성공·실패 경로. 소켓 차단 아래 통과 — stdio 는 서브프로세스이므로 loopback 허용으로 충분한지 **실측해 보고**합니다(아니면 그 테스트만 `integration`) |
 | 주의 | SDK 타입이 `McpClient` 포트 밖으로 새지 않습니다. `domain`·`application` 은 `mcp` 를 import 하지 않습니다(AR-9) — **이것은 `.importlinter` 의 `ar9-core-is-framework-free` 가 이미 막습니다**(`aether_mcp.domain`·`application` 이 `source_modules` 에, `mcp` 가 `forbidden_modules` 에). 별도 구조 테스트를 만들지 않습니다(P2-1 실행이 확인, 개정 1) |
 

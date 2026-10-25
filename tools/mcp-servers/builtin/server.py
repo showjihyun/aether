@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """spec 0003 2.3, D-5: 저장소 안 MCP Server — Phase 1 의 내부 도구 둘(`clock`·
 `calculator`)을 그대로 옮깁니다. `packages/mcp`·`tools/mcp-servers/echo` 와 같은
-SDK(`mcp` 2.2.0)의 서버 API 로 만든 파이썬 서버입니다.
+SDK(`mcp`. 핀의 값은 spec 0003 D-1)의 서버 API 로 만든 파이썬 서버입니다.
 
 `calculator` 는 `eval` 을 쓰지 않습니다 — `ast.parse(mode="eval")` 로 구문 트리를
 얻고, 허용한 노드 종류(사칙연산·거듭제곱·단항 부호·괄호)만 직접 평가합니다. 이름·

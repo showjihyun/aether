@@ -57,13 +57,13 @@ apps/worker ──► aether_runtime.application (ExecuteRun, Planner/Executor)
 
 ### 2.2 MCP 클라이언트 (P2-1, 열린 질문 1)
 
-공식 SDK `mcp` 를 씁니다. 2026-09-25 확인: 최신 릴리스 **2.2.0**(2025-12-19), `requires_python >= 3.10`, 전이 의존에 `starlette`·`uvicorn`·`httpx2`·`jsonschema`·`pydantic` 이 있습니다.
+공식 SDK `mcp` 를 씁니다. 2026-09-25 확인: 최신 릴리스 **2.2.0**(2025-12-19), `requires_python >= 3.10`, 전이 의존에 `starlette`·`uvicorn`·`httpx2`·`jsonschema`·`pydantic` 이 있습니다. 2026-10-25 재확인: 새 릴리스 **2.3.0** 이 나왔고 개정 6 이 핀을 거기로 옮깁니다. 전이 의존의 구성은 그대로입니다 — `uv.lock` 대조에서 새로 들어온 패키지는 없었습니다.
 
 | 항목 | 내용 |
 | --- | --- |
 | 전송 | stdio 와 streamable HTTP 둘. SDK 가 제공하는 것을 그대로 씁니다 — `stdio_client(StdioServerParameters(...))`, `mcp.client.streamable_http.streamable_http_client(url, http_client=...)`, 세션은 `Client` |
 | 우리 포트 | `McpClient`(outbound): `discover(server: McpServerRef) -> tuple[Tool, ...]`, `call(server, tool_name, arguments) -> ToolResult`. SDK 타입이 이 포트 밖으로 새지 않습니다 |
-| 버전 고정 | `pyproject.toml` 에 `mcp == 2.2.0`, `uv.lock` 에 잠급니다. Air-Gapped 설치는 lock + 휠 캐시로 합니다(새 네트워크 접근을 만들지 않습니다) |
+| 버전 고정 | `pyproject.toml` 에 `mcp == 2.3.0`(개정 6. 초안 ~ 개정 5 는 `== 2.2.0`), `uv.lock` 에 잠급니다. Air-Gapped 설치는 lock + 휠 캐시로 합니다(새 네트워크 접근을 만들지 않습니다) — 범위(`>=`)가 아니라 `==` 인 이유가 이것이고, 개정 6 은 그 이유를 바꾸지 않습니다. **핀을 올리는 변경은 `pyproject.toml`·`uv.lock`·이 표·D-1 을 같은 커밋에 고칩니다** — 코드만 올라가고 결정이 남는 드리프트가 2026-10-23·2026-10-25 에 두 번 있었습니다(`improvement-log/2026-10-23-001.yaml`) |
 | 전이 의존 주의 | `starlette`·`uvicorn` 이 따라옵니다. AR-9 가 `domain`·`application` 에서 이들을 금지하므로 SDK import 는 `adapters/outbound` 안에만 둡니다 — R-2 가 이것을 계약으로 검사합니다 |
 
 프로토콜을 직접 구현하지 않는 이유는 하나입니다. 우리가 얻을 것은 도구 발견과 호출 두 가지인데, 직접 구현하면 프로토콜 개정을 우리가 따라가야 합니다. 그 비용은 제품 가치와 무관합니다.
@@ -198,7 +198,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 
 | # | 결정 | 근거 | 어디 |
 | --- | --- | --- | --- |
-| D-1 | MCP 클라이언트는 공식 SDK `mcp`, **2.2.0 고정**. SDK import 는 `aether_mcp/adapters/outbound` 안에만 | intent OQ 1 | 2.2, R-2 |
+| D-1 | MCP 클라이언트는 공식 SDK `mcp`, **2.3.0 고정**(개정 6. 초안 ~ 개정 5 는 2.2.0 고정이었습니다). SDK import 는 `aether_mcp/adapters/outbound` 안에만 | intent OQ 1, 개정 6 | 2.2, R-2 |
 | D-2 | 바인딩은 `control.agent_versions.definition` 안(새 테이블 없음), 감사는 `data.tool_call_audit`(신설). 정책 표는 `control.tool_permissions` | intent OQ 2 | 2.6, 2.7 |
 | D-3 | 감사는 이번 Phase 에 **기록만**. 조회 API·보존 정책은 Phase 9. 표 증가 속도를 `smoke` 에서 1회 실측해 기록 | intent OQ 3 | 2.8, C-2 |
 | D-4 | `smoke` 에는 **Filesystem 하나**. HTTP·PostgreSQL 은 `api-integration`. 단계 수는 늘리지 않음 | intent OQ 4 | 2.10, R-12 |
@@ -245,6 +245,7 @@ spec 0002 D-3 은 `AgentDefinition` 의 도구 이름을 `aether_runtime.domain.
 | 개정 | 내용 |
 | --- | --- |
 | 초안 | 2026-09-25. intent 0003 의 열린 질문 6건을 D-1 ~ D-6 으로 고정하고, 외부 사실 확인에서 나온 D-7·D-8 을 더했습니다 |
+| 개정 6 | 2026-10-25. **핀을 2.2.0 에서 2.3.0 으로 올렸습니다**(Dependabot PR #128). 이 핀은 결정이므로 의존 한 줄로 지나가지 않습니다 — 코드만 올리면 D-1 이 아니라고 말하는 것이 남습니다. 2.3.0 의 행동 변경 넷을 이 저장소에 하나씩 대조해 **전부 닿지 않는 것**을 확인했습니다: `httpx2>=2.10.0` 상향 요구는 lock 에 이미 그 이상이 있어 무효이고(lock 에 새로 들어온 패키지 0건), 도구 인자의 헤더 어노테이션은 저장소 안 MCP Server 셋이 쓰지 않으며(인자가 전부 평범한 `str`), `tools/call` 마다 붙던 `tools/list` 제거와 서명 검증 변경은 서버 쪽이고 우리는 클라이언트이며 Discovery 에서 `list_tools()` 를 직접 부릅니다. 전량 verify 를 2.3.0 이 **실제로 설치된 상태**로 통과시켰습니다 — `uv run` 이 lock 변경을 따라 재동기화하지 않아 첫 번에 2.2.0 을 검사한 거짓 초록을 한 번 냈고 그것은 버렸습니다(`improvement-log/2026-10-25-002.yaml`, PR #206 — 아직 병합 전입니다). 함께 **숫자 사본 넷을 없앴습니다** — 저장소 안 MCP Server 셋의 도입부와 intent 요지는 이제 번호를 적지 않고 D-1 을 가리킵니다. plan 0003 P2-1 의 `2.2.0` 은 그 단위가 실제로 쓴 값이므로 기록으로 남깁니다. 사람 결정 2026-10-25 |
 | 개정 5 | 2026-09-28. **P2-6 실행이 정한 것을 문서로 고정**했습니다 — `AETHER_MCP_SERVERS` 의 문법(`;` 구분, stdio 는 `shlex.split`, http 는 URL, `${VAR}` 치환)은 spec 이 비워 둔 자리였고 구현이 정했습니다. 그리고 이번 조립에서 HTTP 전송이 실제로 연결되지 않는다는 한계와, 그것을 풀려면 P2-5 에서 AR-6 예외 한 줄이 더 필요하다는 것을 2.9 에 적었습니다 |
 | 개정 4 | 2026-09-26. **P2-4 착수 전 제안에서 찾은 구멍** — 감사는 `server_name` 을 남기는데 판정의 키에는 없었습니다. MCP 에 전역 도구 이름공간이 없으므로 같은 이름의 도구가 서버마다 있을 수 있고, 그러면 allow 가 의도보다 넓게 열립니다. 정책 표의 PK 를 `(agent_version_id, server_name, tool_name)` 으로 확장하고(마이그레이션 0003 을 직접 수정 — 아직 어디에도 배포되지 않았습니다) CLI 에 `--server` 를 더합니다. 사람 결정 2026-09-26 |
 | 개정 3 | 2026-09-26. **P2-2a 리뷰**에서 감사표를 append-only 로 조였습니다 — `GRANT ALL PRIVILEGES` 였던 것을 `INSERT, SELECT` 로. 조이기 전 테스트가 `DID NOT RAISE InsufficientPrivilege` 로 실패해 권한이 넓었다는 것이 실측으로 확인되었습니다. `control.tool_permissions` 의 PK 는 `(agent_version_id, tool_name)` 복합키이고, 이 가정이 P2-4 의 CLI upsert 설계와 맞는지는 그 단위의 🔒 검토에서 확인합니다 |
