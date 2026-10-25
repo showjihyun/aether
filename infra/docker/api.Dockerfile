@@ -6,8 +6,12 @@
 # 이 이미지는 `api` 서비스(uvicorn)와 `migrate` 서비스(alembic, command 오버라이드)
 # 둘 다에 씁니다 — 둘 다 같은 uv workspace 설치가 필요하기 때문입니다(spec 2.7).
 
-# 확인: uv 버전은 이 세션에서 로컬로 쓴 0.11.2 로 고정. digest 는
-# `docker buildx imagetools inspect ghcr.io/astral-sh/uv:0.11.2` 로 얻었습니다.
+# 확인: uv 버전은 아래 FROM 의 태그로 고정하고 **Dependabot 이 갱신**합니다(태그와
+# digest 를 함께 올립니다). digest 를 손으로 얻을 때는
+# `docker buildx imagetools inspect ghcr.io/astral-sh/uv:<태그>` 입니다.
+# 이 주석은 2026-10-25 까지 `0.11.2` 를 "이 세션에서 로컬로 쓴" 값으로 적고
+# 있었는데, 그 뒤 Dependabot 이 0.12.22 → 0.13.5 로 올렸으므로 **이미 두 번
+# 틀린 상태**였습니다. 버전 숫자를 두 곳에 적지 않도록 태그를 인용하지 않습니다.
 FROM ghcr.io/astral-sh/uv:0.13.5@sha256:32a7bb39b496babbd997b0a39a4d66c126bdaf5661b302bf6f06abda8deca6ff AS uv
 
 # 확인: Python 버전은 .python-version(3.12)과 맞춥니다. Debian slim — psycopg[binary]
