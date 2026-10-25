@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """spec 0003 2.3, R-1: 저장소 안 테스트용 MCP Server — 도구 `echo` 와 `fail`.
 
-`packages/mcp` 와 같은 SDK(`mcp` 2.2.0)로 만든 파이썬 서버입니다. 새 언어 런타임을
-테스트에 들이지 않기 위해서입니다(plan 0003 F-7). `fail` 은 항상 결정적으로
-실패해 실패 경로 판정(R-1)의 대상이 됩니다.
+`packages/mcp` 와 같은 SDK(`mcp`. 핀의 값은 spec 0003 D-1 이 소유합니다)로 만든
+파이썬 서버입니다. 새 언어 런타임을 테스트에 들이지 않기 위해서입니다(plan 0003
+F-7). `fail` 은 항상 결정적으로 실패해 실패 경로 판정(R-1)의 대상이 됩니다.
 
 stdio 로 직접 실행:  ``python tools/mcp-servers/echo/server.py``
 streamable HTTP 로 실행: ``python tools/mcp-servers/echo/server.py --http --port 8765``
