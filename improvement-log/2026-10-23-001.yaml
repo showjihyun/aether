@@ -28,6 +28,31 @@ evidence: |
   탐지는 검사가 아니라 **사람이 넘긴 결정(H-1)의 실측 중 우연**이었다. spec 0007 C-6 이
   "보고만 한다" 로 적어 둔 것이 그 우연의 유일한 흔적이다.
 
+  재발(2026-10-25, Dependabot PR #128 검토): 같은 모양이 다시 왔다 — 이번에는
+  **병합 전**이다. #128 은 `mcp` 를 `==2.2.0` 에서 `==2.3.0` 으로 올리는데, 그
+  핀은 **승인된 spec 의 결정**이다:
+
+      specs/0003-phase-2-mcp-gateway.md
+      | D-1 | MCP 클라이언트는 공식 SDK `mcp`, **2.2.0 고정** |
+      2절: "`pyproject.toml` 에 `mcp == 2.2.0`, `uv.lock` 에 잠급니다.
+             Air-Gapped 설치는 lock + 휠 캐시로 합니다"
+
+  `2.2.0` 이 적힌 자리는 일곱 곳이다 — spec 0003 의 D-1·2절·버전 고정 행,
+  plan 0003, 그리고 `tools/mcp-servers/{builtin,echo,postgres-readonly}/server.py`
+  의 머리말 주석 셋. 병합하면 코드는 2.3.0, 승인된 결정은 2.2.0 이 된다.
+
+  2026-10-23 건과 다른 점은 **발견 경로뿐**이다. 그때는 사람이 넘긴 결정의 실측
+  중 우연이었고, 이번에는 주 세션이 낡은 CI 초록(base 71커밋 뒤)을 대신 재려고
+  diff 를 현재 main 에 얹다가 보았다. **두 번 다 검사가 잡지 않았다** — 이 후보가
+  제안한 `tests/scripts/test_documented_pins_match_manifests.py` 가 있었으면
+  #128 은 빨간불이었을 것이다. 그 제안의 적용 범위를 `DESIGN.md` 에서 **spec·plan
+  까지** 넓혀야 한다는 것이 이 재발이 더하는 것이다(핀을 선언하는 문서가
+  `DESIGN.md` 하나가 아니었다).
+
+  2회 관측이고 원인이 같으므로 promotion-gate 의 판단 대상이다. 다만 제안의 한쪽
+  (`.github/dependabot.yml` 의 major ignore)은 보호 파일이고, `tests/**` 쪽은
+  에이전트가 쓸 수 있다 — 어느 쪽을 먼저 둘지는 사람 결정으로 남는다.
+
   범위 확인: 매니페스트의 **정확 핀은 이것 하나뿐**이다(나머지는 caret 범위).
 
       $ grep -nE '"[^"]+": *"[0-9]' apps/web/package.json

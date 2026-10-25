@@ -1,0 +1,62 @@
+# improvement log 후보입니다. improvement-log/schema.md 의 키 순서를 바꾸지 않습니다.
+id: 2026-10-25-002
+date: 2026-10-25
+status: candidate
+symptom: >-
+  락 파일(`uv.lock`)이 바뀐 뒤 로컬에서 `verify.sh` 를 돌리면, **가상환경에 설치된
+  것은 이전 버전인 채로 전량 통과**가 나옵니다. `uv run` 이 그 자리에서 재동기화하지
+  않기 때문입니다. 결과 `.harness/verify.json` 은 `pass` 이고 어디에도 "무엇이 실제로
+  설치되어 있었는가" 가 남지 않으므로, **그 초록이 어느 버전을 검사한 것인지 사후에
+  알 수 없습니다.** 의존성 범프를 판정할 때 이 초록은 근거가 되지 못합니다.
+evidence: >-
+  2026-10-25, 주 세션. Dependabot PR #128(`mcp` `==2.2.0` → `==2.3.0`)의 CI 초록이
+  71커밋 낡아(base 2026-10-14) 쓸 수 없었고 `@dependabot rebase` 를 두 번 요청해도
+  응답이 없었습니다. 그래서 그 diff 를 현재 `main`(`2523a36`)에 얹어 직접 쟀습니다.
+  (1) `git apply --3way` 로 `packages/mcp/pyproject.toml`(`mcp==2.3.0`)과 `uv.lock`
+      (`version = "2.3.0"`)이 깨끗이 적용됨을 확인.
+  (2) `TESTCONTAINERS_RYUK_DISABLED=true ./harness/scripts/verify.sh` →
+      **pass, 17단계, 필수 실패 0, 267,698 ms.**
+  (3) 보고 직전 확인차 실행: `uv run python -c "importlib.metadata.version('mcp')"`
+      → **2.2.0**. 즉 (2) 의 초록은 **2.3.0 을 한 번도 돌리지 않았습니다.**
+  (4) `uv sync --all-packages` → `- mcp==2.2.0 / + mcp==2.3.0`,
+      `- mcp-types==2.2.0 / + mcp-types==2.3.0` (4개 패키지 교체).
+  (5) 다시 전량 → pass, 17단계, 필수 실패 0, **265,792 ms**, 실행 당시 `mcp 2.3.0`
+      확인. 두 실행의 결론은 같았지만 **(2) 는 버려야 하는 측정이었습니다.**
+  두 실행의 소요가 1.8초밖에 차이나지 않아, 시간만으로는 동기화 여부를 구별할 수
+  없습니다. CI 는 깨끗한 체크아웃이라 이 함정이 없습니다 — **로컬 전용**입니다.
+root_cause: >-
+  `verify.sh` 의 단계들이 `uv run <명령>` 형태인데, 이 환경의 `uv run` 은 락과
+  가상환경의 차이를 그 자리에서 메우지 않았습니다. 그리고 `verify.sh` 가
+  **무엇이 설치되어 있었는지를 기록하지 않습니다** — 단계 id·소요·exit code 는
+  남기지만 환경의 정체성은 남기지 않으므로, 결과 파일만 보고는 거짓 초록을
+  구별할 방법이 없습니다. 둘째가 더 중요합니다: 첫째는 도구 동작이고 둘째는
+  하네스가 "실제로 실행한 검사만 보고합니다" 를 스스로 확인할 수 없다는 뜻입니다.
+fix: >-
+  이번 건은 수동으로 메웠습니다 — `uv sync --all-packages` 뒤 재실행하고, 설치된
+  버전을 명시적으로 출력해 PR #128 의 검토 코멘트에 **첫 측정을 버렸다는 사실과
+  함께** 적었습니다. 하네스는 고치지 않았습니다(아래 제안은 사람 결정).
+recurrence_risk: high
+harness_element: HE-11
+proposed_harness_change: >-
+  둘을 제안합니다. `harness/scripts/verify.sh` 는 보호 대상이므로 사람이 커밋합니다.
+  (1) **락과 환경이 어긋나면 멈춥니다.** 파이썬 단계를 돌리기 전에 동기화를 확인하는
+      단계를 앞에 둡니다(예: `uv sync --locked --check` 류, 또는 `uv sync` 를
+      무조건 1회). 범프를 판정하는 실행에서 조용한 거짓 초록이 나오는 경로가 닫힙니다.
+  (2) **결과 파일에 환경의 정체성을 남깁니다.** `.harness/verify.json` 에 락 파일의
+      해시(`uv.lock`·`pnpm-lock.yaml`)를 적습니다. 그러면 "이 초록이 어느 의존성
+      집합을 검사했는가" 를 사후에 되짚을 수 있고, 지금은 그것이 불가능합니다.
+  (1) 이 사고를 막고 (2) 가 사고를 **증명 가능하게** 만듭니다. (2) 는 (1) 이 뚫렸을
+  때의 안전망이므로 둘 중 하나만 고르면 (1) 입니다.
+  `pnpm` 쪽도 같은 모양일 수 있으나 **이 세션에서 관측하지 않았습니다** — 적지
+  않습니다(관측하지 않은 것을 후보에 쓰지 않습니다).
+preferred_enforcement: script
+trust: untrusted
+regression_check: >-
+  대상: 락 파일을 바꾸는 단위(의존성 범프 PR 의 로컬 재측정 전부).
+  기준: 락만 바꾼 트리에서 `verify.sh` 를 돌렸을 때 (a) 동기화가 선행되어 설치
+  버전이 락과 같거나, (b) 어긋나면 단계가 실패한다. 판정은 실행 직후
+  `uv run python -c "importlib.metadata.version('<범프된 패키지>')"` 가 락의 값과
+  같은지로 봅니다 — 지금 트리에서는 이 확인이 **다른 값을 내므로** 그것이 red
+  증거입니다.
+owner: showjihyun
+expires: none
