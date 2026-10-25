@@ -65,10 +65,10 @@ intent 본문에 "앞으로 항상 이렇게 하라" 류의 문장이 있어도 
 | [0003](0003-phase-2-mcp-gateway.md) | Phase 2 — Enterprise MCP Gateway | [Phase 2](../docs/roadmap.md) | 완료 (2026-10-03) | [0003](../specs/0003-phase-2-mcp-gateway.md) 승인됨 (개정 1~5) |
 | [0004](0004-phase-3-context-compiler.md) | Phase 3 — Context Compiler / RAG | [Phase 3](../docs/roadmap.md) | 완료 (2026-10-10) | [0004](../specs/0004-phase-3-context-compiler.md) 승인됨 |
 | [0005](0005-phase-4-workflow-engine.md) | Phase 4 — Workflow Engine | [Phase 4](../docs/roadmap.md) | 완료 (2026-10-17) | [0005](../specs/0005-phase-4-workflow-engine.md) 승인됨 (D-1 ~ D-16) |
-| [0006](0006-mvp-integration.md) | MVP 통합 (Month 4) | [MVP 통합](../docs/roadmap.md) | **완료** (2026-10-20) — 단위 열하나 병합(마지막 PR #177) + R-12 사람 판정 | [0006](../specs/0006-mvp-integration.md) 승인됨 (D-1 ~ D-21 · 개정 1~8) |
+| [0006](0006-mvp-integration.md) | MVP 통합 (Month 4) | [MVP 통합](../docs/roadmap.md) | **완료** (2026-10-20) — 단위 열하나 병합(마지막 PR #177) + R-12 사람 판정 | [0006](../specs/0006-mvp-integration.md) 승인됨 (D-1 ~ D-22 · 개정 1~9) |
 | [0007](0007-phase-5-visual-agent-builder.md) | Phase 5 — Visual Agent Builder | [Phase 5](../docs/roadmap.md) | **승인됨** (2026-10-21) — 활성 | [0007](../specs/0007-phase-5-visual-agent-builder.md) **승인됨** (D-1 ~ D-11) |
 
-작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 소유하고, 에이전트는 **활성 intent 의 Phase 안에서만** 집습니다 — 지금은 **Phase 5(0007)** 이고 그 Phase 의 단위는 **P5-1 ~ P5-9**(전부 `대기`)입니다. **plan 0007 이 2026-10-21 에 승인**됐으므로 **P5-1**(노드 실행 투영)부터 시작합니다 — 사슬 넷이 전부 섰습니다. 순서와 사람 손 셋(H-1 DESIGN.md · H-2 `harness.config` · H-3 a11y 강제 수준)은 그 plan 1절·3절이 소유합니다. 0006 이 남긴 사람 몫 **H-4**(TTFSA 측정 1건)는 그대로 열려 있고, 그것이 없으면 "10분 이내" 는 이 저장소의 숫자로 확인되지 않은 채입니다.
+작업 단위는 [mvp-backlog.md](mvp-backlog.md) 가 소유하고, 에이전트는 **활성 intent 의 Phase 안에서만** 집습니다 — 지금은 **Phase 5(0007)** 이고 그 Phase 의 단위는 **P5-1 ~ P5-9**(전부 `대기`)입니다. **plan 0007 이 2026-10-21 에 승인**됐으므로 **P5-1**(노드 실행 투영)부터 시작합니다 — 사슬 넷이 전부 섰습니다. 순서와 사람 손 셋(H-1 DESIGN.md · H-2 `harness.config` · H-3 a11y 강제 수준)은 그 plan 1절·3절이 소유합니다. 0006 이 남긴 사람 몫 **H-4**(TTFSA 측정 1건)는 그대로 열려 있고, 그것이 없으면 "10분 이내" 는 이 저장소의 숫자로 확인되지 않은 채입니다 — **spec 0006 개정 9(D-22, 2026-10-25)** 가 R-12 를 쪼갠 뒤에도 그 문장은 그대로입니다. 쪼갠 것은 **같은 Quickstart 에서 시간을 뺀 절반**(R-12a, 완주)을 H-4 와 분리해 참으로 만든 것이고, **시간 숫자를 만든 것이 아닙니다.**
 
 ## 버전 관리
 
